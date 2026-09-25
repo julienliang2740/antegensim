@@ -1,0 +1,60 @@
+{
+  "kind": "agent",
+  "id": "a04",
+  "name": "Damaris",
+  "position": {
+    "x": 0,
+    "y": 0
+  },
+  "stats": {
+    "compute": 125.0324,
+    "essence": 16.0,
+    "essence_capacity": 100.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 1.0,
+    "speed": 1,
+    "vision_range": 1,
+    "communication_range": 1,
+    "compute_absorption": 0.2,
+    "essence_absorption": 0.1,
+    "skill_count_limit": 5,
+    "skill_block_limit": 100
+  },
+  "upgrade_counts": {
+    "vision_range": 1,
+    "communication_range": 1
+  },
+  "persona": "",
+  "alive": true,
+  "created_round": 0,
+  "died_round": null,
+  "death_cause": null,
+  "skills": {},
+  "skill_execution": null,
+  "wait_turns_remaining": 0,
+  "last_action": {
+    "name": "send",
+    "args": {
+      "recipient": "a01",
+      "message": "Greetings a01! I'm Damaris (a04) at (0,0). I've just upgraded my communication capability to reach you. I see we're both here with plant p0001 and fruit f0013. I'm interested in discussing how we might cooperate on resource gathering or coordinate our actions for mutual benefit. What are your current goals?"
+    }
+  },
+  "last_result": {
+    "ok": true,
+    "reason": "ok",
+    "cost_compute": 3.0,
+    "cost_essence": 0.0,
+    "round": 11,
+    "data": {
+      "delivered_to": "a01"
+    },
+    "effects": {
+      "delivered": 1
+    }
+  },
+  "total_compute_spent": 69.0,
+  "total_cognition_spent": 19.967600000000004,
+  "total_interpreter_spent": 0.0,
+  "model_call_count": 11
+}

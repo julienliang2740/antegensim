@@ -1,0 +1,188 @@
+{
+  "kind": "agent",
+  "id": "a05",
+  "name": "Eos",
+  "position": {
+    "x": 0,
+    "y": -1
+  },
+  "stats": {
+    "compute": 158.1594,
+    "essence": 18.0,
+    "essence_capacity": 100.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 1.0,
+    "speed": 1,
+    "vision_range": 1,
+    "communication_range": 0,
+    "compute_absorption": 0.2,
+    "essence_absorption": 0.1,
+    "skill_count_limit": 5,
+    "skill_block_limit": 100
+  },
+  "upgrade_counts": {
+    "vision_range": 1
+  },
+  "persona": "",
+  "alive": true,
+  "created_round": 0,
+  "died_round": null,
+  "death_cause": null,
+  "skills": {},
+  "skill_execution": null,
+  "wait_turns_remaining": 0,
+  "last_action": {
+    "name": "query",
+    "args": {
+      "entity": "self"
+    }
+  },
+  "last_result": {
+    "ok": true,
+    "reason": "ok",
+    "cost_compute": 1.0,
+    "cost_essence": 0.0,
+    "round": 10,
+    "data": {
+      "position": {
+        "x": 0,
+        "y": -1
+      },
+      "health": 100.0,
+      "max_health": 100.0,
+      "compute": 159.1594,
+      "essence": 18.0,
+      "essence_capacity": 100.0,
+      "attack": 1.0,
+      "speed": 1,
+      "vision_range": 1,
+      "communication_range": 0,
+      "compute_absorption": 0.2,
+      "essence_absorption": 0.1,
+      "skill_count_limit": 5,
+      "skill_block_limit": 100,
+      "costs": {
+        "normal": {
+          "move": 5.0,
+          "observe": 1.0,
+          "query": 1.0,
+          "send": 3.0,
+          "broadcast": 7.0,
+          "absorb": 3.0,
+          "transfer": 1.0,
+          "wait": 0.0
+        },
+        "skill": {
+          "move": 4.0,
+          "observe": 0.8,
+          "query": 0.8,
+          "send": 2.4000000000000004,
+          "broadcast": 5.6000000000000005,
+          "absorb": 2.4000000000000004,
+          "transfer": 0.8,
+          "wait": 0.0
+        },
+        "discount": 0.8,
+        "recovery_health_per_compute": 1.0,
+        "upkeep_per_round": 1.0,
+        "interpreter_cost_per_op": 0.01,
+        "max_ops_per_turn": 100,
+        "failure_fee_cap": 1.0,
+        "cognition": {
+          "input_rate": 0.0002,
+          "generation_rate": 0.001
+        }
+      },
+      "upgrade_quotes": {
+        "essence_capacity": {
+          "base_compute": 25.0,
+          "skill_compute": 20.0,
+          "compute": 25.0,
+          "essence": 2.0,
+          "next_value": 120.0,
+          "allowed": true
+        },
+        "max_health": {
+          "base_compute": 25.0,
+          "skill_compute": 20.0,
+          "compute": 25.0,
+          "essence": 2.0,
+          "next_value": 120.0,
+          "allowed": true
+        },
+        "vision_range": {
+          "base_compute": 50.0,
+          "skill_compute": 40.0,
+          "compute": 50.0,
+          "essence": 4.0,
+          "next_value": 2,
+          "allowed": true
+        },
+        "communication_range": {
+          "base_compute": 25.0,
+          "skill_compute": 20.0,
+          "compute": 25.0,
+          "essence": 2.0,
+          "next_value": 1,
+          "allowed": true
+        },
+        "speed": {
+          "base_compute": 25.0,
+          "skill_compute": 20.0,
+          "compute": 25.0,
+          "essence": 2.0,
+          "next_value": 2,
+          "allowed": true
+        },
+        "compute_absorption": {
+          "base_compute": 25.0,
+          "skill_compute": 20.0,
+          "compute": 25.0,
+          "essence": 2.0,
+          "next_value": 0.25,
+          "allowed": true
+        },
+        "essence_absorption": {
+          "base_compute": 25.0,
+          "skill_compute": 20.0,
+          "compute": 25.0,
+          "essence": 2.0,
+          "next_value": 0.15,
+          "allowed": true
+        },
+        "skill_count_limit": {
+          "base_compute": 25.0,
+          "skill_compute": 20.0,
+          "compute": 25.0,
+          "essence": 2.0,
+          "next_value": 6,
+          "allowed": true
+        },
+        "skill_block_limit": {
+          "base_compute": 25.0,
+          "skill_compute": 20.0,
+          "compute": 25.0,
+          "essence": 2.0,
+          "next_value": 120,
+          "allowed": true
+        },
+        "attack": {
+          "base_compute": 100.0,
+          "skill_compute": 80.0,
+          "compute": 100.0,
+          "essence": 10.0,
+          "next_value": 1.25,
+          "allowed": true
+        }
+      },
+      "quote_mode": "direct",
+      "round": 10
+    },
+    "effects": {}
+  },
+  "total_compute_spent": 37.0,
+  "total_cognition_spent": 18.840600000000002,
+  "total_interpreter_spent": 0.0,
+  "model_call_count": 10
+}

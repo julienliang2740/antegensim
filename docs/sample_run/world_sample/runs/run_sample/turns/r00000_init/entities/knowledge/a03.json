@@ -1,0 +1,53 @@
+{
+  "agent_id": "a03",
+  "records": [
+    {
+      "id": "a03-k000001",
+      "agent_id": "a03",
+      "round": 0,
+      "seq": 1,
+      "kind": "system",
+      "provenance": {
+        "source": "world",
+        "action": null,
+        "sender_visible": null,
+        "turn_id": "r00000_init"
+      },
+      "text": "You are Cyrene (id a03); in round 0 you are at (0,1). Starting state: compute 200, essence 20 of capacity 100, health 100 of 100, attack 1, speed 1, vision_range 0, communication_range 0, compute_absorption 0.2, essence_absorption 0.1, skill limits 5 skills x 100 blocks.",
+      "content": {
+        "text": "You are Cyrene (id a03); in round 0 you are at (0,1). Starting state: compute 200, essence 20 of capacity 100, health 100 of 100, attack 1, speed 1, vision_range 0, communication_range 0, compute_absorption 0.2, essence_absorption 0.1, skill limits 5 skills x 100 blocks.",
+        "self": {
+          "compute": 200.0,
+          "essence": 20.0,
+          "essence_capacity": 100.0,
+          "health": 100.0,
+          "max_health": 100.0,
+          "attack": 1.0,
+          "speed": 1,
+          "vision_range": 0,
+          "communication_range": 0,
+          "compute_absorption": 0.2,
+          "essence_absorption": 0.1,
+          "skill_count_limit": 5,
+          "skill_block_limit": 100,
+          "position": {
+            "x": 0,
+            "y": 1
+          }
+        },
+        "run_start": true
+      },
+      "tags": [
+        "0,1"
+      ],
+      "importance": 0.2,
+      "read": false,
+      "created_at": "2026-09-25T22:53:52.840513+00:00"
+    }
+  ],
+  "notebook": "",
+  "notebook_version": 0,
+  "notebook_truncated": false,
+  "next_seq": 2,
+  "priorities": {}
+}

@@ -1,0 +1,56 @@
+{
+  "schema_version": "0.1.0",
+  "turn_id": "r00011_t03_a04",
+  "kind": "agent_turn",
+  "round": 11,
+  "turn_index": 3,
+  "acting_agent_id": "a04",
+  "previous_turn_id": "r00011_t02_a08",
+  "scheduler": {
+    "round": 11,
+    "order": [
+      "a07",
+      "a08",
+      "a04",
+      "a06",
+      "a01",
+      "a05",
+      "a03",
+      "a02"
+    ],
+    "next_index": 3,
+    "round_complete": false
+  },
+  "decision_source": "model",
+  "packet_id": "pk_r00011_t03_a04",
+  "model_call_ids": [
+    "mc_r00011_t03_a04_01"
+  ],
+  "action": {
+    "name": "send",
+    "args": {
+      "recipient": "a01",
+      "message": "Greetings a01! I'm Damaris (a04) at (0,0). I've just upgraded my communication capability to reach you. I see we're both here with plant p0001 and fruit f0013. I'm interested in discussing how we might cooperate on resource gathering or coordinate our actions for mutual benefit. What are your current goals?"
+    },
+    "via_skill": false,
+    "skill_name": null
+  },
+  "action_result": {
+    "ok": true,
+    "reason": "ok",
+    "cost_compute": 3.0,
+    "cost_essence": 0.0,
+    "round": 11,
+    "data": {
+      "delivered_to": "a01"
+    },
+    "effects": {
+      "delivered": 1
+    }
+  },
+  "interventions": [],
+  "event_seq_start": 558,
+  "event_seq_end": 563,
+  "code_revision": "a11e51b+dirty.67f19b11",
+  "saved_at": "2026-09-25T23:03:43.305497+00:00"
+}

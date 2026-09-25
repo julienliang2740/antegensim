@@ -1,0 +1,24 @@
+{
+  "context": {
+    "input_token_cap": 6000,
+    "generation_allowance": 1000,
+    "recent_history_length": 5,
+    "notebook_max_tokens": 400,
+    "retrieved_memory_limit": 5,
+    "new_event_digest_limit": 10,
+    "weights": {
+      "relevance": 1.0,
+      "recency": 1.0,
+      "importance": 1.0
+    },
+    "include_skill_source": false
+  },
+  "context_overrides": {},
+  "default_model_key": "claude-cli-haiku",
+  "model_overrides": {},
+  "max_rounds": null,
+  "play_delay_seconds": 0.0,
+  "real_budget_usd": null,
+  "fake_scripts": {},
+  "fake_options": {}
+}

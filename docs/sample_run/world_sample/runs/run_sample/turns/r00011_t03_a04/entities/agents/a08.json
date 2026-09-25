@@ -1,0 +1,61 @@
+{
+  "kind": "agent",
+  "id": "a08",
+  "name": "Halcyon",
+  "position": {
+    "x": 1,
+    "y": 0
+  },
+  "stats": {
+    "compute": 151.19180000000003,
+    "essence": 18.0,
+    "essence_capacity": 100.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 1.0,
+    "speed": 1,
+    "vision_range": 1,
+    "communication_range": 0,
+    "compute_absorption": 0.2,
+    "essence_absorption": 0.1,
+    "skill_count_limit": 5,
+    "skill_block_limit": 100
+  },
+  "upgrade_counts": {
+    "vision_range": 1
+  },
+  "persona": "",
+  "alive": true,
+  "created_round": 0,
+  "died_round": null,
+  "death_cause": null,
+  "skills": {},
+  "skill_execution": null,
+  "wait_turns_remaining": 0,
+  "last_action": {
+    "name": "absorb",
+    "args": {
+      "source": "f0014",
+      "resource": "compute"
+    }
+  },
+  "last_result": {
+    "ok": true,
+    "reason": "ok",
+    "cost_compute": 3.0,
+    "cost_essence": 0.0,
+    "round": 11,
+    "data": {},
+    "effects": {
+      "processed": 60.0,
+      "gained": 12.0,
+      "lost": 48.0,
+      "source": "f0014",
+      "resource": "compute"
+    }
+  },
+  "total_compute_spent": 42.0,
+  "total_cognition_spent": 20.808200000000003,
+  "total_interpreter_spent": 0.0,
+  "model_call_count": 11
+}

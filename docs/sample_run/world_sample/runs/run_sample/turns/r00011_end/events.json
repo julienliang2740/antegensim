@@ -1,0 +1,262 @@
+[
+  {
+    "seq": 590,
+    "turn_id": "r00011_end",
+    "round": 11,
+    "turn": null,
+    "actor": "world",
+    "kind": "plant_growth",
+    "summary": "12 plants grew: +144 energy, +12 essence",
+    "details": {
+      "count": 12,
+      "total_energy_inflow": 144.0,
+      "total_essence_inflow": 12.0,
+      "skipped_non_land": []
+    },
+    "costs": {
+      "compute": 0.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:04:17.369567+00:00"
+  },
+  {
+    "seq": 591,
+    "turn_id": "r00011_end",
+    "round": 11,
+    "turn": null,
+    "actor": "world",
+    "kind": "upkeep",
+    "summary": "a01 paid 1 of 1 upkeep",
+    "details": {
+      "agent_id": "a01",
+      "paid": 1.0,
+      "owed": 1.0
+    },
+    "costs": {
+      "compute": 1.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:04:17.369586+00:00"
+  },
+  {
+    "seq": 592,
+    "turn_id": "r00011_end",
+    "round": 11,
+    "turn": null,
+    "actor": "world",
+    "kind": "upkeep",
+    "summary": "a02 paid 1 of 1 upkeep",
+    "details": {
+      "agent_id": "a02",
+      "paid": 1.0,
+      "owed": 1.0
+    },
+    "costs": {
+      "compute": 1.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:04:17.369592+00:00"
+  },
+  {
+    "seq": 593,
+    "turn_id": "r00011_end",
+    "round": 11,
+    "turn": null,
+    "actor": "world",
+    "kind": "upkeep",
+    "summary": "a03 paid 1 of 1 upkeep",
+    "details": {
+      "agent_id": "a03",
+      "paid": 1.0,
+      "owed": 1.0
+    },
+    "costs": {
+      "compute": 1.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:04:17.369597+00:00"
+  },
+  {
+    "seq": 594,
+    "turn_id": "r00011_end",
+    "round": 11,
+    "turn": null,
+    "actor": "world",
+    "kind": "upkeep",
+    "summary": "a04 paid 1 of 1 upkeep",
+    "details": {
+      "agent_id": "a04",
+      "paid": 1.0,
+      "owed": 1.0
+    },
+    "costs": {
+      "compute": 1.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:04:17.369601+00:00"
+  },
+  {
+    "seq": 595,
+    "turn_id": "r00011_end",
+    "round": 11,
+    "turn": null,
+    "actor": "world",
+    "kind": "upkeep",
+    "summary": "a05 paid 1 of 1 upkeep",
+    "details": {
+      "agent_id": "a05",
+      "paid": 1.0,
+      "owed": 1.0
+    },
+    "costs": {
+      "compute": 1.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:04:17.369606+00:00"
+  },
+  {
+    "seq": 596,
+    "turn_id": "r00011_end",
+    "round": 11,
+    "turn": null,
+    "actor": "world",
+    "kind": "upkeep",
+    "summary": "a06 paid 1 of 1 upkeep",
+    "details": {
+      "agent_id": "a06",
+      "paid": 1.0,
+      "owed": 1.0
+    },
+    "costs": {
+      "compute": 1.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:04:17.369610+00:00"
+  },
+  {
+    "seq": 597,
+    "turn_id": "r00011_end",
+    "round": 11,
+    "turn": null,
+    "actor": "world",
+    "kind": "upkeep",
+    "summary": "a07 paid 1 of 1 upkeep",
+    "details": {
+      "agent_id": "a07",
+      "paid": 1.0,
+      "owed": 1.0
+    },
+    "costs": {
+      "compute": 1.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:04:17.369614+00:00"
+  },
+  {
+    "seq": 598,
+    "turn_id": "r00011_end",
+    "round": 11,
+    "turn": null,
+    "actor": "world",
+    "kind": "upkeep",
+    "summary": "a08 paid 1 of 1 upkeep",
+    "details": {
+      "agent_id": "a08",
+      "paid": 1.0,
+      "owed": 1.0
+    },
+    "costs": {
+      "compute": 1.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:04:17.369619+00:00"
+  },
+  {
+    "seq": 599,
+    "turn_id": "r00011_end",
+    "round": 11,
+    "turn": null,
+    "actor": "world",
+    "kind": "fruit_removed",
+    "summary": "fruit f0014 removed (consumed; 0 compute lost)",
+    "details": {
+      "plant_id": "p0002",
+      "entity_id": "f0014",
+      "position": {
+        "x": 1,
+        "y": 0
+      },
+      "lost_compute": 0.0,
+      "reason": "consumed"
+    },
+    "costs": {
+      "compute": 0.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:04:17.369624+00:00"
+  },
+  {
+    "seq": 600,
+    "turn_id": "r00011_end",
+    "round": 11,
+    "turn": null,
+    "actor": "world",
+    "kind": "fruit_removed",
+    "summary": "fruit f0018 removed (consumed; 0 compute lost)",
+    "details": {
+      "plant_id": "p0006",
+      "entity_id": "f0018",
+      "position": {
+        "x": 1,
+        "y": 1
+      },
+      "lost_compute": 0.0,
+      "reason": "consumed"
+    },
+    "costs": {
+      "compute": 0.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:04:17.369628+00:00"
+  },
+  {
+    "seq": 601,
+    "turn_id": "r00011_end",
+    "round": 11,
+    "turn": null,
+    "actor": "world",
+    "kind": "round_ended",
+    "summary": "round 11 ended: 8 living agents, 0 deaths",
+    "details": {
+      "round": 11,
+      "living_agents": [
+        "a01",
+        "a02",
+        "a03",
+        "a04",
+        "a05",
+        "a06",
+        "a07",
+        "a08"
+      ],
+      "deaths": []
+    },
+    "costs": {
+      "compute": 0.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:04:17.369633+00:00"
+  }
+]

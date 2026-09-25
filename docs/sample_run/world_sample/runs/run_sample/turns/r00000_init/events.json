@@ -1,0 +1,33 @@
+[
+  {
+    "seq": 1,
+    "turn_id": "r00000_init",
+    "round": 0,
+    "turn": null,
+    "actor": "system",
+    "kind": "run_created",
+    "summary": "run 'live-story-8x12' created with 8 agents (seed 7)",
+    "details": {
+      "run_id": "run_20260925_225352_5ae2",
+      "world_id": "world_20260925_225352_dcbb",
+      "agent_ids": [
+        "a01",
+        "a02",
+        "a03",
+        "a04",
+        "a05",
+        "a06",
+        "a07",
+        "a08"
+      ],
+      "seed": 7,
+      "warnings": []
+    },
+    "costs": {
+      "compute": 0.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T22:53:52.846157+00:00"
+  }
+]

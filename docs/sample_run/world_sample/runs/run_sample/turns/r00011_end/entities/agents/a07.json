@@ -1,0 +1,63 @@
+{
+  "kind": "agent",
+  "id": "a07",
+  "name": "Galene",
+  "position": {
+    "x": 0,
+    "y": -1
+  },
+  "stats": {
+    "compute": 139.0446,
+    "essence": 18.0,
+    "essence_capacity": 100.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 1.0,
+    "speed": 1,
+    "vision_range": 1,
+    "communication_range": 0,
+    "compute_absorption": 0.2,
+    "essence_absorption": 0.1,
+    "skill_count_limit": 5,
+    "skill_block_limit": 100
+  },
+  "upgrade_counts": {
+    "vision_range": 1
+  },
+  "persona": "",
+  "alive": true,
+  "created_round": 0,
+  "died_round": null,
+  "death_cause": null,
+  "skills": {},
+  "skill_execution": null,
+  "wait_turns_remaining": 0,
+  "last_action": {
+    "name": "move",
+    "args": {
+      "direction": "right"
+    }
+  },
+  "last_result": {
+    "ok": true,
+    "reason": "ok",
+    "cost_compute": 5.0,
+    "cost_essence": 0.0,
+    "round": 11,
+    "data": {},
+    "effects": {
+      "from": {
+        "x": -1,
+        "y": -1
+      },
+      "to": {
+        "x": 0,
+        "y": -1
+      }
+    }
+  },
+  "total_compute_spent": 40.0,
+  "total_cognition_spent": 21.955400000000004,
+  "total_interpreter_spent": 0.0,
+  "model_call_count": 11
+}

@@ -1,0 +1,59 @@
+{
+  "kind": "agent",
+  "id": "a01",
+  "name": "Aster",
+  "position": {
+    "x": 0,
+    "y": 0
+  },
+  "stats": {
+    "compute": 144.89340000000004,
+    "essence": 18.0,
+    "essence_capacity": 100.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 1.0,
+    "speed": 1,
+    "vision_range": 1,
+    "communication_range": 0,
+    "compute_absorption": 0.2,
+    "essence_absorption": 0.1,
+    "skill_count_limit": 5,
+    "skill_block_limit": 100
+  },
+  "upgrade_counts": {
+    "vision_range": 1
+  },
+  "persona": "",
+  "alive": true,
+  "created_round": 0,
+  "died_round": null,
+  "death_cause": null,
+  "skills": {},
+  "skill_execution": null,
+  "wait_turns_remaining": 0,
+  "last_action": {
+    "name": "send",
+    "args": {
+      "recipient": "a04",
+      "message": "Greetings Damaris! Thank you for reaching out. I'm Aster (a01). I'm currently focused on resource gathering and maintaining my energy reserves. I'm interested in learning more about your proposal for cooperation. Unfortunately, my communication_range is still 0, so I may have limited ability to coordinate beyond this message. What resources or coordination would be most valuable to you?"
+    }
+  },
+  "last_result": {
+    "ok": true,
+    "reason": "ok",
+    "cost_compute": 3.0,
+    "cost_essence": 0.0,
+    "round": 11,
+    "data": {
+      "delivered_to": "a04"
+    },
+    "effects": {
+      "delivered": 1
+    }
+  },
+  "total_compute_spent": 35.0,
+  "total_cognition_spent": 21.1066,
+  "total_interpreter_spent": 0.0,
+  "model_call_count": 11
+}

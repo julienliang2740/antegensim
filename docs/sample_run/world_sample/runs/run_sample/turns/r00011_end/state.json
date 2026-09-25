@@ -1,0 +1,34 @@
+{
+  "schema_version": "0.1.0",
+  "turn_id": "r00011_end",
+  "kind": "round_end",
+  "round": 11,
+  "turn_index": null,
+  "acting_agent_id": null,
+  "previous_turn_id": "r00011_t08_a02",
+  "scheduler": {
+    "round": 11,
+    "order": [
+      "a07",
+      "a08",
+      "a04",
+      "a06",
+      "a01",
+      "a05",
+      "a03",
+      "a02"
+    ],
+    "next_index": 8,
+    "round_complete": true
+  },
+  "decision_source": "none",
+  "packet_id": null,
+  "model_call_ids": [],
+  "action": null,
+  "action_result": null,
+  "interventions": [],
+  "event_seq_start": 590,
+  "event_seq_end": 601,
+  "code_revision": "a11e51b+dirty.67f19b11",
+  "saved_at": "2026-09-25T23:04:17.369661+00:00"
+}

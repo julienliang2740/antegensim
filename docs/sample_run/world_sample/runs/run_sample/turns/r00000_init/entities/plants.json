@@ -1,0 +1,338 @@
+{
+  "p0001": {
+    "kind": "plant",
+    "id": "p0001",
+    "position": {
+      "x": 0,
+      "y": 0
+    },
+    "species": "fruit_tree",
+    "stage_index": 2,
+    "age_rounds": 15,
+    "size": 3.0,
+    "energy": 0.0,
+    "essence": 5.0,
+    "alive": true,
+    "created_round": 0,
+    "died_round": null,
+    "death_cause": null,
+    "fruit_ids": [
+      "f0001"
+    ],
+    "seed_ids": [],
+    "rounds_since_fruit": 0,
+    "rounds_since_seed": 0,
+    "total_fruit_produced": 1,
+    "total_seeds_produced": 0,
+    "total_source_energy": 60.0,
+    "total_source_essence": 5.0
+  },
+  "p0002": {
+    "kind": "plant",
+    "id": "p0002",
+    "position": {
+      "x": 1,
+      "y": 0
+    },
+    "species": "fruit_tree",
+    "stage_index": 2,
+    "age_rounds": 15,
+    "size": 3.0,
+    "energy": 0.0,
+    "essence": 5.0,
+    "alive": true,
+    "created_round": 0,
+    "died_round": null,
+    "death_cause": null,
+    "fruit_ids": [
+      "f0002"
+    ],
+    "seed_ids": [],
+    "rounds_since_fruit": 0,
+    "rounds_since_seed": 0,
+    "total_fruit_produced": 1,
+    "total_seeds_produced": 0,
+    "total_source_energy": 60.0,
+    "total_source_essence": 5.0
+  },
+  "p0003": {
+    "kind": "plant",
+    "id": "p0003",
+    "position": {
+      "x": 0,
+      "y": 1
+    },
+    "species": "fruit_tree",
+    "stage_index": 2,
+    "age_rounds": 15,
+    "size": 3.0,
+    "energy": 0.0,
+    "essence": 5.0,
+    "alive": true,
+    "created_round": 0,
+    "died_round": null,
+    "death_cause": null,
+    "fruit_ids": [
+      "f0003"
+    ],
+    "seed_ids": [],
+    "rounds_since_fruit": 0,
+    "rounds_since_seed": 0,
+    "total_fruit_produced": 1,
+    "total_seeds_produced": 0,
+    "total_source_energy": 60.0,
+    "total_source_essence": 5.0
+  },
+  "p0004": {
+    "kind": "plant",
+    "id": "p0004",
+    "position": {
+      "x": -1,
+      "y": 0
+    },
+    "species": "fruit_tree",
+    "stage_index": 2,
+    "age_rounds": 15,
+    "size": 3.0,
+    "energy": 0.0,
+    "essence": 5.0,
+    "alive": true,
+    "created_round": 0,
+    "died_round": null,
+    "death_cause": null,
+    "fruit_ids": [
+      "f0004"
+    ],
+    "seed_ids": [],
+    "rounds_since_fruit": 0,
+    "rounds_since_seed": 0,
+    "total_fruit_produced": 1,
+    "total_seeds_produced": 0,
+    "total_source_energy": 60.0,
+    "total_source_essence": 5.0
+  },
+  "p0005": {
+    "kind": "plant",
+    "id": "p0005",
+    "position": {
+      "x": 0,
+      "y": -1
+    },
+    "species": "fruit_tree",
+    "stage_index": 2,
+    "age_rounds": 15,
+    "size": 3.0,
+    "energy": 0.0,
+    "essence": 5.0,
+    "alive": true,
+    "created_round": 0,
+    "died_round": null,
+    "death_cause": null,
+    "fruit_ids": [
+      "f0005"
+    ],
+    "seed_ids": [],
+    "rounds_since_fruit": 0,
+    "rounds_since_seed": 0,
+    "total_fruit_produced": 1,
+    "total_seeds_produced": 0,
+    "total_source_energy": 60.0,
+    "total_source_essence": 5.0
+  },
+  "p0006": {
+    "kind": "plant",
+    "id": "p0006",
+    "position": {
+      "x": 1,
+      "y": 1
+    },
+    "species": "fruit_tree",
+    "stage_index": 2,
+    "age_rounds": 15,
+    "size": 3.0,
+    "energy": 0.0,
+    "essence": 5.0,
+    "alive": true,
+    "created_round": 0,
+    "died_round": null,
+    "death_cause": null,
+    "fruit_ids": [
+      "f0006"
+    ],
+    "seed_ids": [],
+    "rounds_since_fruit": 0,
+    "rounds_since_seed": 0,
+    "total_fruit_produced": 1,
+    "total_seeds_produced": 0,
+    "total_source_energy": 60.0,
+    "total_source_essence": 5.0
+  },
+  "p0007": {
+    "kind": "plant",
+    "id": "p0007",
+    "position": {
+      "x": -1,
+      "y": -1
+    },
+    "species": "fruit_tree",
+    "stage_index": 2,
+    "age_rounds": 15,
+    "size": 3.0,
+    "energy": 0.0,
+    "essence": 5.0,
+    "alive": true,
+    "created_round": 0,
+    "died_round": null,
+    "death_cause": null,
+    "fruit_ids": [
+      "f0007"
+    ],
+    "seed_ids": [],
+    "rounds_since_fruit": 0,
+    "rounds_since_seed": 0,
+    "total_fruit_produced": 1,
+    "total_seeds_produced": 0,
+    "total_source_energy": 60.0,
+    "total_source_essence": 5.0
+  },
+  "p0008": {
+    "kind": "plant",
+    "id": "p0008",
+    "position": {
+      "x": 2,
+      "y": 0
+    },
+    "species": "fruit_tree",
+    "stage_index": 2,
+    "age_rounds": 15,
+    "size": 3.0,
+    "energy": 0.0,
+    "essence": 5.0,
+    "alive": true,
+    "created_round": 0,
+    "died_round": null,
+    "death_cause": null,
+    "fruit_ids": [
+      "f0008"
+    ],
+    "seed_ids": [],
+    "rounds_since_fruit": 0,
+    "rounds_since_seed": 0,
+    "total_fruit_produced": 1,
+    "total_seeds_produced": 0,
+    "total_source_energy": 60.0,
+    "total_source_essence": 5.0
+  },
+  "p0009": {
+    "kind": "plant",
+    "id": "p0009",
+    "position": {
+      "x": 1,
+      "y": 9
+    },
+    "species": "fruit_tree",
+    "stage_index": 2,
+    "age_rounds": 15,
+    "size": 3.0,
+    "energy": 0.0,
+    "essence": 5.0,
+    "alive": true,
+    "created_round": 0,
+    "died_round": null,
+    "death_cause": null,
+    "fruit_ids": [
+      "f0009"
+    ],
+    "seed_ids": [],
+    "rounds_since_fruit": 0,
+    "rounds_since_seed": 0,
+    "total_fruit_produced": 1,
+    "total_seeds_produced": 0,
+    "total_source_energy": 60.0,
+    "total_source_essence": 5.0
+  },
+  "p0010": {
+    "kind": "plant",
+    "id": "p0010",
+    "position": {
+      "x": -1,
+      "y": -10
+    },
+    "species": "fruit_tree",
+    "stage_index": 2,
+    "age_rounds": 15,
+    "size": 3.0,
+    "energy": 0.0,
+    "essence": 5.0,
+    "alive": true,
+    "created_round": 0,
+    "died_round": null,
+    "death_cause": null,
+    "fruit_ids": [
+      "f0010"
+    ],
+    "seed_ids": [],
+    "rounds_since_fruit": 0,
+    "rounds_since_seed": 0,
+    "total_fruit_produced": 1,
+    "total_seeds_produced": 0,
+    "total_source_energy": 60.0,
+    "total_source_essence": 5.0
+  },
+  "p0011": {
+    "kind": "plant",
+    "id": "p0011",
+    "position": {
+      "x": -6,
+      "y": 0
+    },
+    "species": "fruit_tree",
+    "stage_index": 2,
+    "age_rounds": 15,
+    "size": 3.0,
+    "energy": 0.0,
+    "essence": 5.0,
+    "alive": true,
+    "created_round": 0,
+    "died_round": null,
+    "death_cause": null,
+    "fruit_ids": [
+      "f0011"
+    ],
+    "seed_ids": [],
+    "rounds_since_fruit": 0,
+    "rounds_since_seed": 0,
+    "total_fruit_produced": 1,
+    "total_seeds_produced": 0,
+    "total_source_energy": 60.0,
+    "total_source_essence": 5.0
+  },
+  "p0012": {
+    "kind": "plant",
+    "id": "p0012",
+    "position": {
+      "x": 5,
+      "y": 4
+    },
+    "species": "fruit_tree",
+    "stage_index": 2,
+    "age_rounds": 15,
+    "size": 3.0,
+    "energy": 0.0,
+    "essence": 5.0,
+    "alive": true,
+    "created_round": 0,
+    "died_round": null,
+    "death_cause": null,
+    "fruit_ids": [
+      "f0012"
+    ],
+    "seed_ids": [],
+    "rounds_since_fruit": 0,
+    "rounds_since_seed": 0,
+    "total_fruit_produced": 1,
+    "total_seeds_produced": 0,
+    "total_source_energy": 60.0,
+    "total_source_essence": 5.0
+  }
+}

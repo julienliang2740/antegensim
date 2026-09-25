@@ -1,0 +1,29 @@
+{
+  "schema_version": "0.1.0",
+  "world_id": "world_20260925_225352_dcbb",
+  "run_id": "run_20260925_225352_5ae2",
+  "name": "live-story-8x12",
+  "created_at": "2026-09-25T22:53:52.841180+00:00",
+  "updated_at": "2026-09-25T23:05:27.557790+00:00",
+  "seed": 7,
+  "parent": null,
+  "code_revision": "a11e51b+dirty.67f19b11",
+  "current_turn_id": "r00012_end",
+  "last_round": 12,
+  "last_turn_index": null,
+  "next_event_seq": 654,
+  "next_intervention_seq": 1,
+  "agent_count": 8,
+  "living_agent_count": 8,
+  "default_model_key": "claude-cli-haiku",
+  "finished": false,
+  "finished_reason": null,
+  "turn_count": 109,
+  "real_usage": {
+    "calls": 96,
+    "interrupted_calls": 0,
+    "input_tokens": 645600,
+    "output_tokens": 54728,
+    "provider_cost_usd": 0.7905858999999998
+  }
+}

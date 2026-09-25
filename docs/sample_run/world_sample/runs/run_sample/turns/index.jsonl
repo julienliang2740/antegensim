@@ -1,0 +1,3 @@
+{"turn_id": "r00000_init", "kind": "init", "round": 0, "turn_index": null, "acting_agent_id": null, "action_name": null, "ok": null, "decision_source": "none", "intervention_count": 0, "event_count": 1, "saved_at": "2026-09-25T22:53:52.846185+00:00"}
+{"turn_id": "r00011_t03_a04", "kind": "agent_turn", "round": 11, "turn_index": 3, "acting_agent_id": "a04", "action_name": "send", "ok": true, "decision_source": "model", "intervention_count": 0, "event_count": 6, "saved_at": "2026-09-25T23:03:43.305497+00:00"}
+{"turn_id": "r00011_end", "kind": "round_end", "round": 11, "turn_index": null, "acting_agent_id": null, "action_name": null, "ok": null, "decision_source": "none", "intervention_count": 0, "event_count": 12, "saved_at": "2026-09-25T23:04:17.369661+00:00"}

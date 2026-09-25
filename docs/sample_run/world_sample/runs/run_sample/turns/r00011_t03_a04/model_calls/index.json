@@ -1,0 +1,22 @@
+[
+  {
+    "call_id": "mc_r00011_t03_a04_01",
+    "agent_id": "a04",
+    "model_key": "claude-cli-haiku",
+    "provider": "claude_cli",
+    "model_id": "haiku",
+    "response_model": "claude-haiku-4-5-20251001",
+    "status": "completed",
+    "result_status": "ok",
+    "input_tokens": 6858,
+    "output_tokens": 358,
+    "latency_ms": 5112.085287008085,
+    "attempts": 1,
+    "charged_compute": 1.7296,
+    "uncharged_compute": 0.0,
+    "packet_id": "pk_r00011_t03_a04",
+    "error": null,
+    "provider_cost_usd": 0.0068561,
+    "reasoning_tokens": 0
+  }
+]

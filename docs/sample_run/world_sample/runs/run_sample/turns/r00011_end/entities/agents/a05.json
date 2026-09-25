@@ -1,0 +1,63 @@
+{
+  "kind": "agent",
+  "id": "a05",
+  "name": "Eos",
+  "position": {
+    "x": 0,
+    "y": -1
+  },
+  "stats": {
+    "compute": 105.1524,
+    "essence": 14.0,
+    "essence_capacity": 100.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 1.0,
+    "speed": 1,
+    "vision_range": 2,
+    "communication_range": 0,
+    "compute_absorption": 0.2,
+    "essence_absorption": 0.1,
+    "skill_count_limit": 5,
+    "skill_block_limit": 100
+  },
+  "upgrade_counts": {
+    "vision_range": 2
+  },
+  "persona": "",
+  "alive": true,
+  "created_round": 0,
+  "died_round": null,
+  "death_cause": null,
+  "skills": {},
+  "skill_execution": null,
+  "wait_turns_remaining": 0,
+  "last_action": {
+    "name": "upgrade",
+    "args": {
+      "attribute": "vision_range"
+    }
+  },
+  "last_result": {
+    "ok": true,
+    "reason": "ok",
+    "cost_compute": 50.0,
+    "cost_essence": 4.0,
+    "round": 11,
+    "data": {
+      "attribute": "vision_range",
+      "new_value": 2,
+      "purchase_count": 2
+    },
+    "effects": {
+      "purchased": "vision_range",
+      "new_value": 2,
+      "compute": 50.0,
+      "essence": 4.0
+    }
+  },
+  "total_compute_spent": 87.0,
+  "total_cognition_spent": 20.847600000000003,
+  "total_interpreter_spent": 0.0,
+  "model_call_count": 11
+}

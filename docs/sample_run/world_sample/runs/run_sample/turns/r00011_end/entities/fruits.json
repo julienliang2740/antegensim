@@ -1,0 +1,278 @@
+{
+  "f0009": {
+    "kind": "fruit",
+    "id": "f0009",
+    "position": {
+      "x": 1,
+      "y": 9
+    },
+    "plant_id": "p0009",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 0
+  },
+  "f0010": {
+    "kind": "fruit",
+    "id": "f0010",
+    "position": {
+      "x": -1,
+      "y": -10
+    },
+    "plant_id": "p0010",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 0
+  },
+  "f0011": {
+    "kind": "fruit",
+    "id": "f0011",
+    "position": {
+      "x": -6,
+      "y": 0
+    },
+    "plant_id": "p0011",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 0
+  },
+  "f0012": {
+    "kind": "fruit",
+    "id": "f0012",
+    "position": {
+      "x": 5,
+      "y": 4
+    },
+    "plant_id": "p0012",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 0
+  },
+  "f0016": {
+    "kind": "fruit",
+    "id": "f0016",
+    "position": {
+      "x": -1,
+      "y": 0
+    },
+    "plant_id": "p0004",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 5
+  },
+  "f0019": {
+    "kind": "fruit",
+    "id": "f0019",
+    "position": {
+      "x": -1,
+      "y": -1
+    },
+    "plant_id": "p0007",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 5
+  },
+  "f0020": {
+    "kind": "fruit",
+    "id": "f0020",
+    "position": {
+      "x": 2,
+      "y": 0
+    },
+    "plant_id": "p0008",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 5
+  },
+  "f0021": {
+    "kind": "fruit",
+    "id": "f0021",
+    "position": {
+      "x": 1,
+      "y": 9
+    },
+    "plant_id": "p0009",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 5
+  },
+  "f0022": {
+    "kind": "fruit",
+    "id": "f0022",
+    "position": {
+      "x": -1,
+      "y": -10
+    },
+    "plant_id": "p0010",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 5
+  },
+  "f0023": {
+    "kind": "fruit",
+    "id": "f0023",
+    "position": {
+      "x": -6,
+      "y": 0
+    },
+    "plant_id": "p0011",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 5
+  },
+  "f0024": {
+    "kind": "fruit",
+    "id": "f0024",
+    "position": {
+      "x": 5,
+      "y": 4
+    },
+    "plant_id": "p0012",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 5
+  },
+  "f0025": {
+    "kind": "fruit",
+    "id": "f0025",
+    "position": {
+      "x": 0,
+      "y": 0
+    },
+    "plant_id": "p0001",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 10
+  },
+  "f0026": {
+    "kind": "fruit",
+    "id": "f0026",
+    "position": {
+      "x": 1,
+      "y": 0
+    },
+    "plant_id": "p0002",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 10
+  },
+  "f0027": {
+    "kind": "fruit",
+    "id": "f0027",
+    "position": {
+      "x": 0,
+      "y": 1
+    },
+    "plant_id": "p0003",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 10
+  },
+  "f0028": {
+    "kind": "fruit",
+    "id": "f0028",
+    "position": {
+      "x": -1,
+      "y": 0
+    },
+    "plant_id": "p0004",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 10
+  },
+  "f0029": {
+    "kind": "fruit",
+    "id": "f0029",
+    "position": {
+      "x": 0,
+      "y": -1
+    },
+    "plant_id": "p0005",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 10
+  },
+  "f0030": {
+    "kind": "fruit",
+    "id": "f0030",
+    "position": {
+      "x": 1,
+      "y": 1
+    },
+    "plant_id": "p0006",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 10
+  },
+  "f0031": {
+    "kind": "fruit",
+    "id": "f0031",
+    "position": {
+      "x": -1,
+      "y": -1
+    },
+    "plant_id": "p0007",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 10
+  },
+  "f0032": {
+    "kind": "fruit",
+    "id": "f0032",
+    "position": {
+      "x": 2,
+      "y": 0
+    },
+    "plant_id": "p0008",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 10
+  },
+  "f0033": {
+    "kind": "fruit",
+    "id": "f0033",
+    "position": {
+      "x": 1,
+      "y": 9
+    },
+    "plant_id": "p0009",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 10
+  },
+  "f0034": {
+    "kind": "fruit",
+    "id": "f0034",
+    "position": {
+      "x": -1,
+      "y": -10
+    },
+    "plant_id": "p0010",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 10
+  },
+  "f0035": {
+    "kind": "fruit",
+    "id": "f0035",
+    "position": {
+      "x": -6,
+      "y": 0
+    },
+    "plant_id": "p0011",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 10
+  },
+  "f0036": {
+    "kind": "fruit",
+    "id": "f0036",
+    "position": {
+      "x": 5,
+      "y": 4
+    },
+    "plant_id": "p0012",
+    "available_compute": 60.0,
+    "available_essence": 0.0,
+    "created_round": 10
+  }
+}

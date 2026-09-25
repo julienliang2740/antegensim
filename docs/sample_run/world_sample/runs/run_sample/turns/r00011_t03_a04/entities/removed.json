@@ -1,0 +1,112 @@
+{
+  "f0001": {
+    "id": "f0001",
+    "kind": "fruit",
+    "position": {
+      "x": 0,
+      "y": 0
+    },
+    "round": 2,
+    "reason": "consumed"
+  },
+  "f0003": {
+    "id": "f0003",
+    "kind": "fruit",
+    "position": {
+      "x": 0,
+      "y": 1
+    },
+    "round": 2,
+    "reason": "consumed"
+  },
+  "f0005": {
+    "id": "f0005",
+    "kind": "fruit",
+    "position": {
+      "x": 0,
+      "y": -1
+    },
+    "round": 2,
+    "reason": "consumed"
+  },
+  "f0006": {
+    "id": "f0006",
+    "kind": "fruit",
+    "position": {
+      "x": 1,
+      "y": 1
+    },
+    "round": 2,
+    "reason": "consumed"
+  },
+  "f0007": {
+    "id": "f0007",
+    "kind": "fruit",
+    "position": {
+      "x": -1,
+      "y": -1
+    },
+    "round": 2,
+    "reason": "consumed"
+  },
+  "f0008": {
+    "id": "f0008",
+    "kind": "fruit",
+    "position": {
+      "x": 2,
+      "y": 0
+    },
+    "round": 2,
+    "reason": "consumed"
+  },
+  "f0002": {
+    "id": "f0002",
+    "kind": "fruit",
+    "position": {
+      "x": 1,
+      "y": 0
+    },
+    "round": 3,
+    "reason": "consumed"
+  },
+  "f0004": {
+    "id": "f0004",
+    "kind": "fruit",
+    "position": {
+      "x": -1,
+      "y": 0
+    },
+    "round": 3,
+    "reason": "consumed"
+  },
+  "f0017": {
+    "id": "f0017",
+    "kind": "fruit",
+    "position": {
+      "x": 0,
+      "y": -1
+    },
+    "round": 7,
+    "reason": "consumed"
+  },
+  "f0013": {
+    "id": "f0013",
+    "kind": "fruit",
+    "position": {
+      "x": 0,
+      "y": 0
+    },
+    "round": 8,
+    "reason": "consumed"
+  },
+  "f0015": {
+    "id": "f0015",
+    "kind": "fruit",
+    "position": {
+      "x": 0,
+      "y": 1
+    },
+    "round": 10,
+    "reason": "consumed"
+  }
+}

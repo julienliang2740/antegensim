@@ -1,0 +1,25 @@
+{
+  "schema_version": "0.1.0",
+  "turn_id": "r00000_init",
+  "kind": "init",
+  "round": 0,
+  "turn_index": null,
+  "acting_agent_id": null,
+  "previous_turn_id": null,
+  "scheduler": {
+    "round": 0,
+    "order": [],
+    "next_index": 0,
+    "round_complete": true
+  },
+  "decision_source": "none",
+  "packet_id": null,
+  "model_call_ids": [],
+  "action": null,
+  "action_result": null,
+  "interventions": [],
+  "event_seq_start": 1,
+  "event_seq_end": 1,
+  "code_revision": "a11e51b+dirty.67f19b11",
+  "saved_at": "2026-09-25T22:53:52.846185+00:00"
+}

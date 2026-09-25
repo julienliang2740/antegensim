@@ -1,0 +1,165 @@
+[
+  {
+    "seq": 558,
+    "turn_id": "r00011_t03_a04",
+    "round": 11,
+    "turn": 3,
+    "actor": "a04",
+    "kind": "turn_started",
+    "summary": "Damaris (a04) begins turn 3 of round 11",
+    "details": {},
+    "costs": {
+      "compute": 0.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:03:38.164349+00:00"
+  },
+  {
+    "seq": 559,
+    "turn_id": "r00011_t03_a04",
+    "round": 11,
+    "turn": 3,
+    "actor": "a04",
+    "kind": "model_call_pending",
+    "summary": "a04 waiting for claude-cli-haiku (claude_cli/haiku)",
+    "details": {
+      "call_id": "mc_r00011_t03_a04_01",
+      "model_key": "claude-cli-haiku",
+      "provider": "claude_cli",
+      "model_id": "haiku",
+      "reservation_compute": 2.1958
+    },
+    "costs": {
+      "compute": 0.0,
+      "essence": 0.0
+    },
+    "pending": true,
+    "timestamp": "2026-09-25T23:03:38.184818+00:00"
+  },
+  {
+    "seq": 560,
+    "turn_id": "r00011_t03_a04",
+    "round": 11,
+    "turn": 3,
+    "actor": "a04",
+    "kind": "model_call_completed",
+    "summary": "a04 got a decision from claude-cli-haiku (in 6858 / out 358 tokens)",
+    "details": {
+      "call_id": "mc_r00011_t03_a04_01",
+      "status": "ok",
+      "usage": {
+        "input_tokens": 3,
+        "cache_read_tokens": 4551,
+        "cache_creation_tokens": 2304,
+        "output_tokens": 358,
+        "reasoning_tokens": 0,
+        "billed_input_tokens": 6858,
+        "source": "provider"
+      },
+      "latency_ms": 5112.085287008085,
+      "attempts": 1,
+      "provider_cost_usd": 0.0068561,
+      "response_model": "claude-haiku-4-5-20251001",
+      "uncharged_compute": 0.0
+    },
+    "costs": {
+      "compute": 1.7296,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:03:43.304671+00:00"
+  },
+  {
+    "seq": 561,
+    "turn_id": "r00011_t03_a04",
+    "round": 11,
+    "turn": 3,
+    "actor": "a04",
+    "kind": "decision",
+    "summary": "a04 decides: send to a01 \"Greetings a01! I'm Damaris (a0\"",
+    "details": {
+      "thought": "",
+      "action": {
+        "name": "send",
+        "args": {
+          "recipient": "a01",
+          "message": "Greetings a01! I'm Damaris (a04) at (0,0). I've just upgraded my communication capability to reach you. I see we're both here with plant p0001 and fruit f0013. I'm interested in discussing how we might cooperate on resource gathering or coordinate our actions for mutual benefit. What are your current goals?"
+        }
+      },
+      "notebook_updated": false,
+      "saved_skills": [],
+      "deleted_skills": [],
+      "memory_priorities": []
+    },
+    "costs": {
+      "compute": 0.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:03:43.304876+00:00"
+  },
+  {
+    "seq": 562,
+    "turn_id": "r00011_t03_a04",
+    "round": 11,
+    "turn": 3,
+    "actor": "a04",
+    "kind": "action",
+    "summary": "a04 send to a01 (77 tokens) -> ok: delivered to a01 (cost 3)",
+    "details": {
+      "action": {
+        "name": "send",
+        "args": {
+          "recipient": "a01",
+          "message": "Greetings a01! I'm Damaris (a04) at (0,0). I've just upgraded my communication capability to reach you. I see we're both here with plant p0001 and fruit f0013. I'm interested in discussing how we might cooperate on resource gathering or coordinate our actions for mutual benefit. What are your current goals?"
+        }
+      },
+      "result": {
+        "ok": true,
+        "reason": "ok",
+        "cost_compute": 3.0,
+        "cost_essence": 0.0,
+        "round": 11,
+        "data": {
+          "delivered_to": "a01"
+        },
+        "effects": {
+          "delivered": 1
+        }
+      },
+      "via_skill": false,
+      "skill_name": null
+    },
+    "costs": {
+      "compute": 3.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:03:43.305345+00:00"
+  },
+  {
+    "seq": 563,
+    "turn_id": "r00011_t03_a04",
+    "round": 11,
+    "turn": 3,
+    "actor": "a04",
+    "kind": "message_delivered",
+    "summary": "message delivered to a01",
+    "details": {
+      "recipients": [
+        "a01"
+      ],
+      "broadcast": false,
+      "sender_visible_to": {
+        "a01": true
+      }
+    },
+    "costs": {
+      "compute": 0.0,
+      "essence": 0.0
+    },
+    "pending": false,
+    "timestamp": "2026-09-25T23:03:43.305354+00:00"
+  }
+]
