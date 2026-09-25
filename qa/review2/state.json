@@ -1,0 +1,65 @@
+{
+  "runId": "run_20260925_183039_9341",
+  "runName": "review2 live haiku 183035",
+  "afterStep2": "r00001_t01_a04",
+  "playTimeline": [
+    {
+      "t": "0.0",
+      "state": "waiting_model",
+      "active": "r00001_t02_a03",
+      "saved": "r00001_t01_a04",
+      "usd": 0.0059781
+    },
+    {
+      "t": "4.8",
+      "state": "waiting_model",
+      "active": "r00001_t03_a01",
+      "saved": "r00001_t02_a03",
+      "usd": 0.011145200000000001
+    },
+    {
+      "t": "10.3",
+      "state": "turn_active",
+      "active": "r00001_t04_a06",
+      "saved": "r00001_t03_a01",
+      "usd": 0.016621300000000002
+    },
+    {
+      "t": "10.4",
+      "state": "waiting_model",
+      "active": "r00001_t04_a06",
+      "saved": "r00001_t03_a01",
+      "usd": 0.016621300000000002
+    },
+    {
+      "t": "15.8",
+      "state": "waiting_model",
+      "active": "r00001_t05_a05",
+      "saved": "r00001_t04_a06",
+      "usd": 0.0220854
+    },
+    {
+      "t": "20.4",
+      "state": "waiting_model",
+      "active": "r00001_t06_a02",
+      "saved": "r00001_t05_a05",
+      "usd": 0.027173500000000003
+    },
+    {
+      "t": "21.5",
+      "state": "pause_requested",
+      "active": "r00001_t06_a02",
+      "saved": "r00001_t05_a05",
+      "usd": 0.027173500000000003
+    },
+    {
+      "t": "27.1",
+      "state": "paused",
+      "active": null,
+      "saved": "r00001_t06_a02",
+      "usd": 0.033374600000000004
+    }
+  ],
+  "voiceTarget": "a03",
+  "afterVoice": "r00002_t02_a03"
+}

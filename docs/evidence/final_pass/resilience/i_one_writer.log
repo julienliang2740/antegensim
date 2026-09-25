@@ -1,0 +1,10 @@
+[PASS] i_one_writer: second process: open of a run held by the first is 409 illegal_command :: {"status": 409, "body": {"error": "illegal_command", "detail": "illegal_command: run run_20260925_204701_417c is open in another process", "problems": []}}
+[PASS] i_one_writer: second process can still read history (read-only routes) :: {"turns": 200, "turn view": 200, "n_turns": 10}
+[PASS] i_one_writer: second process cannot drive the run (409 run_not_open) :: {"error": "run_not_open", "detail": "run_not_open", "problems": []}
+[PASS] i_one_writer: first process still owns the run and is unaffected :: "paused"
+[PASS] i_one_writer: second process cannot stage edits either (409) :: {"error": "run_not_open", "detail": "run_not_open", "problems": []}
+[PASS] i_one_writer: second process cannot reload working files (409) :: {"error": "run_not_open", "detail": "run_not_open", "problems": []}
+[PASS] i_one_writer: after the first process closes the run, the second can open it :: {"status": 200}
+[PASS] i_one_writer: now the first process is refused with 409 :: {"error": "illegal_command", "detail": "illegal_command: run run_20260925_204701_417c is open in another process", "problems": []}
+[PASS] i_one_writer: after kill -9 of the holder, the first process can open (flock released by the OS) :: {"status": 200, "current": "r00002_t01_a04"}
+evidence: /home/ubuntu/antegensim/qa/resilience/out-final/i_one_writer.json ALL OK

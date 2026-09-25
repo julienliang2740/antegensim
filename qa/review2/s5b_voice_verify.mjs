@@ -1,0 +1,45 @@
+import { launch, shot, log, loadState, api, BASE } from './lib.mjs';
+const st = loadState(); const runId = st.runId; const T = st.voiceTarget || 'a03';
+const { browser, page } = await launch();
+log(`=== STEP 5b: verify voice in ${T} knowledge + packet digest`);
+await page.goto(`${BASE}/#/run/${runId}`); await page.waitForTimeout(3000);
+await page.getByPlaceholder(/e\.g\. a05/).fill(T);
+await page.getByRole('button', { name: 'Select entity' }).click(); await page.waitForTimeout(2000);
+const rm = page.getByText(/^Received messages and voice/).first();
+await rm.evaluate(e => e.scrollIntoView({ block: 'start' })); await page.waitForTimeout(300);
+await shot(page, `57-${T}-knowledge-after-turn`);
+const insp = await page.locator('.insp-inspector').innerText().catch(() => '');
+let i = insp.indexOf('Received messages and voice'); log('received:', insp.slice(i, i + 900).replace(/\n/g, ' | '));
+i = insp.indexOf('Knowledge records ('); log('records:', insp.slice(i, i + 1600).replace(/\n/g, ' | '));
+// packet
+await page.evaluate(() => window.scrollTo(0, 0));
+await page.getByRole('button', { name: /Open its latest decision packet/ }).first().click(); await page.waitForTimeout(2500);
+const rv = page.locator('section.record-viewer');
+const sums = await rv.locator('details > summary').allInnerTexts();
+log('packet sections', sums);
+const det = rv.locator('details');
+for (let k = 0; k < await det.count(); k++) await det.nth(k).evaluate((d, open) => d.open = open, /^situation/.test(sums[k] || ''));
+const idx = sums.findIndex(s => /^situation/.test(s));
+const off = await det.nth(idx).evaluate(d => { const rv = d.closest('section.record-viewer'); return d.getBoundingClientRect().top - rv.getBoundingClientRect().top + rv.scrollTop; });
+await rv.evaluate(e => { e.scrollTop = 0; }); await page.waitForTimeout(200);
+await rv.screenshot({ path: new URL(`./shots/58-${T}-packet-head.png`, import.meta.url).pathname });
+await rv.evaluate((e, y) => { e.scrollTop = y - 10; }, off); await page.waitForTimeout(300);
+await rv.screenshot({ path: new URL(`./shots/59-${T}-packet-situation-voice.png`, import.meta.url).pathname });
+console.log('---- situation ----\n' + (await det.nth(idx).innerText()));
+const head = await rv.innerText(); console.log('---- head ----\n' + head.slice(0, 900));
+// model call from packet
+await rv.evaluate(e => { e.scrollTop = 0; });
+await rv.getByRole('button', { name: /Open model call/ }).first().click(); await page.waitForTimeout(2500);
+const rv2 = page.locator('section.record-viewer');
+await rv2.evaluate(e => { e.scrollTop = 0; });
+await rv2.screenshot({ path: new URL(`./shots/5A-${T}-model-call-after-voice.png`, import.meta.url).pathname });
+console.log('---- model call ----\n' + (await rv2.innerText()).slice(0, 1600));
+await page.getByRole('button', { name: 'Close record view' }).click(); await page.waitForTimeout(800);
+// Turn record tab
+await page.getByRole('tab', { name: /Turn record/ }).click(); await page.waitForTimeout(2000);
+await shot(page, '5B-turn-record-tab');
+const tr = await page.locator('[role=tabpanel]').first().innerText().catch(() => '');
+console.log('---- turn record ----\n' + tr.slice(0, 4000));
+await page.evaluate(() => window.scrollBy(0, 700)); await page.waitForTimeout(300);
+await shot(page, '5C-turn-record-tab-scrolled');
+await browser.close();

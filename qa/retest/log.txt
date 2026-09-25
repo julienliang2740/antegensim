@@ -1,0 +1,274 @@
+=== S1 setup + create (retest main 192007)
+entry buttons ["New session\nSet up the world, plant rules, context settings and 6–11 agent cards (8 prefilled), then open the new run paused.","Resume session\nPick a saved run and open it paused at its latest saved turn, ready to inspect or continue."]
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/01-entry.png
+agent cards 8 Agent card 1: Aster ; Agent card 2: Boreas ; Agent card 3: Cyrene ; Agent card 4: Damaris ; Agent card 5: Eos ; Agent card 6: Ferrin ; Agent card 7: Galene ; Agent card 8: Halcyon
+1440x900 run name vs seed hint {"inputLeft":31,"inputRight":362,"hintLeft":380,"hintRight":711,"inputTop":238,"inputBottom":266,"hintTop":231,"hintBottom":266,"overlaps":false}
+  shot: /home/ubuntu/antegensim/qa/retest/shots/a01-setup-top-1440.png
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/02-new-session-cards.png
+world settings: plants at agent starts 1 true | initial fruit per plant 1 1
+  shot: /home/ubuntu/antegensim/qa/retest/shots/a02-world-settings-fields.png
+card1 health field found 1
+=== S1 setup + create (retest main 192016)
+entry buttons ["New session\nSet up the world, plant rules, context settings and 6–11 agent cards (8 prefilled), then open the new run paused.","Resume session\nPick a saved run and open it paused at its latest saved turn, ready to inspect or continue."]
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/01-entry.png
+agent cards 8 Agent card 1: Aster ; Agent card 2: Boreas ; Agent card 3: Cyrene ; Agent card 4: Damaris ; Agent card 5: Eos ; Agent card 6: Ferrin ; Agent card 7: Galene ; Agent card 8: Halcyon
+1440x900 run name vs seed hint {"inputLeft":31,"inputRight":362,"hintLeft":380,"hintRight":711,"inputTop":238,"inputBottom":266,"hintTop":231,"hintBottom":266,"overlaps":false}
+  shot: /home/ubuntu/antegensim/qa/retest/shots/a01-setup-top-1440.png
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/02-new-session-cards.png
+world settings: plants at agent starts 1 true | initial fruit per plant 1 1
+  shot: /home/ubuntu/antegensim/qa/retest/shots/a02-world-settings-fields.png
+card1 health field found 1
+validation summary: Setup problems (path: message) — each is also shown next to its field: | agents[0].stats.health: health exceeds max_health
+=== S1 setup + create (retest main 192026)
+entry buttons ["New session\nSet up the world, plant rules, context settings and 6–11 agent cards (8 prefilled), then open the new run paused.","Resume session\nPick a saved run and open it paused at its latest saved turn, ready to inspect or continue."]
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/01-entry.png
+agent cards 8 Agent card 1: Aster ; Agent card 2: Boreas ; Agent card 3: Cyrene ; Agent card 4: Damaris ; Agent card 5: Eos ; Agent card 6: Ferrin ; Agent card 7: Galene ; Agent card 8: Halcyon
+1440x900 run name vs seed hint {"inputLeft":31,"inputRight":362,"hintLeft":380,"hintRight":711,"inputTop":238,"inputBottom":266,"hintTop":231,"hintBottom":266,"overlaps":false}
+  shot: /home/ubuntu/antegensim/qa/retest/shots/a01-setup-top-1440.png
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/02-new-session-cards.png
+world settings: plants at agent starts 1 true | initial fruit per plant 1 1
+  shot: /home/ubuntu/antegensim/qa/retest/shots/a02-world-settings-fields.png
+card1 health field found 1
+validation summary: Setup problems (path: message) — each is also shown next to its field: | agents[0].stats.health: health exceeds max_health
+validation state: 1 problem found.
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/03-new-session-validation-problem.png
+  shot: /home/ubuntu/antegensim/qa/retest/shots/a03-validation-card1.png
+after fix validation state: Setup is valid.
+created run_20260925_192035_4381 state paused r00000_init runs + 1
+badge Paused
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/04-run-paused.png
+1100x750 run name vs seed hint {"inputRight":365,"hintLeft":383,"overlaps":false}
+=== S2 run turn + step rounds on run_20260925_192035_4381
+status bar height before/during/after first turn 173.7 [173.7] 173.7 tabs y 386 -> 386
+status after first turn: Paused | Paused at a turn boundary. Nothing runs until you press Run turn, Play or Step round. | ROUND | 1 | TURN | 1 | ACTING AGENT (LAST SAVED TURN) | a02 Boreas | NEXT STEP | agent turn for a01 Aster | LAST SAVED TURN | r00001_t01_a02 | LIVING AGENTS | 8 | STAGED EDITS | 0 | MODEL USAGE (FAKE: FREE) | 1 calls · 2,432 in / 33 out tokens (estimated) · $0.0000 | No model call in progress.
+    #1 ~ [r0 init] ~ system ~ run_created ~ r00000_init ~ run 'retest main 192026' created with 8 agents (seed 1)
+    #2 ~ [r1 t1] ~ world ~ round_started ~ r00001_t01_a02 ~ round 1 begins: a02 a01 a03 a04 a07 a08 a06 a05
+    #3 ~ [r1 t1] ~ a02 ~ turn_started ~ r00001_t01_a02 ~ Boreas (a02) begins turn 1 of round 1
+    #4 ~ [r1 t1] ~ a02 ~ model_call_pending ~ r00001_t01_a02 ~ a02 waiting for fake-heuristic (fake/fake-heuristic) — answered (see next lines)
+    #5 ~ [r1 t1] ~ a02 ~ model_call_completed ~ cost 0.5194 compute ~ r00001_t01_a02 ~ a02 got a decision from fake-heuristic (in 2432 / out 33 tokens) ~ 0.0 s
+    #6 ~ [r1 t1] ~ a02 ~ decision ~ r00001_t01_a02 ~ a02 decides: observe (1,0) — "I have not observed this point yet."
+    #7 ~ [r1 t1] ~ a02 ~ action ~ cost 1 compute ~ r00001_t01_a02 ~ a02 observe (1,0) -> ok: land, 3 entities (cost 1)
+  shot: /home/ubuntu/antegensim/qa/retest/shots/b01-after-first-turn.png
+step round -> paused r00001_end next new_round ["a04","a07","a08","a06","a01","a02","a05","a03"]
+step round -> paused r00002_end next new_round ["a01","a04","a02","a06","a08","a03","a05","a07"]
+step round -> paused r00003_end next new_round ["a07","a08","a03","a02","a05","a06","a04","a01"]
+step round -> paused r00004_end next new_round ["a08","a06","a05","a02","a03","a04","a01","a07"]
+status bar height after 4 rounds 173.7
+status at round boundary: Paused | Paused at a turn boundary. Nothing runs until you press Run turn, Play or Step round. | ROUND | 4 | TURN | round end | ACTING AGENT (LAST SAVED TURN) | none | NEXT STEP | start round 5 — likely order a08 Halcyon, a06 Ferrin, a05 Eos, … (8 agents) (predicted; staged edits can change it) | LAST SAVED TURN | r00004_end | LIVING AGENTS | 8 | STAGED EDITS | 0 | MODEL USAGE (FAKE: FREE) | 32 calls · 83,196 in / 1,000 out tokens (estimated) · $0.0000 | No model call in progress.
+  shot: /home/ubuntu/antegensim/qa/retest/shots/b02-after-rounds.png
+status mid-round: Paused | Paused at a turn boundary. Nothing runs until you press Run turn, Play or Step round. | ROUND | 5 | TURN | 1 | ACTING AGENT (LAST SAVED TURN) | a08 Halcyon | NEXT STEP | agent turn for a06 Ferrin | LAST SAVED TURN | r00005_t01_a08 | LIVING AGENTS | 8 | STAGED EDITS | 0 | MODEL USAGE (FAKE: FREE) | 33 calls · 85,938 in / 1,037 out tokens (estimated) · $0.0000 | No model call in progress.
+bar height mid-round 173.7
+=== S3 history, crowded cell, inspector on run_20260925_192035_4381
+history mode text: HISTORY / Viewing history: turn r00003_t03_a02 (round 3). The run itself is unchanged and the live log keeps running. / ◀ Previous round / Round 3 / Next round ▶ / Return to live / TURN / ‹ Previous turn / Turn in round 3 / t01 · a01 Aster · absorb ok — r00003_t01_a01 / t02 · a04 Damaris · absorb ok — r00003_t02_a04 / t03 · a02 Boreas · absorb ok — r00003_t03_a02 / t04 · a06 Ferrin · absorb ok — r00003_t04_a06 / t05 · a08 Halcyon · absorb ok — r00003_t05_a08 / t06 · a03 Cyrene · absorb ok — r00003_t06_a03 / t07 · a05 Eos · absorb ok — r00003_t07_a05 / t08 · a07 Galene · absorb ok — r00003_t08_a07 / Round 3 end — r00003_end / Next turn ›
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/07-history-view.png
+after return to live: LIVE
+most crowded -1,-1 ["a07","p0007"]
+tooltip: (-1, -1) land · 2 occupants | A Galene (a07) | health 100/100 · compute 199.794 · essence 20/100 | P p0007 fruit_tree | fruit_tree · mature (stage 2) · 0 fruit · essence 9 | Removed here earlier: f0007 (consumed, round 3)
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/08-crowded-cell-hover.png
+occupant rows 2 ["A a07 Galene health 100/100 · compute 199.794 · essence 20/100","P p0007 fruit_tree fruit_tree · mature (stage 2) · 0 fruit · essence 9"]
+occupants missing from list: []
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/09-crowded-cell-occupants.png
+wide inspector default aria-pressed true side column width 604
+sections overflowing sideways (wide): []
+all section widths: ["Stats and balances 598/598","Current action and result 598/598","This turn's decision packet an 598/598","Model assignment and context s 598/598","Saved skills (0 of 5) 598/598","Skill execution state 598/598","Believed self vs actual 598/598","Received messages and voice 598/598","Recent action results (with co 598/598","Notebook 598/598","Knowledge records (9) 598/598"]
+clipped cells: []
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/10-agent-inspector.png
+inspector sections: Stats and balances ; Current action and result ; This turn's decision packet and model calls ; Model assignment and context settings ; Saved skills (0 of 5) ; Skill execution state ; Believed self vs actual ; Received messages and voice ; Recent action results (with costs) ; Notebook ; Knowledge records (9)
+first knowledge record text block {"w":566,"text":"You observe (-1,-1) -> ok; terrain land; entities: a07 agent, p0007 plant; obser"}
+  shot: /home/ubuntu/antegensim/qa/retest/shots/c01-knowledge-records.png
+  shot: /home/ubuntu/antegensim/qa/retest/shots/c02-recent-results.png
+sections overflowing sideways (narrow): [] side width 429
+  shot: /home/ubuntu/antegensim/qa/retest/shots/c03-knowledge-records-narrow.png
+agent view banners: ["Agent view is on, but the map and this list are omniscient: they show every entity and true values, which the selected agent may not know. Its own knowledge is in the inspector below.","Agent view: only what Galene (a07) knows — its believed self, notebook, skills, received messages and own records. Authoritative stats, model settings and other entities are hidden."]
+occupant row in agent view: A a07 Galene health 100/100 · compute 199.794 · essence 20/100
+  shot: /home/ubuntu/antegensim/qa/retest/shots/c04-agent-view.png
+=== S4 decision packet, model call record, plant inspector on run_20260925_192035_4381 (a07)
+record viewer: Decision packet pk_r00004_t01_a07
+packet sections: ["stable_rules — ~1911 tokens","skills — ~19 tokens","notebook — ~24 tokens","recent_history — ~180 tokens, records a07-k000003, a07-k000005, a07-k000007","retrieved_memories — ~106 tokens, records a07-k000001","situation — ~215 tokens, records a07-k000006","decision_request — ~254 tokens","Exact messages sent (2)","Situation (structured)"]
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/11-decision-packet.png
+packet head text: Decision packet pk_r00004_t01_a07 | of turn r00004_t01_a07 | Close record view | agent	a07 | round / turn	4 / r00004_t01_a07 | affordable	yes | input token estimate	2709 (incl. 0 request overhead) | generation allowance	1000 | reserved compute (bound only)	1.5418 | notebook version	0 | effective settings	input cap 6000, generation 1000, recent history 5, notebook 400, retrieved 5, digest 10, weights r1/c1/i1, skill source no | selected records	a07-k000003, a07-k000005, a07-k000007, a07-k000001, a07-k000006 | unread shown (digest)	a07-k000006 | omitted (counts)	nothing omitted | created	2026-09-25T19:21:30.487726+00:00 | Open model call mc_r00004_t01_a07_01 | Sections in the order the model saw them | stable_rules — ~1911 tokens | skills — ~19 tokens | ## SKILLS (working memory) | You have no saved skills. | Skill execution: none. | notebook — ~24 tokens | ## NOTEBOOK | Your notebook (version 0; at most 400 tokens; notebook_update repl
+record viewer now: Model call mc_r00004_t01_a07_01
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/12-model-call-record.png
+model call text (head): Model call mc_r00004_t01_a07_01 | of turn r00004_t01_a07 | Close record view | agent	a07 | status	completed (result: ok) | model	fake-heuristic — fake/fake-heuristic, served by fake-heuristic | started / finished	2026-09-25T19:21:30.491449+00:00 / 2026-09-25T19:21:30.501481+00:00 | latency	0.2 ms over 1 attempt(s) | usage (tokens)	input 2709, cache read 0, cache write 0, output 32, billed input 2709 (source: estimate) | world compute	reserved 1.5418, charged 0.5738, uncharged 0, mind multiplier 1 | provider cost	not reported | stop reason	end_turn | error	none | attempt errors	none | request	max output 1000 tokens, timeout 90s per attempt, 2 retries | Open decision packet pk_r00004_t01_a07 | Model output (as returned) | {"thought": "Things changed here; look again.", "action": {"name": "observe", "args": {"point": {"x": -1, "y": -1}, "page": 0}}} | Parsed JSON | { |   "thought": "Things changed here; look again.", |   "action": { |     "name": "observe", |     "args": { |       "point": { |         "x": -1, |         "y": -1 |       }, |       "page": 0 |     } |   } | } | Request messages (2) | Model reference snapshot (no secrets)
+plant chosen p0001 fruit_tree stage 2 energy 48 pos {"x":0,"y":0} rounds_since_fruit 4
+next fruit row: waiting — interval: due in 1 round; energy: needs 60, has 48 (+12/round → about 1 round)
+next seed row: waiting — interval: due in 16 rounds
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/13-plant-inspector-rules.png
+  shot: /home/ubuntu/antegensim/qa/retest/shots/d01-plant-species-rule.png
+plant inspector overflow: []
+species panel present 1
+species panel fruit energy before 60
+panel message: Staged: species rule "fruit_tree" replaced at the next turn boundary.
+  shot: /home/ubuntu/antegensim/qa/retest/shots/d02-species-rule-staged.png
+staged: ["update_plant_rules:fruit_tree:70"]
+=== S5 god mode on run_20260925_192035_4381
+before voice: status=1 tab=(1 staged)
+staged-count samples (changes only): ["0ms status=1 tab=(1 staged)","101ms status=1 tab=(2 staged)","213ms status=2 tab=(2 staged)"]
+voice ok line: ["Staged: the voice reaches a07, a03 at the next turn boundary."]
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/14-god-mode-voice.png
+recent history field 1 5
+context ok line: ["Staged: run defaults recent_history_length change at the next turn boundary (agents with an override keep it)."]
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/15-god-mode-context-settings.png
+quick-box tables vs box (1440): [{"boxRight":509},{"boxRight":1001,"tableRight":950}]
+stage place fruit 201 {"staged":[{"id":"iv_0001","origin":"ui","note":"","created_at":"2026-09-25T19:24:21.352781+00:00","type":"update_plant_rules","species":"fruit_tree","rule":{"name":"fruit_tree","description":"Default
+stage place fruit 201 {"staged":[{"id":"iv_0001","origin":"ui","note":"","created_at":"2026-09-25T19:24:21.352781+00:00","type":"update_plant_rules","species":"fruit_tree","rule":{"name":"fruit_tree","description":"Default
+stage place seed 201 {"staged":[{"id":"iv_0001","origin":"ui","note":"","created_at":"2026-09-25T19:24:21.352781+00:00","type":"update_plant_rules","species":"fruit_tree","rule":{"name":"fruit_tree","description":"Default
+a05 health on disk before 100 BASE_TURN r00005_t01_a08
+working folder shown: /home/ubuntu/antegensim/worlds/world_20260925_192035_2417/runs/run_20260925_192035_4381/working/ | exists on disk: true | hint: An absolute path on the machine that runs the backend (open it in your editor). Reload error messages name files from the run folder (for example working/entities/agents/a04.json).
+reload result: Files and history / Reload working/ files / While paused, edit the JSON files in the run's working/ folder, then reload: they are validated and staged as one file edit. Invalid files are reported and nothing changes. / Folder: /home/ubuntu/antegensim/worlds/world_20260925_192035_2417/runs/run_20260925_192035_4381/working/ / Copy path / An absolute path on the machine that runs the backend (open it in your editor). Reload error messages name files from the run folder (for example working/entities/agents/a04.json). / Create continuation from turn r00005_t01_a08 / Starts a new run from the viewed checkpoint (opened paused). This run and its later turns stay untouched. / working/ files validated and staged as one file edit. / 1 field will change when the file edit is applied: / world.agents.a05.stats.health: 100 → 77
+  shot: /home/ubuntu/antegensim/qa/retest/shots/e01-working-reload-changes.png
+invalid reload result: Files and history / Reload working/ files / While paused, edit the JSON files in the run's working/ folder, then reload: they are validated and staged as one file edit. Invalid files are reported and nothing changes. / Folder: /home/ubuntu/antegensim/worlds/world_20260925_192035_2417/runs/run_20260925_192035_4381/working/ / Copy path / An absolute path on the machine that runs the backend (open it in your editor). Reload error messages name files from the run folder (for example working/entities/agents/a04.json). / Create continuation from turn r00005_t01_a08 / Starts a new run from the viewed checkpoint (opened paused). This run and its later turns stay untouched. / Failed: / working/entiti
+  shot: /home/ubuntu/antegensim/qa/retest/shots/e02-working-reload-invalid.png
+staged now: ["update_plant_rules","voice","update_context_settings","place_entity","place_entity","place_entity","apply_working_files"]
+staged rows in UI: ["iv_0001 update_plant_rulesUI replace species rule \"fruit_tree\" (3 stages)Discard","iv_0002 voiceUI voice to a07, a03: \"A voice from nowhere: ripe fruit waits at (-1,-1).\"Discard","iv_0003 update_context_settingsUI context settings for run defaults: recent_history_length=3Discard","iv_0004 place_entityUI place fruit at (-1, -1)Discard","iv_0005 place_entityUI place fruit at (-1, -1)Discard","iv_0006 place_entityUI place seed fruit_tree at (-1, -1)Discard","iv_0007 apply_working_filesfile edit apply working/ files (base turn r00005_t01_a08, 1 changes) world.agents.a05.stats.health: 100 → 77 Discard"]
+  shot: /home/ubuntu/antegensim/qa/retest/shots/e03-staged-list.png
+counts now: status=7 tab=(7 staged)
+applied at r00005_t02_a06 ["update_plant_rules:true","voice:true","update_context_settings:true","place_entity:true","place_entity:true","place_entity:true","apply_working_files:true"]
+a05 health after 77 context recent_history 
+operator log lines:
+    #221 ~ [r5 t2] ~ operator ~ intervention ~ OPERATOR ~ r00005_t02_a06 ~ operator iv_0001 update_plant_rules -> ok, 1 changes ~ replace species rule "fruit_tree" (3 stages) · world.rules.plant_species.fruit_tree: {"name":"fruit_tree","description":"Def… → {"name":"fruit_tree","description":"Def…
+    #222 ~ [r5 t2] ~ operator ~ operator_voice ~ OPERATOR ~ r00005_t02_a06 ~ operator voice to a07, a03: "A voice from nowhere: ripe fruit waits at (-1,-1)."
+    #223 ~ [r5 t2] ~ operator ~ intervention ~ OPERATOR ~ r00005_t02_a06 ~ operator iv_0003 update_context_settings -> ok, 1 changes ~ context settings for run defaults: recent_history_length=3 · settings.context.recent_history_length: 5 → 3
+    #224 ~ [r5 t2] ~ operator ~ intervention ~ OPERATOR ~ r00005_t02_a06 ~ operator iv_0004 place_entity -> ok, 1 changes ~ place fruit at (-1, -1) · world.fruits.f0013: null → {"kind":"fruit","id":"f0013","position"…
+    #225 ~ [r5 t2] ~ operator ~ intervention ~ OPERATOR ~ r00005_t02_a06 ~ operator iv_0005 place_entity -> ok, 1 changes ~ place fruit at (-1, -1) · world.fruits.f0014: null → {"kind":"fruit","id":"f0014","position"…
+    #226 ~ [r5 t2] ~ operator ~ intervention ~ OPERATOR ~ r00005_t02_a06 ~ operator iv_0006 place_entity -> ok, 1 changes ~ place seed fruit_tree at (-1, -1) · world.seeds.s0001: null → {"kind":"seed","id":"s0001","position":…
+    #227 ~ [r5 t2] ~ operator ~ intervention ~ OPERATOR ~ r00005_t02_a06 ~ operator iv_0007 apply_working_files -> ok, 1 changes ~ apply working/ files (base turn r00005_t01_a08, 1 changes) · world.agents.a05.stats.health: 100 → 77
+  shot: /home/ubuntu/antegensim/qa/retest/shots/e04-turn-record-applied-edits.png
+  shot: /home/ubuntu/antegensim/qa/retest/shots/e05-turn-record-applied-edits-scrolled.png
+1100x750 quick-box tables vs box: [{"boxRight":379,"boxScrolls":false},{"boxRight":741,"tableRight":730,"boxScrolls":false}] log panel left 764 doc overflow 0
+=== S6 crowded cell (re-staged placements) on run_20260925_192035_4381
+stage place fruit 201 ok
+stage place fruit 201 ok
+stage place seed 201 ok
+stage place residue 201 ok
+applied at r00005_t03_a05 occupants at -1,-1 ["a07","p0007","f0013","f0014","s0001","res0001"]
+tooltip: (-1, -1) land · 6 occupants | A Galene (a07) | health 100/100 · compute 199.794 · essence 20/100 | P p0007 fruit_tree | fruit_tree · mature (stage 2) · 0 fruit · essence 9 | F f0013 | compute 25 · essence 0 | F f0014 | compute 40 · essence 0 | R res0001 | compute 5 · essence 2 · from agent a99 | S s0001 fruit_tree | fruit_tree · germinates round 99 | Removed here earlier: f0007 (consumed, round 3)
+tooltip box {"x":32,"y":310.359375,"width":390,"height":299.96875}
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/08-crowded-cell-hover.png
+occupant rows 6 ["A a07 Galene health 100/100 · compute 199.794 · essence 20/100","P p0007 fruit_tree fruit_tree · mature (stage 2) · 0 fruit · essence 9","F f0013 fruit compute 25 · essence 0","F f0014 fruit compute 40 · essence 0","R res0001 residue compute 5 · essence 2 · from agent a99","S s0001 fruit_tree fruit_tree · germinates round 99"]
+occupants missing from list: []
+inspector heads per occupant: {"a07":"A Agent Galene (a07)","p0007":"P Plant p0007 fruit_tree","f0013":"F Fruit f0013","f0014":"F Fruit f0014","s0001":"R Residue res0001","res0001":"R Residue res0001"}
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/09-crowded-cell-occupants.png
+tooltip overflow {"sw":388,"cw":388,"sh":298,"ch":298,"ov":"hidden","rows":["372/372 normal clip","372/372 normal clip","372/372 normal clip","372/372 normal clip","372/372 normal clip","372/372 normal clip"]}
+cell box {"x":159.5,"y":405.859375,"width":45,"height":45} tooltip box {"x":32,"y":310.359375,"width":390,"height":299.96875} tooltip covers cell: true
+scroll containers above the occupant rows: [{"cls":"insp-occupants-scroll","sh":401,"ch":258,"maxH":"260px"}]
+rows ["A y=63 h=45","P y=134 h=45","F y=205 h=45","F y=250 h=45","R y=321 h=45","S y=392 h=45"]
+seed click failed TimeoutError: locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator('.insp-
+seed inspector head: Inspector |  | Select an entity on the map (click a cell) or in the occupant list.
+clip chain [{"cls":"insp-map-viewport","ov":"hidden","left":27,"right":387,"tipRight":422}]
+seed inspector head: S | Seed s0001 fruit_tree | at (-1, -1) |  Agent view off
+residue inspector head: R | Residue res0001 | at (-1, -1) |  Agent view off
+  shot: /home/ubuntu/antegensim/qa/retest/shots/f02-occupants-scrolled-to-residue.png
+=== S7 continuation + resume on run_20260925_192035_4381
+continuation button: Create continuation from turn r00004_t04_a02
+  shot: /home/ubuntu/antegensim/qa/retest/shots/g01-continuation-button.png
+landed on run_20260925_193024_26c1
+timeline: LIVE / Following the latest saved turn r00004_t04_a02. / ◀ Previous round / Round 4 / Next round ▶ / Return to live / TURN / ‹ Parent run / Turn in round 4 / t04 · a02 Boreas · observe ok — r00004_t04_a02 (latest) / Next turn › / ← Earlier history is in the parent run run_20260925_192035_4381 at turn r00004_t04_a02. Open parent run at that turn
+status: Paused | Paused at a turn boundary. Nothing runs until you press Run turn, Play or Step round. | ROUND | 4 | TURN | 4 | ACTING AGENT (LAST SAVED TURN) | a02 Boreas | NEXT STEP | agent turn for a05 Eos | LAST SAVED TURN | r00004_t04_a02 | LIVING AGENTS | 8 | STAGED EDITS | 0 | MODEL USAGE (FAKE: FREE) | 0 calls · 0 in / 0 out tokens (estimated) · $0.0000 | No model call in progress.
+api summary parent {"world_id":"world_20260925_192035_2417","run_id":"run_20260925_192035_4381","turn_id":"r00004_t04_a02"} name retest main 192026 from r00004_t04_a02 current r00004_t04_a02
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/16-continuation.png
+after back url http://127.0.0.1:5173/#/ status of cont run (expect closed/409): 409
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/18-resume-session.png
+resume list head: Resume session | Saved runs, newest first. Opening a run loads its latest complete checkpoint; it opens paused. | Back to sessions | Filter by name or id | Refresh list | New session instead | Run (click to open)	Last saved turn	Saved at	Agents (living / total)	Status when listed	Default model	Ids | Open retest main 192026 from r00004_t04_a02 | continuation of run_20260925_192035_4381 from r00004_t04_a02 | 	round 4 · turn 4 | r00004_t04_a02 | 	9/25/2026, 7:30:24 PM	8 / 8	Paused	fake-heuristic	 | run run_20260925_193024_26c1 | world world_20260925_192035_2417 | Open retest main 192026	round 5 · turn 3 | r00005_t03_a05 | 	9/25/2026, 7:27:17 PM	8 / 8	Paused	fake-heuristic	 | run run_20260925_192035_4381 | world world_20260925_192035_2417 | Open final-fix error wording	round 0 · initial state | r00000_init | 	9/25/2026, 7:14:51 PM	6 / 6	Paused	fake-heuristic	 | run run_20260925_191451_57f0 | world world_20260925_191451_0327 | Open fina
+open button for main run 1
+resumed http://127.0.0.1:5173/#/run/run_20260925_192035_4381 badge Paused api paused r00005_t03_a05
+  shot: /home/ubuntu/antegensim/qa/retest/shots/g02-resumed-main.png
+=== S8 play / pending call / pause requested on run_20260925_193055_5e95 (create 201)
+state waiting_model pending {"call_id":"mc_r00001_t01_a02_01","agent_id":"a02","model_key":"fake-heuristic","started_at":"2026-09-25T19:30:59.235987+00:00"}
+status bar: Waiting for model | Waiting for model: a02 Boreas (fake-heuristic), playing continuously. | ROUND | 1 | TURN | 1 (in progress) | ACTING AGENT | a02 Boreas | NEXT STEP | finish r00001_t01_a02 (in progress) | LAST SAVED TURN | r00000_init | LIVING AGENTS | 8 | STAGED EDITS | 0 | MODEL USAGE (FAKE: FREE) | 1 calls · 0 in / 0 out tokens (estimated) · $0.0000 | Waiting for model: a02 Boreas asked fake-heuristic (call mc_r00001_t01_a02_01) — 1.1 s so far. | View request in progress
+bar height idle/waiting 173.7 173.7
+waiting log lines: ["#4 ~ [r1 t1] ~ a02 ~ model_call_pending ~ in progress ~ r00001_t01_a02 ~ a02 waiting for fake-heuristic (fake/fake-heuristic) — WAITING FOR MODEL…"]
+controls: Run turn | Play | Pause | Step round | ?
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/05-playing-pending-call.png
+pending viewer title: Model call in progress
+pending viewer text: Model call in progress | Close record view | Waiting for the model. This view switches to the saved record when the call finishes. | agent	a02 | status	pending (the model has not answered yet) | model	fake-heuristic — fake/fake-heuristic | started / finished	2026-09-25T19:30:59.235987+00:00 / still running | latency	pending | usage (tokens)	waiting for the reply | world compute	reserved 1.4864, charged 0, uncharged 0, mind multiplier 1 | provider cost	waiting for the reply | stop reason	— | error	none | attempt errors	none | request	max output 1000 tokens, timeout 90s per attempt, 2 retries | Open decision packet pk_r00001_t01_a02 | Model output (as returned) | (waiting for the reply) | Request messages (2) | Model reference snapshot (no secrets) | agent	a02 | round / turn	1 / r00001_t01_a02 | affordable	yes | input token estimate	2432 (incl. 0 request overhead) | generation allowance	1000 | reserved compute (bound only)	1.4864 | notebook version	0 | effective settings	input cap 6000, generation 1000, recent history 5, notebook 400, retrieved 5, digest 10, weights r1/c1/i1, skill source no | selected records	a02-k000001 | unread shown (digest)	a02-k000001 | omitted (counts)	nothing omitted | created	2026-09-25T19:30:59.232262+00:00 | Sections in the order the model saw them | stable_rules — ~1911 tokens | skills — ~19 tokens | ## SKILLS (working memory) | You have no saved skills. | Skill execution: none. | notebook — ~24 tokens | ## NOTEBOOK | Your notebo
+  shot: /home/ubuntu/antegensim/qa/retest/shots/h01-pending-call-view.png
+status bar (pause requested): Pause requested | Pause requested: the current turn finishes and is saved, then the run pauses. | ROUND | 1 | TURN | 2 (in progress) | ACTING AGENT | a01 Aster | NEXT STEP | finish r00001_t02_a01 (in progress) | LAST SAVED TURN | r00001_t01_a02 | LIVING AGENTS | 8 | STAGED EDITS | 0 | MODEL USAGE (FAKE: FREE) | 2 calls · 2,432 in / 33 out tokens (estimated) · $0.0000 | Waiting for model: a01 Aster asked fake-heuristic (call mc_r00001_t02_a01_01) — 0.7 s so far. | View request in progress
+controls: Run turn | Play | Pause | Step round | ?
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/06-pause-requested.png
+badge sequence after Pause: ["Pause requested","Paused"]
+after pause paused r00001_t02_a01 play_loop false
+  shot: /home/ubuntu/antegensim/qa/retest/shots/h02-paused-after-play.png
+    #3 ~ [r1 t1] ~ a02 ~ turn_started ~ r00001_t01_a02 ~ Boreas (a02) begins turn 1 of round 1
+    #4 ~ [r1 t1] ~ a02 ~ model_call_pending ~ r00001_t01_a02 ~ a02 waiting for fake-heuristic (fake/fake-heuristic) — answered (see next lines)
+    #5 ~ [r1 t1] ~ a02 ~ model_call_completed ~ cost 0.5194 compute ~ r00001_t01_a02 ~ a02 got a decision from fake-heuristic (in 2432 / out 33 tokens) ~ 4.0 s
+    #6 ~ [r1 t1] ~ a02 ~ decision ~ r00001_t01_a02 ~ a02 decides: observe (1,0) — "I have not observed this point yet."
+    #7 ~ [r1 t1] ~ a02 ~ action ~ cost 1 compute ~ r00001_t01_a02 ~ a02 observe (1,0) -> ok: land, 3 entities (cost 1)
+    #8 ~ [r1 t2] ~ a01 ~ turn_started ~ r00001_t02_a01 ~ Aster (a01) begins turn 2 of round 1
+    #9 ~ [r1 t2] ~ a01 ~ model_call_pending ~ r00001_t02_a01 ~ a01 waiting for fake-heuristic (fake/fake-heuristic) — answered (see next lines)
+    #10 ~ [r1 t2] ~ a01 ~ model_call_completed ~ cost 0.5194 compute ~ r00001_t02_a01 ~ a01 got a decision from fake-heuristic (in 2432 / out 33 tokens) ~ 4.0 s
+    #11 ~ [r1 t2] ~ a01 ~ decision ~ r00001_t02_a01 ~ a01 decides: observe (0,0) — "I have not observed this point yet."
+    #12 ~ [r1 t2] ~ a01 ~ action ~ cost 1 compute ~ r00001_t02_a01 ~ a01 observe (0,0) -> ok: land, 3 entities (cost 1)
+=== S9 error state + recover + re-run on run_20260925_193131_164a
+badge sequence ["Running","Waiting for model","Error"]
+status bar in error: Error | Error: the turn was not committed. Recover (pause) discards the failed attempt and re-runs the same turn next time. | ROUND | 0 | TURN | initial state | ACTING AGENT (LAST SAVED TURN) | none | NEXT STEP | start round 1 — likely order a02 Boreas, a01 Aster, a03 Cyrene, … (8 agents) (predicted; staged edits can change it) | LAST SAVED TURN | r00000_init | LIVING AGENTS | 8 | STAGED EDITS | 0 | MODEL USAGE (FAKE: FREE) | 1 calls · 0 in / 0 out tokens (estimated) · $0.0000 | No model call in progress. | Failed turn: r00001_t01_a02 · a02 Boreas — model fake-heuristic, call mc_r00001_t01_a02_01, 3 attempts | Cause: HTTP 503: fake scheduled error (attempt 3 of the turn) (infrastructure failure: no world compute was charged and no memory was marked read; the provider reported no cost for this attempt) | Run error: provider failure: error | Recover (pause) | Discards the failed attempt and reloads the last saved turn r00000_init; the next Run turn or Play re-runs r00001_t01_a02.
+failed-turn panel: Failed turn: r00001_t01_a02 · a02 Boreas — model fake-heuristic, call mc_r00001_t01_a02_01, 3 attempts | Cause: HTTP 503: fake scheduled error (attempt 3 of the turn) (infrastructure failure: no world compute was charged and no memory was marked read; the provider reported no cost for this attempt) | Run error: provider failure: error
+pending notes: [" — failed (see next line)"]
+    #1 ~ [r0 init] ~ system ~ run_created ~ r00000_init ~ run 'retest error run (503 x3)' created with 8 agents (seed 1)
+    #2 ~ [r1 t1] ~ world ~ round_started ~ failed attempt: carried into the re-run ~ r00001_t01_a02 ~ round 1 begins: a02 a01 a03 a04 a07 a08 a06 a05
+    #3 ~ [r1 t1] ~ a02 ~ turn_started ~ failed attempt: carried into the re-run ~ r00001_t01_a02 ~ Boreas (a02) begins turn 1 of round 1
+    #4 ~ [r1 t1] ~ a02 ~ model_call_pending ~ failed attempt: carried into the re-run ~ r00001_t01_a02 ~ a02 waiting for fake-heuristic (fake/fake-heuristic) — failed (see next line)
+    #5 ~ [r1 t1] ~ a02 ~ model_call_failed ~ failed attempt: carried into the re-run ~ r00001_t01_a02 ~ a02 got no answer from fake-heuristic: error ~ HTTP 503: fake scheduled error (attempt 3 of the turn) · 3 attempts · infrastructure failure: no world compute charged · 3.0 s
+    #6 ~ [r1 t1] ~ system ~ error ~ failed attempt: carried into the re-run ~ r00001_t01_a02 ~ turn r00001_t01_a02 failed: provider failure: error
+in error: Run turn disabled=true
+in error: Play disabled=true
+in error: Pause disabled=true
+in error: Step round disabled=true
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/17-error-state.png
+after recover paused r00000_init badge Paused
+status after recover: Paused | Paused at a turn boundary. Nothing runs until you press Run turn, Play or Step round. | ROUND | 0 | TURN | initial state | ACTING AGENT (LAST SAVED TURN) | none | NEXT STEP | start round 1 — likely order a02 Boreas, a01 Aster, a03 Cyrene, … (8 agents) (predicted; staged edits can change it) | LAST SAVED TURN | r00000_init | LIVING AGENTS | 8 | STAGED EDITS | 0 | MODEL USAGE (FAKE: FREE) | 1 calls · 0 in / 0 out tokens (estimated) · $0.0000 | No model call in progress. | Previous error (recovered; clears at the next saved turn): provider failure: error — failed turn r00001_t01_a02: HTTP 503: fake scheduled error (attempt 3 of the turn)
+   R cat-system :: #1 ~ [r0 init] ~ system ~ run_created ~ r00000_init ~ run 'retest error run (503 x3)' created with 8 agents (seed 1)
+   R cat-world cat-progress :: #2 ~ [r1 t1] ~ world ~ round_started ~ failed attempt: carried into the re-run ~ r00001_t01_a02 ~ round 1 begins: a02 a01 a03 a04 a07 a08 a06 a05
+   R cat-agent cat-progress :: #3 ~ [r1 t1] ~ a02 ~ turn_started ~ failed attempt: carried into the re-run ~ r00001_t01_a02 ~ Boreas (a02) begins turn 1 of round 1
+   R cat-pending cat-progress :: #4 ~ [r1 t1] ~ a02 ~ model_call_pending ~ failed attempt: carried into the re-run ~ r00001_t01_a02 ~ a02 waiting for fake-heuristic (fake/fake-heuristic) — failed (see next line)
+   R cat-error cat-progress :: #5 ~ [r1 t1] ~ a02 ~ model_call_failed ~ failed attempt: carried into the re-run ~ r00001_t01_a02 ~ a02 got no answer from fake-heuristic: error ~ HTTP 503: fake scheduled error (attempt 3 of the turn) · 3 attempts · infrastructure failure: no world compute charged · 3.0 s
+   R cat-error cat-progress :: #6 ~ [r1 t1] ~ system ~ error ~ failed attempt: carried into the re-run ~ r00001_t01_a02 ~ turn r00001_t01_a02 failed: provider failure: error
+  shot: /home/ubuntu/antegensim/qa/retest/shots/i01-after-recover.png
+after re-run paused r00001_t01_a02
+   A cat-system :: #1 ~ [r0 init] ~ system ~ run_created ~ r00000_init ~ run 'retest error run (503 x3)' created with 8 agents (seed 1)
+   A cat-world cat-discarded :: #2 ~ [r1 t1] ~ world ~ round_started ~ discarded attempt: not saved ~ r00001_t01_a02 ~ round 1 begins: a02 a01 a03 a04 a07 a08 a06 a05
+   A cat-agent cat-discarded :: #3 ~ [r1 t1] ~ a02 ~ turn_started ~ discarded attempt: not saved ~ r00001_t01_a02 ~ Boreas (a02) begins turn 1 of round 1
+   A cat-pending :: #4 ~ [r1 t1] ~ a02 ~ model_call_pending ~ r00001_t01_a02 ~ a02 waiting for fake-heuristic (fake/fake-heuristic) — failed (see next line)
+   A cat-error :: #5 ~ [r1 t1] ~ a02 ~ model_call_failed ~ r00001_t01_a02 ~ a02 got no answer from fake-heuristic: error ~ HTTP 503: fake scheduled error (attempt 3 of the turn) · 3 attempts · infrastructure failure: no world compute charged · 3.0 s
+   A cat-error :: #6 ~ [r1 t1] ~ system ~ error ~ r00001_t01_a02 ~ turn r00001_t01_a02 failed: provider failure: error
+   A cat-world :: #7 ~ [r1 t1] ~ world ~ round_started ~ r00001_t01_a02 ~ round 1 begins: a02 a01 a03 a04 a07 a08 a06 a05
+   A cat-agent :: #8 ~ [r1 t1] ~ a02 ~ turn_started ~ r00001_t01_a02 ~ Boreas (a02) begins turn 1 of round 1
+   A cat-pending :: #9 ~ [r1 t1] ~ a02 ~ model_call_pending ~ r00001_t01_a02 ~ a02 waiting for fake-heuristic (fake/fake-heuristic) — answered (see next lines)
+   A cat-agent :: #10 ~ [r1 t1] ~ a02 ~ model_call_completed ~ cost 0.5194 compute ~ r00001_t01_a02 ~ a02 got a decision from fake-heuristic (in 2432 / out 33 tokens) ~ 0.0 s
+   A cat-agent :: #11 ~ [r1 t1] ~ a02 ~ decision ~ r00001_t01_a02 ~ a02 decides: observe (1,0) — "I have not observed this point yet."
+   A cat-agent :: #12 ~ [r1 t1] ~ a02 ~ action ~ cost 1 compute ~ r00001_t01_a02 ~ a02 observe (1,0) -> ok: land, 3 entities (cost 1)
+discarded lines text-decoration: ["line-through","line-through"]
+  shot: /home/ubuntu/antegensim/qa/retest/shots/i03-after-rerun.png
+saved turn event seqs 4 - 12 kinds 4:model_call_pending 5:model_call_failed 6:error 7:round_started 8:turn_started 9:model_call_pending 10:model_call_completed 11:decision 12:action
+model calls in the saved turn: ["mc_r00001_t01_a02_01:failed:null","mc_r00001_t01_a02_02:completed:null"]
+status usage {"calls":2,"interrupted_calls":0,"input_tokens":2432,"output_tokens":33,"provider_cost_usd":0}
+  shot: /home/ubuntu/antegensim/qa/retest/shots/i04-turn-record-after-rerun.png
+=== S10 stored live run records (run_20260925_183039_9341) status before: {"error":"run_not_open","detail":"run_not_open","problems":[]}
+turn record model call buttons: ["Open model call mc_r00002_t02_a03_01 (failed / error, 13296 in / 1429 out, 16.5 s)","Open model call mc_r00002_t02_a03_02 (failed / error, 13342 in / 1144 out, 14.4 s)","Open model call mc_r00002_t02_a03_03 (completed / ok, 6231 in / 647 out, 7.3 s)"]
+  shot: /home/ubuntu/antegensim/qa/retest/shots/j01-live-turn-record-buttons.png
+live model call record (head): Model call mc_r00002_t02_a03_03 | of turn r00002_t02_a03 | Close record view | agent	a03 | status	completed (result: ok) | model	claude-cli-haiku — claude_cli/haiku, served by claude-haiku-4-5-20251001 | started / finished	2026-09-25T18:37:53.291279+00:00 / 2026-09-25T18:38:00.599205+00:00 | latency	7299.3 ms over 1 attempt(s) | usage (tokens)	input 10, cache read 4551, cache write 1670, output 647 (of which reasoning 397), billed input 6231 (source: provider) | world compute	reserved 2.061, charged 1.8932, uncharged 0, mind multiplier 1 | provider cost	$0.00704 | stop reason	tool_use | error	none | attempt errors	none | request	max output 1000 tokens, timeout 90s per attempt, 2 retries | Open decision packet pk_r00002_t02_a03 | Model output (as returned) | {"notebook_update":"Round 2: Received message about plant at (5,5). Starting with vision_range 0, need to upgrade to explore. Upgrading vision_range to 1.","thought":"I need to explore the world. Currently my vision_range is 0, so I can only see my current location. Upgrading vision_range will help me locate resources and understand my surroundings.","action":{"na
+  shot: /home/ubuntu/antegensim/qa/retest/shots/j02-live-model-call-record.png
+live FAILED model call record (head): Model call mc_r00002_t02_a03_01 | of turn r00002_t02_a03 | Close record view | agent	a03 | status	failed (result: error) | model	claude-cli-haiku — claude_cli/haiku, served by claude-haiku-4-5-20251001 | started / finished	2026-09-25T18:37:11.181896+00:00 / 2026-09-25T18:37:27.722023+00:00 | latency	16530.6 ms over 1 attempt(s) | usage (tokens)	input 20, cache read 10771, cache write 2505, output 1429 (of which reasoning 825), billed input 13296 (source: provider) | world compute	reserved 2.061, charged 0, uncharged 0, mind multiplier 1 | provider cost	$0.013252 | stop reason	tool_use | error	claude CLI made 2 model requests; exactly one is allowed | attempt errors	attempt 1: error: claude CLI made 2 model requests; exactly one is allowed | request	max output 1000 tokens, timeout 90s per attempt, 2 retries | Open decision packet pk_r00002_t02_a03 | Model output (as returned) | {"action":{"name":"upgrade","args":{"attribute":"vision_range"}},"thought":"Unknown voice reported plant at (5,5). I have vision_range 0 which severely limits exploration. Upgrading vision_range to 1 costs 25 compute + 2 essence, well affordabl
+  shot: /home/ubuntu/antegensim/qa/retest/shots/j03-live-failed-call-record.png
+status bar usage: Paused | Paused at a turn boundary. Nothing runs until you press Run turn, Play or Step round. | ROUND | 2 | TURN | 2 | ACTING AGENT (LAST SAVED TURN) | a03 Cyrene | NEXT STEP | agent turn for a04 Damaris | LAST SAVED TURN | r00002_t02_a03 | LIVING AGENTS | 6 | STAGED EDITS | 0 | REAL MODEL USAGE | 10 calls · 75,191 in / 6,565 out tokens · $0.0730 of $1 budget | No model call in progress.
+    #45 ~ [r2 t1] ~ a01 ~ model_call_completed ~ cost 1.9688 compute ~ r00002_t01_a01 ~ a01 got a decision from claude-cli-haiku (in 6209 / out 727 tokens) ~ 8.7 s · 471 reasoning tokens (part of output)
+    #50 ~ [r2 t2] ~ a03 ~ model_call_failed ~ r00002_t02_a03 ~ a03 got no answer from claude-cli-haiku: error ~ claude CLI made 2 model requests; exactly one is allowed · 1 attempt · infrastructure failure: no world compute charged · 16.5 s
+    #54 ~ [r2 t2] ~ a03 ~ model_call_failed ~ r00002_t02_a03 ~ a03 got no answer from claude-cli-haiku: error ~ claude CLI made 2 model requests; exactly one is allowed · 1 attempt · infrastructure failure: no world compute charged · 14.4 s
+    #58 ~ [r2 t2] ~ a03 ~ model_call_completed ~ cost 1.8932 compute ~ r00002_t02_a03 ~ a03 got a decision from claude-cli-haiku (in 6231 / out 647 tokens) ~ 7.3 s · 397 reasoning tokens (part of output)
+status after leaving 409 {"error":"run_not_open","detail":"run_not_open","problems":[]}
+=== P3 reload-revert repro
+  reload true ["world.agents.a05.stats.health: 100 -> 77"]
+  staged voice, place_entity, apply_working_files
+  [ui-then-file] records: voice:ok | place_entity:ok | apply_working_files:ok -> a01 operator_voice records: 0, placed fruit present: 0, a05 health: 77
+  run run_20260925_193358_c3f4
+  reload true ["world.agents.a05.stats.health: 100 -> 77"]
+  staged apply_working_files, voice, place_entity
+  [file-then-ui] records: apply_working_files:ok | voice:ok | place_entity:ok -> a01 operator_voice records: 1, placed fruit present: 1, a05 health: 77
+  run run_20260925_193358_3aef
+cards heading y 70 sticky bar bottom 48
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/02-new-session-cards.png
+=== S11 world settings: plants at agent starts off, initial fruit 0 (created from the UI)
+  shot: /home/ubuntu/antegensim/qa/retest/shots/k01-world-fields-off.png
+run run_20260925_193607_e6d8 plants 12 fruits 0 plants on agent start cells []

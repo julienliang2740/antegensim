@@ -1,0 +1,11 @@
+import { launch, shot, log, loadState, BASE } from './lib.mjs';
+const st = loadState(); const runId = st.runId;
+const { browser, page } = await launch();
+await page.goto(`${BASE}/#/run/${runId}?turn=r00005_end`); await page.waitForTimeout(3000);
+await page.getByRole('tab', { name: /Rules & settings/ }).click(); await page.waitForTimeout(1500);
+await shot(page, '76-rules-settings-history', { fullPage: false });
+const txt = await page.locator('[role=tabpanel]:not([hidden])').first().innerText();
+console.log(txt.slice(0, 1800));
+await page.evaluate(() => window.scrollTo(0, 800)); await page.waitForTimeout(300);
+await shot(page, '77-rules-settings-history-scrolled');
+await browser.close();

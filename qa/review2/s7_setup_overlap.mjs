@@ -1,0 +1,15 @@
+import { chromium } from 'playwright';
+import { log, BASE } from './lib.mjs';
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+await page.goto(BASE + '/#/'); await page.waitForTimeout(800);
+await page.getByRole('button', { name: /New session/ }).click(); await page.waitForTimeout(2000);
+const name = page.getByLabel('Run name');
+const nb = await name.boundingBox();
+const hint = page.getByText(/same seed \+ same setup/).first();
+const hb = await hint.boundingBox();
+const sb = await page.locator('.setup-section .form-row').nth(1).locator('input').first().boundingBox();
+log('run name input box', nb, 'seed hint box', hb, 'seed input', sb);
+log('overlap x:', nb.x + nb.width > hb.x && hb.y < nb.y + nb.height && hb.y + hb.height > nb.y);
+await page.screenshot({ path: new URL('./shots/70-setup-runname-seed-overlap.png', import.meta.url).pathname, clip: { x: 16, y: 170, width: 720, height: 110 } });
+await browser.close();

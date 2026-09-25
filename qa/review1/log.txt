@@ -1,0 +1,259 @@
+=== STEP 1/2: entry + new session
+  shot: /home/ubuntu/antegensim/qa/review1/shots/01-entry.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/02-new-session-top.png
+run name set review1 operator 180126
+card2 coords 1 0
+card1 renamed Aurelia and moved to 1 0
+card1 aria-label now Agent card 1: Aurelia
+  shot: /home/ubuntu/antegensim/qa/review1/shots/03-validate-negative-compute-top.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/04-validate-negative-compute-field.png
+problem path agents[2].stats.compute shown on page: true
+card3 problem text near field: ["compute","agents[2].stats.compute: must be a finite number >= 0","compute absorption"]
+compute aria-invalid null class num-field field-invalid
+after fix status line: Validate setup | Create and open | Setup is valid.
+after add: Agent cards (9; 6–11 allowed)
+  shot: /home/ubuntu/antegensim/qa/review1/shots/05-added-card-9.png
+card 9 label: Agent card 9: Iole id a09 x,y 0 2
+after remove: Agent cards (8; 6–11 allowed)
+cards now: ["Agent card 1: Aurelia","Agent card 2: Boreas","Agent card 3: Cyrene","Agent card 4: Damaris","Agent card 5: Eos","Agent card 6: Ferrin","Agent card 7: Galene","Agent card 8: Iole"]
+model options ["run default (fake-heuristic)","fake-heuristic (fake/fake-heuristic)","fake-scripted (fake/fake-scripted)","fake-malformed (fake/fake-malformed)","claude-cli-haiku (claude_cli/haiku)","claude-cli-haiku-prompted (claude_cli/haiku)","anthropic-haiku (anthropic/claude-haiku-4-5) — unavailable: missing ANTHROPIC_API_KEY","openai-mini (openai/gpt-4o-mini) — unavailable: missing OPENAI_API_KEY","fireworks-llama (fireworks/accounts/fireworks/models/llama-v3p1-8b-instruct) — unavailable: missing FIREWORKS_API_KEY","bedrock-haiku (bedrock/anthropic.claude-3-5-haiku-20241022-v1:0)","foundry-gpt (foundry/gpt-4o-mini) — unavailable: missing AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT"]
+card2 model = fake-scripted
+recent history length before 5
+fruit energy before 60
+validate status: Validate setup | Create and open | Setup is valid.
+  shot: /home/ubuntu/antegensim/qa/review1/shots/06-context-default-changed.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/07-plant-rule-fruit-energy.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/08-validated-top.png
+created run run_20260925_180134_ea67
+  shot: /home/ubuntu/antegensim/qa/review1/shots/09-run-page-initial.png
+backend: a01   a02 pos  ids []
+backend settings keys ["settings","effective_context","effective_model_key","limits"]
+context recent_history_length {"settings":{"context":{"input_token_cap":6000,"generation_allowance":1000,"recent_history_length":8,"notebook_max_tokens":400,"retrieved_memory_limit":5,"new_event_digest_limit":10,"weights":{"relevance":1,"recency":1,"importance":1},"include_skill_source":false},"context_overrides":{},"default_model_key":"fake-heuristic","model_overrides":{"a02":"fake-scripted"},"max_rounds":null,"play_delay_sec
+=== STEP 3: run controls on run_20260925_180134_ea67
+initial badge Paused
+initial status Paused | Paused at a turn boundary. Nothing runs until you press Run turn, Play or Step round. | ROUND | 0 | TURN | initial state | ACTING AGENT (LAST SAVED TURN) | none | NEXT STEP | start round 1 (new initiative order) | LAST SAVED TURN | r00000_init | LIVING AGENTS | 8 | STAGED EDITS | 0 | MODEL USAGE (FAKE: FREE) | 0 calls · 0 in / 0 out tokens (estimated) · $0.0000 | No model call in progress.
+  shot: /home/ubuntu/antegensim/qa/review1/shots/10-controls-help-open.png
+button Run turn: disabled=false title=null
+button Play: disabled=false title=null
+button Pause: disabled=true title=null
+button Step round: disabled=false title=null
+api before run turn paused r00000_init
+badge samples after Run turn ["Running","Turn in progress","Paused"]
+api after run turn paused r00001_t01_a04 latest_seq 7
+status after run turn Paused | Paused at a turn boundary. Nothing runs until you press Run turn, Play or Step round. | ROUND | 1 | TURN | 1 | ACTING AGENT (LAST SAVED TURN) | a04 Damaris | NEXT STEP | agent turn for a07 Galene | LAST SAVED TURN | r00001_t01_a04 | LIVING AGENTS | 8 | STAGED EDITS | 0 | MODEL USAGE (FAKE: FREE) | 1 calls · 2,433 in / 33 out tokens (estimated) · $0.0000 | No model call in progress.
+log after run turn (tail) a04 got a decision from fake-heuristic (in 2433 / out 33 tokens) / #6 / [r1 t1] / a04 / decision / r00001_t01_a04 / a04 decides: observe (-1,0) 0 — "I have not observed this point yet." / #7 / [r1 t1] / a04 / action / cost 1 compute / r00001_t01_a04 / observe (-1,0) -> ok: land, 1 entities (cost 1)
+  shot: /home/ubuntu/antegensim/qa/review1/shots/11-after-run-turn.png
+badge samples during play ["Running","Turn in progress"]
+  shot: /home/ubuntu/antegensim/qa/review1/shots/12-during-play.png
+pause enabled during play true
+  shot: /home/ubuntu/antegensim/qa/review1/shots/13-pause-requested.png
+badge sequence after Pause click ["Pause requested","Paused"] first samples ["5ms:Pause requested","150ms:Pause requested","194ms:Pause requested","238ms:Pause requested","282ms:Pause requested","326ms:Pause requested"]
+  shot: /home/ubuntu/antegensim/qa/review1/shots/14-after-pause.png
+api after pause paused r00005_t03_a01
+status after pause Paused | Paused at a turn boundary. Nothing runs until you press Run turn, Play or Step round. | ROUND | 5 | TURN | 3 | ACTING AGENT (LAST SAVED TURN) | a01 Aurelia | NEXT STEP | agent turn for a06 Ferrin | LAST SAVED TURN | r00005_t03_a01 | LIVING AGENTS | 8 | STAGED EDITS | 0 | MODEL USAGE (FAKE: FREE) | 35 calls · 90,201 in / 1,041 out tokens (estimated) · $0.0000 | No model call in progress.
+badge seq step round ["Running","Paused"] api after step round paused r00005_end next_step new_round
+status after step round Paused | Paused at a turn boundary. Nothing runs until you press Run turn, Play or Step round. | ROUND | 5 | TURN | round end | ACTING AGENT (LAST SAVED TURN) | none | NEXT STEP | start round 6 (new initiative order) | LAST SAVED TURN | r00005_end | LIVING AGENTS | 8 | STAGED EDITS | 0 | MODEL USAGE (FAKE: FREE) | 40 calls · 103,630 in / 1,204 out tokens (estimated) · $0.0000 | No model call in progress.
+  shot: /home/ubuntu/antegensim/qa/review1/shots/15-after-step-round.png
+=== STEP 4: timeline on run_20260925_180134_ea67
+mode live: LIVE Following the latest saved turn r00005_end.
+after prev round: HISTORY Viewing history: turn r00004_end (round 4). The run itself is unchanged and the live log keeps running.
+turn select value: r00004_end
+status badge still: Paused
+tabs ["Map & inspector","Turn record (r00004_end)","God mode","Rules & settings","Set stat","Place entity","Remove entity","Edit knowledge","Voice","Context settings","Plant rules","Prices","Model assignment","Run settings"]
+  shot: /home/ubuntu/antegensim/qa/review1/shots/17-history-previous-round.png
+after 2x prev round: HISTORY Viewing history: turn r00003_end (round 3). The run itself is unchanged and the live log keeps running.
+after next round: HISTORY Viewing history: turn r00004_end (round 4). The run itself is unchanged and the live log keeps running.
+turn options ["t01 · a09 Iole · move ok — r00004_t01_a09","t02 · a06 Ferrin · move ok — r00004_t02_a06","t03 · a05 Eos · move ok — r00004_t03_a05","t04 · a02 Boreas · move ok — r00004_t04_a02","t05 · a03 Cyrene · move ok — r00004_t05_a03","t06 · a04 Damaris · move ok — r00004_t06_a04","t07 · a01 Aurelia · move ok — r00004_t07_a01","t08 · a07 Galene · move ok — r00004_t08_a07","Round 4 end — r00004_end"]
+after select turn r00004_t03_a05 : HISTORY Viewing history: turn r00004_t03_a05 (round 4). The run itself is unchanged and the live log keeps running.
+  shot: /home/ubuntu/antegensim/qa/review1/shots/18-history-turn-selected.png
+after next turn: HISTORY Viewing history: turn r00004_t04_a02 (round 4). The run itself is unchanged and the live log keeps running.
+after prev turn: HISTORY Viewing history: turn r00004_t03_a05 (round 4). The run itself is unchanged and the live log keeps running.
+Run turn enabled in history? true
+log header before/after live turn while in history: Live activity 256 lines (seq 1–256) => Live activity 262 lines (seq 1–262)
+mode after live turn: HISTORY Viewing history: turn r00004_t03_a05 (round 4). The run itself is unchanged and the live log keeps running.
+status bar: Paused | Paused at a turn boundary. Nothing runs until you press Run turn, Play or Step round. | ROUND | 6 | TURN | 1 | ACTING AGENT (LAST SAVED TURN) | a04 Damaris | NEXT STEP | agent turn for a06 Ferrin | LAST SAVED TURN | r00006_t01_a04 | LIVING AGENTS | 8 | STAGED EDITS | 0 | MODEL USAGE (FAKE: 
+  shot: /home/ubuntu/antegensim/qa/review1/shots/19-history-while-live-advances.png
+map area header text: ◀ Left / ▲ Up / ▼ Down / Right ▶
+after return to live: LIVE Following the latest saved turn r00006_t01_a04.
+  shot: /home/ubuntu/antegensim/qa/review1/shots/20-returned-to-live.png
+=== STEP 5: map (1440x900) on run_20260925_180134_ea67
+crowded coordinate 0,2 ["a06","a09"] turn r00006_t01_a04
+cell count 1
+tooltip visible true
+tooltip text: (0, 2) land · 2 occupants / A Ferrin (a06) / health 100/100 · compute 179.258 · essence 20/100 / A Iole (a09) / health 100/100 · compute 179.26 · essence 20/100
+tooltip lists all occupants true
+  shot: /home/ubuntu/antegensim/qa/review1/shots/21-map-hover-crowded.png
+occupant panel: Occupants at (0, 2) / · land / 2 entities / Agents (living) (2) / A / a06 / Ferrin / health 100/100 · compute 179.258 · essence 20/100 / A / a09 / Iole / health 100/100 · compute 179.26 · essence 20/100
+occupants all listed true
+occupant scroll box {"sh":116,"ch":116,"overflowY":"auto","maxH":"260px"}
+  shot: /home/ubuntu/antegensim/qa/review1/shots/22-map-click-crowded.png
+occupant rows 2 ["a06 Ferrin","a09 Iole"]
+occupant 0: A Agent Ferrin (a06) at (0, 2) | sections: Stats and balances ; Stats and balances ; Current action and result ; Current action and result ; This turn's decision packet and model calls ; This turn's decision packet and model calls ; Model assignment and context settings ; Model assignment and context settings ; Saved skills (0 of 5) ; Saved skills (0 of 5) ; Skill execution state ; Skill execution state ; Believed self vs actual ; Believed self vs actual ; Received messages and voice ; Received messages and voice ; Recent action results 
+occupant 1: A Agent Iole (a09) at (0, 2) | sections: Stats and balances ; Stats and balances ; Current action and result ; Current action and result ; This turn's decision packet and model calls ; This turn's decision packet and model calls ; Model assignment and context settings ; Model assignment and context settings ; Saved skills (0 of 5) ; Saved skills (0 of 5) ; Skill execution state ; Skill execution state ; Believed self vs actual ; Believed self vs actual ; Received messages and voice ; Received messages and voice ; Recent action results 
+=== STEP 5b: inspector pane for a06 (1440x900)
+side pane box {"x":572.453125,"y":8,"width":428.546875,"height":884} scrollHeight 4824
+  shot: /home/ubuntu/antegensim/qa/review1/shots/24-inspector-a06-part0.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/24-inspector-a06-part1.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/24-inspector-a06-part2.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/24-inspector-a06-part3.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/24-inspector-a06-part4.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/24-inspector-a06-part5.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/24-inspector-a06-part6.png
+inspector text length 5130
+=== STEP 5c: wider inspector + packet + model call for a02 (1440x900)
+side after wider {"x":397.125,"y":436.421875,"width":603.875,"height":884}
+  shot: /home/ubuntu/antegensim/qa/review1/shots/25-wider-inspector.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/26-wider-inspector-knowledge.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/27-knowledge-record-expanded.png
+open latest packet button present 1
+url now http://127.0.0.1:5173/#/run/run_20260925_180134_ea67
+selected tab ["Map & inspector","Set stat"]
+  shot: /home/ubuntu/antegensim/qa/review1/shots/28-decision-packet.png
+packet view text excerpt:  / ‹ Previous turn / Turn in round 6 / t01 · a04 Damaris · query ok — r00006_t01_a04 (latest) / Next turn › / Decision packet pk_r00005_t02_a02 / of turn r00005_t02_a02 / Close record view / agent	a02 / round / turn	5 / r00005_t02_a02 / affordable	yes / input token estimate	2696 (incl. 0 request overhead) / generation allowance	1000 / reserved compute (bound only)	1.5392 / notebook version	0 / effective settings	input cap 6000, generation 1000, recent history 8, notebook 400, retrieved 5, digest 10, weights r1/c1/i1, skill source no / selected records	a02-k000003, a02-k000005, a02-k000007, a02-k000009, a02-k000001, a02-k000008 / unread shown (digest)	a02-k000008 / omitted (counts)	nothing omitted / created	2026-09-25T18:02:51.357232+00:00 / Open model call mc_r00005_t02_a02_01 / Sections in the order the model saw them / stable_rules — ~1911 tokens / skills — ~19 tokens / ## SKILLS (working memory) / You have no saved skills. / Skill execution: none. / notebook — ~24 tokens / ## NOTEBOOK / Your notebook (version 0; at most 400 tokens; notebook_update replaces it): / (empty) / recent_history — ~185 tokens, records a02-k000003, a02-k000005, a02-k000007, a02-k000009 / ## RECENT HISTORY (your latest actions, oldest first) / [a02-k000003 r1 observation own_action] You observe (1,0) -> ok; terrain land; entities: a01 agent, a02 agent; observed round 1; cost 1 compute. Your thought: "I have not observed this point yet." / [a02-k000005 r2 action_result own_action] You move up -> ok; moved from (1,0) to (1,1); cost 5 compute. Your thought: "Nothing useful here; explore." / [a02-k000007 r3 observation own_action] You observe (1,1) -> ok; terrain land; 
+  shot: /home/ubuntu/antegensim/qa/review1/shots/29-decision-packet-scrolled.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/30-decision-packet-scrolled2.png
+model call buttons ["Open model call mc_r00005_t02_a02_01"]
+=== STEP 5d: packet sections + model call record for a02
+record viewer scrollers ["SECTION.record-viewer sh=1535 ch=626","PRE.text-block sh=1641 ch=380","PRE.text-block sh=1641 ch=380","PRE.text-block sh=818 ch=380","PRE.json-block sh=1625 ch=360"]
+packet details count 9
+packet sections ["stable_rules — ~1911 tokens","skills — ~19 tokens","notebook — ~24 tokens","recent_history — ~185 tokens, records a02-k000003, a02-k000005, a02-k000007, a02-k000009","retrieved_memories — ~105 tokens, records a02-k000001","situation — ~197 tokens, records a02-k000008","decision_request — ~254 tokens","Exact messages sent (2)","Situation (structured)"]
+situation excerpt situation is derived from disclosed feedback (upkeep is not shown); query("self") gives exact values and prices. / - Records you know are labelled like [id rN kind source]; cite ids in memory_priorities to keep them in view. / ## COSTS (compute; an action executed inside a saved skill is charged x0.8) / move 5 (skill 4); observe 1 (skill 0.8); query 1 (skill 0.8); send 3 (skill 2.4); broadcast 7 (skill 5.6); absorb 3 (skill 2.4); transfer fee 1 (skill 0.8) plus the amount sent; wait 0 (skill 0). / recover(budget): charge = the useful part of the budget (skill x0.8); heals 1 health per compute. attack(target, budget): charge = the budget (skill x0.8); damage = your attack x the full budget. / upgrade(attribute): 25 x 2^n compute + 2 x 2^n essence, n = your earlier purchases of that attribute; attack
+format excerpt 
+record viewer title now Model call mc_r00005_t02_a02_01
+=== STEP 5e/6: agent view + plant (1440x900)
+agent view ON sections: Believed self ; Believed self ; Notebook ; Notebook ; Saved skills (0) ; Saved skills (0) ; Skill execution state ; Skill execution state ; Received messages and voice ; Received messages and voice ; Recent action results ; Recent action results ; Knowledge records (11) ; Knowledge records (11) ; You observe (1,0) -> ok; terrain land; entities: a02 agent; observed round 5; cost 1 compute. Your thought: "My observation here is stale." ; your last decision cost 0.5702 compute ; You move down -> ok; moved from (1,1) to (1,0); cost 5 compute. Your thought: "Nothing useful here; explore." ; your last decision cost 0.5594 compute ; You observe (1,1) -> ok; terrain land; entities: a02 agent; observed round 3; cost 1 compute. Your thought: "I have not observed this point yet." ; your last decision cost 0.554 compute ; You move up -> ok; moved from (1,0) to (1,1); cost 5 compute. Your thought: "Nothing useful here; explore." ; your last decision cost 0.5428 compute ; You observe (1,0) -> ok; terrain land; entities: a01 agent, a02 agent; observed round 1; cost 1 compute. Your thought: "I have not observed this point yet." ; your last decision cost 0.5194 compute ; You are Boreas (id a02); in round 0 you are at (1,0). Starting state: compute 200, essence 20 of capacity 100, health 100 of 100, attack 1, speed 1, vision_range 0, communication_range 0, compute_absorption 0.2, essence_absorption 0.1, skill limits 5 skills x 100 blocks. ; Decision packet (what the agent saw this turn) ; Decision packet (what the agent saw this turn)
+  shot: /home/ubuntu/antegensim/qa/review1/shots/33-agent-view-on.png
+map shows fog/unknown in agent view? false
+legend (agent view on): land / mountain (impassable) / water (no plants) / outside region / A3 / living agents (count) / ✕ / dead agent / plant / P2 / living plants / F / fruit · / S / seed · / R / residue · / O / mixed / 5 / zoomed out: occupants in the cell (blue = has a living agent) / selected cell / acting / highlighted agent
+  shot: /home/ubuntu/antegensim/qa/review1/shots/34-agent-view-map.png
+plant chosen p0001 fruit_tree stage 2 pos {"x":9,"y":-5}
+side pane height 3696
+  shot: /home/ubuntu/antegensim/qa/review1/shots/35-plant-p0001-part0.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/35-plant-p0001-part1.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/35-plant-p0001-part2.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/35-plant-p0001-part3.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/35-plant-p0001-part4.png
+species panel present 1
+panel fruit energy before 75
+panel message: Staged: species rule "fruit_tree" replaced at the next turn boundary.
+  shot: /home/ubuntu/antegensim/qa/review1/shots/36-species-rule-staged.png
+staged interventions {"staged":[{"id":"iv_0001","origin":"ui","note":"","created_at":"2026-09-25T18:07:35.058136+00:00","type":"update_plant_rules","species":"fruit_tree","rule":{"name":"fruit_tree","description":"Default deterministic fruit/seed plant. Sprout -> sapling -> mature; mature plants keep fruiting.","stages"
+status bar staged edits: 1
+  shot: /home/ubuntu/antegensim/qa/review1/shots/37-godmode-tab.png
+=== STEP 7a: god mode staging on run_20260925_180134_ea67
+after voice to a02: Staged: the voice reaches a02 at the next turn boundary.
+after broadcast voice: Staged: the voice reaches all living agents at the next turn boundary.
+  shot: /home/ubuntu/antegensim/qa/review1/shots/38-god-voices-staged.png
+after run context change: Staged: the voice reaches all living agents at the next turn boundary. | Staged: run defaults recent_history_length change at the next turn boundary (agents with an override keep it).
+after set stat: Staged: the voice reaches all living agents at the next turn boundary. | Staged: run defaults recent_history_length change at the next turn boundary (agents with an override keep it). | Staged: set a03.stats.compute = 150
+place point fields ["gm-pe-kind","gm-pe-pos-x","gm-pe-pos-y","gm-pe-compute","gm-pe-essence","gm-pe-plant"]
+  shot: /home/ubuntu/antegensim/qa/review1/shots/39-god-place-entity-form.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/40-god-context-agent-scope.png
+=== STEP 7b: place + agent context + apply on run_20260925_180134_ea67
+status bar staged edits on load: 5 api staged 5
+after place: ["Staged: place fruit at (1, 0)"]
+after agent ctx: ["Staged: context settings for agent a03: retrieved_memory_limit=3"]
+status bar staged edits after 2.5s: 7 api staged 7 tab: God mode (7 staged)
+  shot: /home/ubuntu/antegensim/qa/review1/shots/41-god-all-staged.png
+run turn applied: r00006_t01_a04 -> r00006_t02_a06 staged now 0
+operator lines in log: ["OPERATOR","operator iv_0004 update_context_settings -> ok, 1 changes","operator","intervention","OPERATOR","operator iv_0005 set_stat -> ok, 1 changes","operator","intervention","OPERATOR","operator iv_0006 place_entity -> ok, 1 changes","operator","intervention","OPERATOR","operator iv_0007 update_context_settings -> ok, 1 changes"]
+  shot: /home/ubuntu/antegensim/qa/review1/shots/42-log-after-interventions-applied.png
+turn interventions recorded: ["iv_0001:update_plant_rules:ok=true","iv_0002:voice:ok=true","iv_0003:voice:ok=true","iv_0004:update_context_settings:ok=true","iv_0005:set_stat:ok=true","iv_0006:place_entity:ok=true","iv_0007:update_context_settings:ok=true"]
+fruits now: ["f0001@1,0 c=30"]
+a03 compute 150 context 6 a03 override {"input_token_cap":null,"generation_allowance":null,"recent_history_length":null,"notebook_max_tokens":null,"retrieved_memory_limit":3,"new_event_digest_limit":null,"weights":null,"include_skill_source":null}
+a02 voices [] a05 voices []
+=== STEP 7c: remove fruit, working/ reload on run_20260925_180134_ea67
+remove options (first 12) ["(choose an entity)","a01 — Aurelia at (0, -1)","a02 — Boreas at (1, 0)","a03 — Cyrene at (-1, 2)","a04 — Damaris at (-2, -1)","a05 — Eos at (-1, -2)","a06 — Ferrin at (0, 2)","a07 — Galene at (0, -2)","a09 — Iole at (0, 2)","p0001 — fruit_tree at (9, -5)","p0002 — fruit_tree at (-10, 5)","p0003 — fruit_tree at (2, -9)"] count 22
+fruit option f0001 at (1, 0)
+  shot: /home/ubuntu/antegensim/qa/review1/shots/44-god-remove-entity-form.png
+after stage removal: ["Staged: remove f0001"]
+after apply: turn r00006_t03_a03 fruits [] removed {"f0001":{"id":"f0001","kind":"fruit","position":{"x":1,"y":0},"round":6,"reason":"operator"}}
+BASE_TURN r00006_t03_a03 live r00006_t03_a03
+a05 health on disk before 100
+UI folder line: Folder: worlds/world_20260925_180134_9549/runs/run_20260925_180134_ea67/working/ Copy path The path is relative to the worlds root: the repository's worlds/ folder, or EMPYREAN_WORLDS_DIR when the backend was started with it. Reload error messages name files from the run folder (for example working/entities/agents/a04.json).
+reload result area: 
+  shot: /home/ubuntu/antegensim/qa/review1/shots/45-working-reload-result.png
+reload with bad JSON: 
+  shot: /home/ubuntu/antegensim/qa/review1/shots/46-working-reload-invalid-json.png
+restored a06.json; staged now ["apply_working_files"]
+after apply: turn r00006_t04_a07 a05 health 77 interventions ["apply_working_files:true:"]
+=== STEP 7d: continuation from history on run_20260925_180134_ea67
+viewing HISTORY
+Viewing history: turn r00004_t03_a05 (round 4). The run itself is unchanged and the live log keeps running.
+  shot: /home/ubuntu/antegensim/qa/review1/shots/48-godmode-in-history.png
+god mode panel top in history: You are viewing history (turn r00004_t03_a05). God-mode edits change the live run at its next turn boundary, not the viewed turn. To change the past, use "Create continuation from turn r00004_t03_a05" at the bottom: it starts a new run from that checkpoint. / Voice from nowhere /  / The recipients get an operator_voice knowledge record from an unknown source. It is world information, not an instruction. Staged; delivered at the next turn boundary. /  / Voice text — what the agents hear
+continuation button: Create continuation from turn r00004_t03_a05
+  shot: /home/ubuntu/antegensim/qa/review1/shots/49-continuation-button.png
+landed on http://127.0.0.1:5173/#/run/run_20260925_181243_0ae9 new run run_20260925_181243_0ae9
+  shot: /home/ubuntu/antegensim/qa/review1/shots/50-continuation-landed.png
+header review1 operator 180126 from r00004_t03_a05 run run_20260925_181243_0ae9 · world world_20260925_180134_9549 · continuation of run_20260925_180134_ea67 from turn r00004_t03_a05 Back to sessions
+timeline LIVE / Following the latest saved turn r00004_t03_a05. / ◀ Previous round / Round 4 / Next round ▶ / Return to live / TURN / ‹ Parent run / Turn in round 4 / t03 · a05 Eos · move ok — r00004_t03_a05 (latest) / Next turn › / ← Earlier history is in the parent run run_20260925_180134_ea67 at turn r00004_t03_a05. Open parent run at that turn
+status Paused | Paused at a turn boundary. Nothing runs until you press Run turn, Play or Step round. | ROUND | 4 | TURN | 3 | ACTING AGENT (LAST SAVED TURN) | a05 Eos | NEXT STEP | agent turn for a02 Boreas | LAST SAVED TURN | r00004_t03_a05 | LIVING AGENTS | 8 | STAGED EDITS | 0 | MODEL USAGE (FAKE: FREE
+api summary parent {"world_id":"world_20260925_180134_9549","run_id":"run_20260925_180134_ea67","turn_id":"r00004_t03_a05"} name review1 operator 180126 from r00004_t03_a05 last turn r00004_t03_a05
+parent button present 1
+after parent click url http://127.0.0.1:5173/#/run/run_20260925_180134_ea67?turn=r00004_t03_a05
+timeline after parent click HISTORY / Viewing history: turn r00004_t03_a05 (round 4). The run itself is unchanged and the live log keeps running. / ◀ Previous round / Round 4 / Next round ▶ / Return to live / TURN / ‹ Previous turn / Turn in round 4 / t01 · a09 Iole · move ok — r00004_t01_a09 / t02 · a06 Ferrin · move ok — r00
+  shot: /home/ubuntu/antegensim/qa/review1/shots/51-parent-run-opened-at-turn.png
+=== STEP 8: leave + resume run_20260925_180134_ea67
+live turn before leaving r00006_t04_a07
+after Back to sessions url http://127.0.0.1:5173/#/
+  shot: /home/ubuntu/antegensim/qa/review1/shots/52-after-back-to-sessions.png
+status after leaving (expect run_not_open 409): 409 {"error":"run_not_open","detail":"run_not_open","problems":[]}
+  shot: /home/ubuntu/antegensim/qa/review1/shots/53-resume-list.png
+row for run found 1
+opened url http://127.0.0.1:5173/#/run/run_20260925_181243_0ae9
+resumed badge Paused api state  turn  matches last saved: false
+timeline LIVE Following the latest saved turn r00004_t03_a05.
+  shot: /home/ubuntu/antegensim/qa/review1/shots/54-resumed-run.png
+=== STEP 8b: resume exact run run_20260925_180134_ea67
+row text Open review1 operator 180126	round 6 · turn 4 | r00006_t04_a07 | 	9/25/2026, 6:11:48 PM	8 / 8	Paused	fake-heuristic	 | run run_20260925_180134_ea67 | world world_20260925_180134_9549
+resumed badge Paused api paused r00006_t04_a07
+timeline LIVE Following the latest saved turn r00006_t04_a07.
+  shot: /home/ubuntu/antegensim/qa/review1/shots/55-resumed-original-run.png
+=== STEP 9: error state + recover
+create 201 run_20260925_181355_7b5f
+badge sequence ["Running","Waiting for model","Error"]
+  shot: /home/ubuntu/antegensim/qa/review1/shots/56-error-state.png
+in error: Run turn disabled=true
+in error: Play disabled=true
+in error: Pause disabled=true
+in error: Step round disabled=true
+api error state error last_error "provider failure: error"
+recover button Recover (pause) enabled true
+after recover badge Paused api paused r00000_init next new_round
+  shot: /home/ubuntu/antegensim/qa/review1/shots/58-after-recover.png
+re-run after recover paused r00001_t01_a04
+  shot: /home/ubuntu/antegensim/qa/review1/shots/59-rerun-after-recover.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/61-turn-record-after-rerun.png
+=== STEP 10: 1100x750 spot-check
+  shot: /home/ubuntu/antegensim/qa/review1/shots/s-62-entry-1100.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/s-63-new-session-1100.png
+new session horizontal overflow {"docW":1100,"winW":1100}
+  shot: /home/ubuntu/antegensim/qa/review1/shots/s-64-run-page-1100.png
+run page horizontal overflow {"docW":1100,"winW":1100}
+layout rects 1100 {"controls":{"x":16,"y":77,"w":736,"h":30},"status":{"x":16,"y":115,"w":736,"h":174},"timeline":{"x":16,"y":296,"w":736,"h":128},"log":{"x":764,"y":10,"w":320,"h":734},"side":{"x":27,"y":1294,"w":714,"h":147},"map":{"x":28,"y":659,"w":712,"h":480}}
+  shot: /home/ubuntu/antegensim/qa/review1/shots/s-65-inspector-1100.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/s-66-inspector-1100-scrolled.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/s-67-godmode-1100.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/s-68-error-run-1100.png
+1440x900 run-name vs seed-hint {"input":[31,411,238,266],"hint":[380,711,231,266],"overlapX":31,"overlapY":28,"hintClass":"hint","inputParentW":331}
+1440x900 god-mode tables overflowing their bordered container []
+1100x750 run-name vs seed-hint {"input":[31,411,238,266],"hint":[383,717,231,266],"overlapX":28,"overlapY":28,"hintClass":"hint","inputParentW":334}
+1100x750 god-mode tables overflowing their bordered container [{"cls":"insp-table insp-ctx-table","right":820,"boxRight":741,"boxCls":"quick-box","over":79}]
+=== STEP 11: selection across history (f0001 lifecycle)
+mode HISTORY Viewing history: turn r00006_t02_a06 (round 6). The run itself is unchanged and the live log keeps running.
+at r00006_t02_a06: F / Fruit f0001 / at (1, 0) /  Agent view off / Viewing turn r00006_t02_a06 (round 6) — history / Fruit / available compute	30 / available essence	0 (fruit holds no essence by design)
+  shot: /home/ubuntu/antegensim/qa/review1/shots/71-fruit-selected-when-present.png
+at previous turn (before placement): F / Fruit f0001 / at (1, 0) /  Agent view off / Viewing turn r00006_t01_a04 (round 6) — history / Before birth: Created later in round 6 than the viewed turn. Showing data from a later turn. / Fruit / available compute	30
+  shot: /home/ubuntu/antegensim/qa/review1/shots/72-fruit-before-birth.png
+at live (after removal): F / Fruit f0001 / at (1, 0) /  Agent view off / Viewing turn r00006_t04_a07 (round 6) — live / After removal: Left the world in round 6 (reason: operator) at (1, 0). Showing the last known data. / Fruit / available compute	30
+  shot: /home/ubuntu/antegensim/qa/review1/shots/73-fruit-after-removal.png
+hide routine toggle header Live activity => Live activity 286 lines (seq 1–286)
+=== STEP 12: staged-count lag
+samples (changes only): ["0ms status=0 tab=","265ms status=0 tab=(1 staged)","1569ms status=1 tab=(1 staged)"]
+  shot: /home/ubuntu/antegensim/qa/review1/shots/75-staged-count-mismatch-probe.png
+staged after discard 0
+  shot: /home/ubuntu/antegensim/qa/review1/shots/76-rules-settings-history.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/77-rules-settings-history-scrolled.png
+  shot: /home/ubuntu/antegensim/qa/review1/shots/78-map-zoomed-in.png
+map text labels after zoom-in (sample) [null]

@@ -1,0 +1,16 @@
+import { launch, shot, log, loadState, api, BASE } from './lib.mjs';
+const st = loadState(); const runId = st.runId;
+const { browser, page } = await launch();
+log('=== STEP 8b: resume exact run', runId);
+await page.goto(`${BASE}/#/`); await page.waitForTimeout(1000);
+await page.getByRole('button', { name: /Resume session/ }).click(); await page.waitForTimeout(2000);
+const row = page.getByRole('row').filter({ hasText: `run ${runId}` }).first();
+log('row text', (await row.innerText()).replace(/\n/g,' | '));
+await row.getByRole('button').first().click();
+await page.waitForURL(new RegExp(runId), { timeout: 10000 });
+await page.waitForTimeout(2500);
+const s = (await api(`/runs/${runId}/status`)).body;
+log('resumed badge', await page.locator('.state-badge').first().innerText(), 'api', s.state, s.current_turn_id);
+log('timeline', (await page.getByRole('region', { name: 'History timeline' }).innerText()).split('\n').slice(0,2).join(' '));
+await shot(page, '55-resumed-original-run');
+await browser.close();

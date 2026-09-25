@@ -1,0 +1,10 @@
+[PASS] j_storage: 8 rounds committed :: "r00008_end"
+round 1: mean agent turn 107,411 B (alloc 172,032), knowledge 4,543 B, round end 51,035 B, round total 910,323 B, identical-to-previous 31.2%, knowledge files per agent turn 1.0 (unchanged copies 0/8)
+round 4: mean agent turn 119,549 B (alloc 180,736), knowledge 11,257 B, round end 49,102 B, round total 1,005,492 B, identical-to-previous 28.2%, knowledge files per agent turn 1.0 (unchanged copies 0/8)
+round 8: mean agent turn 147,416 B (alloc 208,896), knowledge 24,656 B, round end 53,571 B, round total 1,232,898 B, identical-to-previous 25.8%, knowledge files per agent turn 1.0 (unchanged copies 0/8)
+fit: {'round_total_bytes ~ a + b*round': {'a': 820939, 'b': 59971}, 'extrapolated_total_bytes_1000_rounds': 30836346824, 'extrapolated_GB_1000_rounds': 30.84, 'extrapolated_bytes_per_turn_at_round_1000': 6754631, 'knowledge_bytes_per_turn_growth_per_round': 2873, 'linear_lower_bound_GB (round-8 rate x 1000)': 1.23}
+[PASS] j_storage: measured bytes per turn at rounds 1, 4, 8 :: {"1": 107411, "4": 119549, "8": 147416}
+[PASS] j_storage: every turn's world.json knowledge_files covers every agent and points at an existing file with that sha256 (the same turn or an earlier committed one) :: {"turns": 73, "problems": []}
+[PASS] j_storage: a turn dir holds knowledge files ONLY for the agents whose store changed since the previous committed turn (changed -> written, unchanged -> map entry carried over) :: {"init_local_files": 8, "agent_turn_local_files_min_mean_max": [1, 1.0, 1], "problems": []}
+[PASS] j_storage: every committed turn loads through the API: turn view 200 and every agent's knowledge == the file the map points at :: {"turn_views": 73, "knowledge_views": 584, "problems": []}
+evidence: /home/ubuntu/antegensim/qa/resilience/out-final/j_storage.json ALL OK

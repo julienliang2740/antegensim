@@ -1,0 +1,13 @@
+{
+  "name": "empyrean-qa",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Browser checks for the Empyrean prototype (Playwright, Chromium headless).",
+  "type": "module",
+  "scripts": {
+    "check": "node browser_check.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.49.1"
+  }
+}

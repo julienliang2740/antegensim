@@ -1,0 +1,23 @@
+[PASS] b_controls: GET /defaults returns 6/8/11 prefilled cards; 12 rejected :: {"counts": {"6": 6, "8": 8, "11": 11}, "agent_count=12": 422}
+[PASS] b_controls: cards carry usable defaults (id, name, position, full stats) :: {"card0": {"id": "a01", "name": "Aster", "position": {"x": 0, "y": 0}}, "stats": {"compute": 200.0, "essence": 20.0, "essence_capacity": 100.0, "health": 100.0, "max_health": 100.0, "attack": 1.0, "speed": 1, "vision_range": 0, "communication_range": 0, "compute_absorption": 0.2, "essence_absorption": 0.1, "skill_count_limit": 5, "skill_block_limit": 100}}
+[PASS] b_controls: default cards have unique ids and names :: [["a01", "Aster"], ["a02", "Boreas"], ["a03", "Cyrene"], ["a04", "Damaris"], ["a05", "Eos"], ["a06", "Ferrin"], ["a07", "Galene"], ["a08", "Halcyon"]]
+[PASS] b_controls: edited invalid cards are reported by path :: [{"path": "agents[2].stats.health", "message": "health exceeds max_health"}, {"path": "agents[5].name", "message": "duplicate name 'Boreas' (also agents[1])"}]
+[PASS] b_controls: edited valid cards validate ok :: {"ok": true, "problems": []}
+[PASS] b_controls: card edits land in r00000_init :: {"name": "Edited Aster", "position": {"x": 3, "y": 0}, "compute": 150.0}
+[PASS] b_controls: POST /runs summary says paused :: "paused"
+[PASS] b_controls: new session opens paused :: {"state": "paused", "current_turn_id": "r00000_init", "next_step": "new_round", "next_agent_id": null}
+[PASS] b_controls: run_turn accepted while paused :: "running"
+[PASS] b_controls: run_turn commits exactly one agent turn then pauses :: {"new_turns": ["r00001_t01_a02"], "state": "paused"}
+[PASS] b_controls: second run_turn commits exactly the next agent turn :: "r00001_t02_a01"
+[PASS] b_controls: overlapping run command rejected with 409 :: {"status": 409, "body": {"error": "illegal_command", "detail": "illegal_command: run_turn while waiting_model", "problems": []}}
+[PASS] b_controls: play keeps committing turns without further commands :: {"committed": 3, "state": "waiting_model", "play_loop": true}
+[PASS] b_controls: pause yields pause_requested then paused :: ["pause_requested", "paused"]
+[PASS] b_controls: nothing commits after paused :: 7
+[PASS] b_controls: pause while paused is a no-op (200, stays paused) :: "paused"
+[PASS] b_controls: step_round stops at r{n}_end :: {"from": "r00001_t06_a08", "to": "r00001_end", "next_step": "new_round"}
+[PASS] b_controls: a second step_round runs the next full round and stops at its end :: "r00002_end"
+[PASS] b_controls: run_turn after a round end runs the first agent of the next round :: "r00003_t01_a01"
+[PASS] b_controls: routes needing the runner say run_not_open after close :: {"error": "run_not_open", "detail": "run_not_open", "problems": []}
+[PASS] b_controls: resumed session opens paused at the same committed turn :: {"state": "paused", "current_turn_id": "r00003_t01_a01"}
+[PASS] b_controls: closing during play and reopening gives paused (active turn committed) :: {"state": "paused", "current_turn_id": "r00003_t04_a06"}
+evidence: /home/ubuntu/antegensim/qa/resilience/out-final/b_controls.json ALL OK

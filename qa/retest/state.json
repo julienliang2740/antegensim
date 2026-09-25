@@ -1,0 +1,27 @@
+{
+  "mainRun": "run_20260925_192035_4381",
+  "mainName": "retest main 192026",
+  "afterRounds": "r00005_t01_a08",
+  "crowded": {
+    "key": "-1,-1",
+    "ids": [
+      "a07",
+      "p0007",
+      "f0013",
+      "f0014",
+      "s0001",
+      "res0001"
+    ]
+  },
+  "inspectAgent": "a07",
+  "plant": "p0001",
+  "crowdPoint": {
+    "x": -1,
+    "y": -1
+  },
+  "afterGod": "r00005_t02_a06",
+  "contRun": "run_20260925_193024_26c1",
+  "contFrom": "r00004_t04_a02",
+  "slowRun": "run_20260925_193055_5e95",
+  "errRun": "run_20260925_193131_164a"
+}

@@ -1,0 +1,42 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Run data and local credentials
+worlds/
+.env
+.env.local
+*.env
+
+# Test artifacts and logs
+test-results/
+screenshots/
+*.log
+backend/tests/_artifacts/
+playwright-report/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Evidence shipped with the docs must not be ignored by the patterns above
+!docs/evidence/screenshots/
+!docs/evidence/**/*.log
+
+# Process ids and agent working screenshots (curated evidence lives in docs/evidence/)
+*.pid
+frontend/dev-screenshots/
+qa/**/shots/
+qa/scratch/

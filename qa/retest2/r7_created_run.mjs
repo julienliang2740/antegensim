@@ -1,0 +1,20 @@
+// Curated 04-run-paused: a run created from the UI opens Paused at r00000_init with the full predicted order.
+import { launch, evidence, shot, log, api, status, BASE, loadState, saveState } from './lib.mjs';
+const st = loadState();
+const { browser, page } = await launch('1440x900');
+await page.goto(`${BASE}/#/`); await page.waitForTimeout(1200);
+await page.getByRole('button', { name: /New session/ }).click(); await page.waitForTimeout(2000);
+const stamp = new Date().toISOString().slice(11, 19).replace(/:/g, '');
+await page.getByLabel('Run name').fill(`retest2 created ${stamp}`);
+await page.getByRole('region', { name: 'Setup actions' }).first().getByRole('button', { name: 'Create and open' }).click();
+await page.waitForURL(/#\/run\//, { timeout: 20000 }); await page.waitForTimeout(3000);
+const runId = decodeURIComponent(page.url().split('#/run/')[1].split('?')[0]);
+const s = await status(runId);
+log('=== R7 created', runId, s.state, s.current_turn_id, s.next_step, JSON.stringify(s.next_round_order));
+const ns = await page.evaluate(() => { const dt = [...document.querySelectorAll('.status-fact dt')].find((e) => /next step/i.test(e.textContent)); return dt?.nextElementSibling?.textContent; });
+log('  Next step row:', ns, '| all named:', (s.next_round_order || []).every((id) => ns.includes(id)));
+log('  badge', await page.locator('.state-badge').first().innerText());
+await evidence(page, '04-run-paused');
+await browser.close();
+await api(`/runs/${runId}/close`, { method: 'POST' });
+st.created = runId; saveState(st);

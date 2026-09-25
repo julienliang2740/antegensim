@@ -1,0 +1,8 @@
+[PASS] g_voice: three operator_voice events with exactly the chosen recipients :: {"VOICE-ONE-7f3a hear me, a01": ["a01"], "VOICE-SEL-91bc a02 and a05 only": ["a02", "a05"], "VOICE-ALL-c4d2 everyone listen": ["a01", "a02", "a03", "a04", "a05", "a06", "a07", "a08"]}
+[PASS] g_voice: voice events are actor 'operator' (unseen sender) :: ["operator", "operator", "operator"]
+[PASS] g_voice: each voice is in exactly its recipients' knowledge files (no leak, none missing) :: {"leak": [], "missing": []}
+[PASS] g_voice: voice record has no visible sender (provenance source unknown, sender_visible false) :: [["a01-k000004", {"source": "unknown", "action": null, "sender_visible": false, "turn_id": "r00002_t01_a04"}, "VOICE-ONE-7f3a hear me, a01"], ["a01-k000005", {"source": "unknown", "action": null, "sender_visible": false, "turn_id": "r00002_t01_a04"}, "VOICE-ALL-c4d2 everyone listen"]]
+[PASS] g_voice: every agent had a later decision packet :: {"a01": "r00002_t05_a01", "a02": "r00002_t06_a02", "a03": "r00002_t08_a03", "a04": "r00002_t01_a04", "a05": "r00002_t07_a05", "a06": "r00002_t04_a06", "a07": "r00002_t02_a07", "a08": "r00002_t03_a08"}
+[PASS] g_voice: each recipient's next packet contains its voice text; non-recipients' packets do not :: {"leak": [], "missing": []}
+[PASS] g_voice: rendered voice line in a01's packet shows 'source unknown' and no sender :: "[a01-k000004 r2 voice, source unknown] \"VOICE-ONE-7f3a hear me, a01\""
+evidence: /home/ubuntu/antegensim/qa/resilience/out-final/g_voice.json ALL OK

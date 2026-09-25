@@ -1,0 +1,57 @@
+import { launch, shot, log, loadState, saveState, api, BASE, sleep } from './lib.mjs';
+import fs from 'node:fs';
+import { execSync } from 'node:child_process';
+const st = loadState(); const runId = st.runId;
+const { browser, page } = await launch();
+log('=== STEP 7c: remove fruit, working/ reload on', runId);
+await page.goto(`${BASE}/#/run/${runId}`); await page.waitForTimeout(2500);
+await page.getByRole('tab', { name: /God mode/ }).click(); await page.waitForTimeout(1000);
+await page.getByRole('tab', { name: 'Remove entity', exact: true }).click(); await page.waitForTimeout(300);
+const opts = await page.locator('#gm-re-entity option').allInnerTexts();
+log('remove options (first 12)', opts.slice(0, 12), 'count', opts.length);
+const fo = opts.find(o => o.includes(st.placedFruit));
+log('fruit option', fo);
+await page.locator('#gm-re-entity').selectOption({ label: fo });
+await shot(page, '44-god-remove-entity-form');
+await page.getByRole('button', { name: /Stage removal|Stage remove/ }).click(); await page.waitForTimeout(1200);
+log('after stage removal:', (await page.locator('.ok-line, .insp-ok, [role=alert]').allInnerTexts()).slice(-1));
+await page.getByRole('button', { name: 'Run turn', exact: true }).click(); await sleep(3000);
+const s = (await api(`/runs/${runId}/status`)).body;
+const tv = (await api(`/runs/${runId}/turns/${s.current_turn_id}`)).body;
+log('after apply: turn', s.current_turn_id, 'fruits', Object.keys(tv.entities.fruits), 'removed', JSON.stringify(tv.entities.removed).slice(0,200));
+// ---- working/ edit on disk
+const root = '/home/ubuntu/antegensim/worlds';
+const dir = execSync(`ls -d ${root}/world_*/runs/${runId}`).toString().trim();
+const base = fs.readFileSync(`${dir}/working/BASE_TURN`, 'utf8').trim();
+log('BASE_TURN', base, 'live', s.current_turn_id);
+const f = `${dir}/working/entities/agents/a05.json`;
+const j = JSON.parse(fs.readFileSync(f, 'utf8'));
+log('a05 health on disk before', j.stats.health);
+j.stats.health = 77;
+fs.writeFileSync(f, JSON.stringify(j, null, 2));
+// shown path in UI
+await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)); await page.waitForTimeout(400);
+const folderLine = await page.getByText(/^Folder:/).first().locator('xpath=..').innerText().catch(()=> '');
+log('UI folder line:', folderLine.replace(/\n/g,' '));
+await page.getByRole('button', { name: 'Reload working/ files' }).click(); await page.waitForTimeout(2500);
+const reloadRes = await page.getByRole('button', { name: 'Reload working/ files' }).locator('xpath=ancestor::section[1]').innerText().catch(()=> '');
+log('reload result area:', reloadRes.replace(/\n/g,' / ').slice(0, 800));
+await shot(page, '45-working-reload-result');
+// invalid JSON to see errors
+const f2 = `${dir}/working/entities/agents/a06.json`;
+const orig6 = fs.readFileSync(f2, 'utf8');
+fs.writeFileSync(f2, orig6.replace('"stats": {', '"stats": {,'));
+await page.getByRole('button', { name: 'Reload working/ files' }).click(); await page.waitForTimeout(2500);
+const reloadBad = await page.getByRole('button', { name: 'Reload working/ files' }).locator('xpath=ancestor::section[1]').innerText().catch(()=> '');
+log('reload with bad JSON:', reloadBad.replace(/\n/g,' / ').slice(0, 800));
+await shot(page, '46-working-reload-invalid-json');
+fs.writeFileSync(f2, orig6);
+log('restored a06.json; staged now', JSON.stringify((await api(`/runs/${runId}/interventions`)).body.staged.map(x => x.type)));
+// apply the valid reload
+await page.getByRole('button', { name: 'Run turn', exact: true }).click(); await sleep(3000);
+const s2 = (await api(`/runs/${runId}/status`)).body;
+const tv2 = (await api(`/runs/${runId}/turns/${s2.current_turn_id}`)).body;
+log('after apply: turn', s2.current_turn_id, 'a05 health', tv2.entities.agents.a05.stats.health, 'interventions', (tv2.turn.interventions||[]).map(r => `${r.intervention?.type}:${r.ok}:${r.error||''}`));
+await page.evaluate(() => window.scrollTo(0,0));
+await page.locator('.activity-log').screenshot({ path: new URL('./shots/47-log-after-file-edit-applied.png', import.meta.url).pathname });
+await browser.close();

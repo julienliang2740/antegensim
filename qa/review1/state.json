@@ -1,0 +1,9 @@
+{
+  "runId": "run_20260925_180134_ea67",
+  "runName": "review1 operator 180126",
+  "afterStepRound": "r00005_end",
+  "placedFruit": "f0001",
+  "contRunId": "run_20260925_181243_0ae9",
+  "contFrom": "r00004_t03_a05",
+  "errRunId": "run_20260925_181355_7b5f"
+}

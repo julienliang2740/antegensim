@@ -1,0 +1,40 @@
+// (1b) Conflict: a UI remove_entity staged before a working/ reload that edits the removed agent
+// (and another agent) -> the whole file edit fails with the path named; the removal stands.
+import fs from 'node:fs';
+import path from 'node:path';
+import { launch, shot, log, api, waitIdle, loadState, saveState, BASE } from './lib.mjs';
+const st = loadState();
+const d = (await api('/defaults?agent_count=6')).body;
+d.name = 'retest2 reload conflict'; d.play_delay_seconds = 0;
+const runId = (await api('/runs', { method: 'POST', body: d })).body.run_id;
+await api(`/runs/${runId}/open`, { method: 'POST' });
+const sum = (await api(`/runs/${runId}`)).body;
+log(`=== R1b conflict on ${runId}`);
+const { browser, page } = await launch('1440x900');
+await page.goto(`${BASE}/#/run/${runId}`); await page.waitForTimeout(3000);
+await page.getByRole('tab', { name: /God mode/ }).click(); await page.waitForTimeout(1200);
+await page.getByRole('tablist', { name: 'Intervention type' }).getByRole('tab', { name: 'Remove entity', exact: true }).click();
+await page.locator('#gm-re-entity').selectOption('a05'); await page.waitForTimeout(200);
+await page.getByRole('button', { name: 'Stage removal of a05' }).click(); await page.waitForTimeout(900);
+log('  remove:', (await page.locator('.insp-godmode .insp-tabpanel .insp-ok').innerText().catch(() => '')).trim());
+const wd = path.join(sum.run_dir, 'working', 'entities', 'agents');
+for (const [id, hp] of [['a05', 77], ['a03', 88]]) { const p = path.join(wd, `${id}.json`); const j = JSON.parse(fs.readFileSync(p, 'utf8')); j.stats.health = hp; fs.writeFileSync(p, JSON.stringify(j, null, 2)); }
+await page.getByRole('button', { name: 'Reload working/ files' }).click(); await page.waitForTimeout(2000);
+log('  reload changes shown:', await page.locator('.insp-file-actions .insp-change-list').first().innerText().catch(() => '(none)'));
+await page.evaluate(() => window.scrollTo(0, 0));
+await page.getByRole('button', { name: 'Run turn', exact: true }).click(); await page.waitForTimeout(800);
+const s = await waitIdle(runId); await page.waitForTimeout(2000);
+const tv = (await api(`/runs/${runId}/turns/${s.current_turn_id}`)).body;
+log('  records:', tv.turn.interventions.map((r) => `${r.intervention.id}:${r.intervention.type}:${r.ok ? 'ok' : 'FAILED: ' + r.error}`));
+const a03 = tv.entities.agents.a03?.stats.health, a05 = tv.entities.agents.a05 ? 'present' : 'removed';
+log('  a03 health', a03, '(expect 100: whole file edit rejected) | a05', a05, '| removed entry', JSON.stringify(tv.entities.removed?.a05 ?? null).slice(0, 120));
+await page.getByRole('tab', { name: /Turn record/ }).click(); await page.waitForTimeout(1500);
+await page.getByRole('heading', { name: /Operator edits applied/ }).evaluate((e) => e.scrollIntoView({ block: 'start' }));
+await page.waitForTimeout(300);
+log('  turn record (UI):', (await page.locator('.intervention-record').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').slice(0, 400)));
+await shot(page, 'r1b-conflict-turn-record');
+const snaps = fs.existsSync(path.join(sum.run_dir, 'working')) ? fs.readdirSync(path.join(sum.run_dir, 'working')) : [];
+log('  working/ entries after apply:', snaps.join(', '));
+await browser.close();
+await api(`/runs/${runId}/close`, { method: 'POST' });
+st.r1b = { runId, a03, a05 }; saveState(st);

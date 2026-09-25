@@ -1,0 +1,40 @@
+import { launch, shot, log, loadState, saveState, api, BASE, sleep } from './lib.mjs';
+const st = loadState();
+log('=== STEP 9: error state + recover');
+const d = (await api('/defaults?agent_count=8')).body;
+d.name = 'review1 error run';
+for (const c of d.agents) c.fake_options = { fail: { status: 'error', http_status: 503, rounds: [1], failing_attempts: 3 } };
+const cr = await api('/runs', { method: 'POST', body: d });
+log('create', cr.status, cr.body.run_id);
+const runId = cr.body.run_id; st.errRunId = runId; saveState(st);
+const { browser, page } = await launch();
+await page.goto(`${BASE}/#/run/${runId}`); await page.waitForTimeout(2500);
+await page.getByRole('button', { name: 'Run turn', exact: true }).click();
+const seq = []; const t0 = Date.now();
+while (Date.now() - t0 < 20000) { const b = await page.locator('.state-badge').first().innerText(); if (seq[seq.length-1] !== b) seq.push(b); if (/error/i.test(b)) break; await sleep(150); }
+await page.waitForTimeout(1500);
+log('badge sequence', seq);
+const statusTxt = (await page.getByRole('region', { name: 'Run status' }).innerText());
+console.log('---- STATUS IN ERROR ----\n' + statusTxt);
+await shot(page, '56-error-state');
+await page.locator('.activity-log').screenshot({ path: new URL('./shots/57-error-state-log.png', import.meta.url).pathname });
+for (const n of ['Run turn','Play','Pause','Step round']) log(`in error: ${n} disabled=${await page.getByRole('button', { name: n, exact: true }).isDisabled()}`);
+const s1 = (await api(`/runs/${runId}/status`)).body;
+log('api error state', s1.state, 'last_error', JSON.stringify(s1.last_error).slice(0, 300));
+// Recover
+const rec = page.getByRole('button', { name: /Recover/ });
+log('recover button', await rec.innerText(), 'enabled', !(await rec.isDisabled()));
+await rec.click(); await page.waitForTimeout(2500);
+const s2 = (await api(`/runs/${runId}/status`)).body;
+log('after recover badge', await page.locator('.state-badge').first().innerText(), 'api', s2.state, s2.current_turn_id, 'next', s2.next_step);
+console.log('---- STATUS AFTER RECOVER ----\n' + (await page.getByRole('region', { name: 'Run status' }).innerText()));
+await shot(page, '58-after-recover');
+await page.getByRole('button', { name: 'Run turn', exact: true }).click(); await sleep(3000);
+const s3 = (await api(`/runs/${runId}/status`)).body;
+log('re-run after recover', s3.state, s3.current_turn_id);
+await shot(page, '59-rerun-after-recover');
+await page.locator('.activity-log').screenshot({ path: new URL('./shots/60-rerun-log.png', import.meta.url).pathname });
+// inspect the carried failed call in the turn record tab
+await page.getByRole('tab', { name: /Turn record/ }).click(); await page.waitForTimeout(1500);
+await shot(page, '61-turn-record-after-rerun', { fullPage: true });
+await browser.close();

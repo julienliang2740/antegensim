@@ -1,0 +1,9 @@
+[PASS] c_playback: server log records adapter calls as 'model call provider=' (so absence is meaningful) :: {"lines_in_log_so_far": 166}
+[PASS] c_playback: history browsing works with the run closed :: {"turn_views": 8, "turn_events": 8, "knowledge": 24, "packets": 5, "model_calls": 8, "errors": []}
+[PASS] c_playback: history + live views work with the run open and paused :: {"browse": {"turn_views": 8, "turn_events": 8, "knowledge": 24, "packets": 5, "model_calls": 8, "errors": []}, "live": 200, "state": 200}
+[PASS] c_playback: no new model_calls files :: {"before": 36, "after": 36, "new_files": []}
+[PASS] c_playback: committed turn files unchanged (events, packets, calls) :: []
+[PASS] c_playback: no new events and ledger unchanged :: {"next_event_seq": [224, 224], "latest_seq": [223, 223], "real_usage": {"calls": 36, "interrupted_calls": 3, "input_tokens": 85938, "output_tokens": 1037, "provider_cost_usd": 0.0}}
+[PASS] c_playback: server log shows no adapter call during playback :: {"adapter_lines": [], "log_bytes_during_playback": 13874, "GET lines": 112}
+[PASS] c_playback: no pending model call file created :: []
+evidence: /home/ubuntu/antegensim/qa/resilience/out-final/c_playback.json ALL OK

@@ -1,0 +1,10 @@
+import { launch, evidence, log, BASE } from './lib.mjs';
+const { browser, page } = await launch('1440x900');
+await page.goto(`${BASE}/#/new`); await page.waitForTimeout(2000);
+const h = page.getByRole('heading', { name: /Agent cards/ });
+await h.evaluate((e) => { e.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); });
+await page.waitForTimeout(400);
+const hb = await h.boundingBox(); const bar = await page.getByRole('region', { name: 'Setup actions' }).first().boundingBox();
+log('cards heading y', Math.round(hb.y), 'sticky bar bottom', Math.round(bar.y + bar.height));
+await evidence(page, '02-new-session-cards');
+await browser.close();

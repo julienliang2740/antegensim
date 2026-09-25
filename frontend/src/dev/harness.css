@@ -1,0 +1,67 @@
+/* Layout of the standalone inspect harness page (src/dev/InspectHarness.tsx). */
+
+#harness-root {
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  text-align: left;
+  color: #1b1b1f;
+  background: #eceef1;
+  min-height: 100vh;
+}
+
+@media (prefers-color-scheme: dark) {
+  #harness-root {
+    color: #e8e8ea;
+    background: #101114;
+  }
+}
+
+.harness-page {
+  padding: 8px 12px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.harness-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  align-items: center;
+}
+
+.harness-log {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.harness-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.harness-row-map {
+  grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+}
+
+.harness-row > div {
+  background: var(--harness-panel, #ffffff);
+  border: 1px solid #c9ccd1;
+  border-radius: 6px;
+  padding: 8px 10px;
+  min-width: 0;
+}
+
+.harness-row > div > .insp {
+  background: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  .harness-row > div {
+    background: #17181c;
+    border-color: #3a3d45;
+  }
+}

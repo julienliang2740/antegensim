@@ -1,0 +1,16 @@
+port: 8040  worlds: /home/ubuntu/antegensim/qa/resilience/worlds-final  out: /home/ubuntu/antegensim/qa/resilience/out-final
+source hash at start: 1132bcec6042
+a_crash_resume exit=0 secs=106 pass=27 fail=0
+a2_kill_stress exit=0 secs=23 pass=15 fail=0
+b_controls exit=0 secs=12 pass=22 fail=0
+c_playback exit=0 secs=1 pass=8 fail=0
+d_invalid exit=0 secs=8 pass=15 fail=0
+e_skill_vs_direct exit=0 secs=3 pass=8 fail=0
+f_context_settings exit=0 secs=2 pass=15 fail=0
+g_voice exit=0 secs=3 pass=7 fail=0
+h_working_continuation exit=0 secs=4 pass=17 fail=0
+i_one_writer exit=0 secs=4 pass=9 fail=0
+j_storage exit=0 secs=8 pass=5 fail=0
+k_other_bullets exit=0 secs=5 pass=9 fail=0
+l_reload_order exit=0 secs=3 pass=8 fail=0
+source hash at end: 1132bcec6042

@@ -1,0 +1,10 @@
+[PASS] k_other_bullets: events stream in over many polls while playing (not only at commit) :: {"polls_with_events": 15, "uncommitted model_call_pending seen": [4, 9, 14, 19, 24]}
+[PASS] k_other_bullets: status reports the active state while the feed updates :: ["turn_active", "waiting_model"]
+[PASS] k_other_bullets: each event is one non-empty readable line with an actor field (feed prints actor + summary) :: {"sample": ["[round_started] world: round 1 begins: a02 a01 a03 a04 a07 a08 a06 a05", "[turn_started] a02: Boreas (a02) begins turn 1 of round 1", "[model_call_pending] a02: a02 waiting for fake-heuristic (fake/fake-heuristic)", "[model_call_completed] a02: a02 got a decision from fake-heuristic (in 2432 / out 33 tokens)", "[decision] a02: a02 decides: observe (1,0) \u2014 \"I have not observed th...
+[PASS] k_other_bullets: feed seqs strictly increasing across polls :: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+[PASS] k_other_bullets: the most crowded point at rounds 1/4/8 lists every co-located entity and each is inspectable :: [{"turn": "r00001_end", "point": "0,0", "occupants": ["a01", "f0001", "p0001"], "entities_at_point": ["a01", "f0001", "p0001"], "all_inspectable": true}, {"turn": "r00004_end", "point": "0,0", "occupants": ["a01", "p0001"], "entities_at_point": ["a01", "p0001"], "all_inspectable": true}, {"turn": "r00008_end", "point": "0,0", "occupants": ["a01", "f0013", "p0001"], "entities_at_point": ["a01", "f0...
+[PASS] k_other_bullets: plant rules are served with every turn view :: ["fruit_tree"]
+[PASS] k_other_bullets: every packet stays within its input_token_cap and holds only the agent's own records :: {"packets": 64, "violations": []}
+[PASS] k_other_bullets: older memories (>1 round old) are retrieved into later packets :: {"packets_with_old_retrieved": 56}
+[PASS] k_other_bullets: situation.observed_round is the round of a real earlier observation (no free refresh) :: []
+evidence: /home/ubuntu/antegensim/qa/resilience/out-final/k_other_bullets.json ALL OK

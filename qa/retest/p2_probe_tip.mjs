@@ -1,0 +1,18 @@
+import { launch, shot, log, loadState, BASE } from './lib.mjs';
+const st = loadState(); const runId = st.mainRun; const key = st.crowded.key;
+const { browser, page } = await launch('1440x900');
+await page.goto(`${BASE}/#/run/${runId}`); await page.waitForTimeout(3000);
+await page.locator('.area-map').evaluate((e) => e.scrollIntoView({ block: 'start' })); await page.waitForTimeout(400);
+const cell = page.locator(`rect[data-coord="${key}"]`);
+await cell.hover(); await page.waitForTimeout(900);
+log('clip chain', await page.locator('.insp-tooltip').evaluate((t) => { const out = []; const tr = t.getBoundingClientRect(); let n = t.parentElement; while (n && n !== document.body) { const cs = getComputedStyle(n); const r = n.getBoundingClientRect(); if (cs.overflow !== 'visible' || cs.overflowX !== 'visible') out.push({ cls: String(n.className).slice(0, 50), ov: cs.overflowX, left: Math.round(r.left), right: Math.round(r.right), tipRight: Math.round(tr.right) }); n = n.parentElement; } return out; }));
+await page.screenshot({ path: new URL('./shots/f01-tooltip-clip.png', import.meta.url).pathname, clip: { x: 20, y: 300, width: 420, height: 320 } });
+await cell.click(); await page.waitForTimeout(1200);
+await page.locator('.insp-occupant-row', { hasText: 'germinates round 99' }).first().click(); await page.waitForTimeout(900);
+log('seed inspector head:', (await page.locator('.insp-inspector').first().innerText()).split('\n').slice(0, 4).join(' | '));
+await page.locator('.insp-occupant-row', { hasText: 'from agent a99' }).first().click(); await page.waitForTimeout(900);
+log('residue inspector head:', (await page.locator('.insp-inspector').first().innerText()).split('\n').slice(0, 4).join(' | '));
+await page.getByRole('heading', { name: /Occupants at/ }).evaluate((e) => e.scrollIntoView({ block: 'start' })).catch(() => {});
+await page.waitForTimeout(300);
+await shot(page, 'f02-occupants-scrolled-to-residue');
+await browser.close();

@@ -1,0 +1,200 @@
+BUTTON  | Back to sessions | 
+BUTTON  | Validate setup | 
+BUTTON  | Create and open | 
+INPUT  | New run | 
+INPUT  | 1 | 
+SELECT  | fake-heuristic (fake/fake-heuristic) fak | 
+INPUT  |  | 
+INPUT  | 0.2 | 
+INPUT  |  | 
+INPUT  | a01 | 
+INPUT  | Aster | 
+SELECT  | run default (fake-heuristic) fake-heuris | 
+INPUT  | 0 | 
+INPUT  | 0 | 
+INPUT  | 200 | 
+INPUT  | 20 | 
+INPUT  | 100 | 
+INPUT  | 100 | 
+INPUT  | 100 | 
+INPUT  | 1 | 
+INPUT  | 1 | 
+INPUT  | 0 | 
+INPUT  | 0 | 
+INPUT  | 0.2 | 
+INPUT  | 0.1 | 
+INPUT  | 5 | 
+INPUT  | 100 | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+TEXTAREA  |  | 
+TEXTAREA  |  | 
+BUTTON  |  | 
+BUTTON  | Remove this card | 
+INPUT  | a02 | 
+INPUT  | Boreas | 
+SELECT  | run default (fake-heuristic) fake-heuris | 
+INPUT  | 1 | 
+INPUT  | 0 | 
+INPUT  | 200 | 
+INPUT  | 20 | 
+INPUT  | 100 | 
+INPUT  | 100 | 
+INPUT  | 100 | 
+INPUT  | 1 | 
+INPUT  | 1 | 
+INPUT  | 0 | 
+INPUT  | 0 | 
+INPUT  | 0.2 | 
+INPUT  | 0.1 | 
+INPUT  | 5 | 
+INPUT  | 100 | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+TEXTAREA  |  | 
+TEXTAREA  |  | 
+BUTTON  |  | 
+BUTTON  | Remove this card | 
+INPUT  | a03 | 
+INPUT  | Cyrene | 
+SELECT  | run default (fake-heuristic) fake-heuris | 
+INPUT  | 0 | 
+INPUT  | 1 | 
+INPUT  | 200 | 
+INPUT  | 20 | 
+INPUT  | 100 | 
+INPUT  | 100 | 
+INPUT  | 100 | 
+INPUT  | 1 | 
+INPUT  | 1 | 
+INPUT  | 0 | 
+INPUT  | 0 | 
+INPUT  | 0.2 | 
+INPUT  | 0.1 | 
+INPUT  | 5 | 
+INPUT  | 100 | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+TEXTAREA  |  | 
+TEXTAREA  |  | 
+BUTTON  |  | 
+BUTTON  | Remove this card | 
+INPUT  | a04 | 
+INPUT  | Damaris | 
+SELECT  | run default (fake-heuristic) fake-heuris | 
+INPUT  | -1 | 
+INPUT  | 0 | 
+INPUT  | 200 | 
+INPUT  | 20 | 
+INPUT  | 100 | 
+INPUT  | 100 | 
+INPUT  | 100 | 
+INPUT  | 1 | 
+INPUT  | 1 | 
+INPUT  | 0 | 
+INPUT  | 0 | 
+INPUT  | 0.2 | 
+INPUT  | 0.1 | 
+INPUT  | 5 | 
+INPUT  | 100 | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+TEXTAREA  |  | 
+TEXTAREA  |  | 
+BUTTON  |  | 
+BUTTON  | Remove this card | 
+INPUT  | a05 | 
+INPUT  | Eos | 
+SELECT  | run default (fake-heuristic) fake-heuris | 
+INPUT  | 0 | 
+INPUT  | -1 | 
+INPUT  | 200 | 
+INPUT  | 20 | 
+INPUT  | 100 | 
+INPUT  | 100 | 
+INPUT  | 100 | 
+INPUT  | 1 | 
+INPUT  | 1 | 
+INPUT  | 0 | 
+INPUT  | 0 | 
+INPUT  | 0.2 | 
+INPUT  | 0.1 | 
+INPUT  | 5 | 
+INPUT  | 100 | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+TEXTAREA  |  | 
+TEXTAREA  |  | 
+BUTTON  |  | 
+BUTTON  | Remove this card | 
+INPUT  | a06 | 
+INPUT  | Ferrin | 
+SELECT  | run default (fake-heuristic) fake-heuris | 
+INPUT  | 1 | 
+INPUT  | 1 | 
+INPUT  | 200 | 
+INPUT  | 20 | 
+INPUT  | 100 | 
+INPUT  | 100 | 
+INPUT  | 100 | 
+INPUT  | 1 | 
+INPUT  | 1 | 
+INPUT  | 0 | 
+INPUT  | 0 | 
+INPUT  | 0.2 | 
+INPUT  | 0.1 | 
+INPUT  | 5 | 
+INPUT  | 100 | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+INPUT  | on | 
+TEXTAREA  |  | 
+TEXTAREA  |  | 
+BUTTON  |  | 
+BUTTON  | Remove this card | 
+INPUT  | a07 | 
+INPUT  | Galene | 
+SELECT  | run default (fake-heuristic) fake-heuris | 
+INPUT  | -1 | 
+INPUT  | -1 | 
+INPUT  | 200 | 
+INPUT  | 20 | 
+INPUT  | 100 | 
+INPUT  | 100 | 
+INPUT  | 100 | 
+INPUT  | 1 | 

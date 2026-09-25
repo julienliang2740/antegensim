@@ -1,0 +1,356 @@
+=== R1 [ui-then-file] run_20260925_203239_cc92 at r00000_init; fruit_energy 60, recent_history 5, a05 health 100, terrain(0,0)?
+  voice: Staged: the voice reaches a01 at the next turn boundary.
+  place: Staged: place fruit at (0, 0) 
+  plant rule: Staged: replace species rule "fruit_tree" (3 stages) 
+  context: Staged: run defaults recent_history_length change at the next turn boundary (agents with an override keep it).
+  set_stat: Staged: set a05.stats.health = 55 
+  reload: Files and history / Reload working/ files / [hint]/ folder, then reload: they are validated and staged as one file edit. Invalid files are reported and nothing changes. Staged edits apply in staging order, and the file edit is applied as a field-by-field diff onto the state at that moment, so UI edits staged before or after it (voice, placements, sta
+  staged (API): iv_0001:voice, iv_0002:place_entity, iv_0003:update_plant_rules, iv_0004:update_context_settings, iv_0005:set_stat, iv_0006:apply_working_files
+  staged (UI):
+      iv_0001 voiceUI voice to a01: "retest2 voice (ui-then-file)"
+      iv_0002 place_entityUI place fruit at (0, 0)
+      iv_0003 update_plant_rulesUI replace species rule "fruit_tree" (3 stages)
+      iv_0004 update_context_settingsUI context settings for run defaults: recent_history_length=3
+      iv_0005 set_statUI set a05.stats.health = 55
+      iv_0006 apply_working_filesfile edit apply working/ files (base turn r00000_init, 1 changes)
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/r1-ui-then-file-staged-1440x900.png
+  records: ["iv_0001:voice:ok [knowledge.a01.records[a01-k000002]: null -> {\"id\":\"a01-k000002\",\"agent_id\":\"a01\",\"ro]","iv_0002:place_entity:ok [world.fruits.f0013: null -> {\"kind\":\"fruit\",\"id\":\"f0013\",\"position\":]","iv_0003:update_plant_rules:ok [world.rules.plant_species.fruit_tree: {\"name\":\"fruit_tree\",\"description\":\"Defa -> {\"name\":\"fruit_tree\",\"description\":\"Defa]","iv_0004:update_context_settings:ok [settings.context.recent_history_length: 5 -> 3]","iv_0005:set_stat:ok [world.agents.a05.stats.health: 100 -> 55]","iv_0006:apply_working_files:ok [world.agents.a05.stats.health: 55 -> 77]"]
+  record order == staging order: true iv_0001,iv_0002,iv_0003,iv_0004,iv_0005,iv_0006
+  RESULT {"order":"ui-then-file","runId":"run_20260925_203239_cc92","turn":"r00001_t01_a02","allOk":true,"inOrder":true,"voice":["retest2 voice (ui-then-file)"],"fruit33":["f0013"],"fruit_energy":"60 -> 70","recent_history":"5 -> 3 (effective view: 3)","a05_health":77,"expected_a05_health":77,"pass":true}
+  turn record (UI):
+      iv_0001 voice (UI) — voice to a01: "retest2 voice (ui-then-file)" — applied field before after knowledge.a01.records[a01-k000002] added operator_voice record a01-k000002 for a01: "retest2 voice (ui-th
+      iv_0002 place_entity (UI) — place fruit at (0, 0) — applied field before after world.fruits.f0013 null {"kind":"fruit","id":"f0013","position":{"x":0,"y":0},"plant_id":null,"availabl…
+      iv_0003 update_plant_rules (UI) — replace species rule "fruit_tree" (3 stages) — applied field before after world.rules.plant_species.fruit_tree {"name":"fruit_tree","description":"Default determinist
+      iv_0004 update_context_settings (UI) — context settings for run defaults: recent_history_length=3 — applied field before after settings.context.recent_history_length 5 3
+      iv_0005 set_stat (UI) — set a05.stats.health = 55 — applied field before after world.agents.a05.stats.health 100 55
+      iv_0006 apply_working_files (file edit) — apply working/ files (base turn r00000_init, 1 changes) — applied field before after world.agents.a05.stats.health 55 77
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/r1-ui-then-file-turn-record-1440x900.png
+  operator log lines:
+      #6 ~ [r1 t1] ~ operator ~ intervention ~ operator iv_0005 set_stat -> ok, 1 changes ~ set a05.stats.health = 55 · world.agents.a05.stats.health: 100 → 55
+      #7 ~ [r1 t1] ~ operator ~ intervention ~ operator iv_0006 apply_working_files -> ok, 1 changes ~ apply working/ files (base turn r00000_init, 1 changes) · world.agents.a05.stats.health: 55 → 77
+      #2 ~ [r1 t1] ~ operator ~ operator_voice ~ OPERATOR ~ r00001_t01_a02 ~ operator voice to a01: "retest2 voice (ui-then-file)"
+      #3 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0002 place_entity -> ok, 1 changes ~ place fruit at (0, 0) · world.fruits.f0013: null → {"kind":"fruit","id":"f0013","position"…
+      #4 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0003 update_plant_rules -> ok, 1 changes ~ replace species rule "fruit_tree" (3 stages) · world.rules.plant_species.fruit_tree: {"name":"fr
+      #5 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0004 update_context_settings -> ok, 1 changes ~ context settings for run defaults: recent_history_length=3 · settings.context.recent_histor
+      #6 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0005 set_stat -> ok, 1 changes ~ set a05.stats.health = 55 · world.agents.a05.stats.health: 100 → 55
+      #7 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0006 apply_working_files -> ok, 1 changes ~ apply working/ files (base turn r00000_init, 1 changes) · world.agents.a05.stats.health: 55 → 7
+=== R1 [file-then-ui] run_20260925_203258_a811 at r00000_init; fruit_energy 60, recent_history 5, a05 health 100, terrain(0,0)?
+  reload: Files and history / Reload working/ files / [hint]/ folder, then reload: they are validated and staged as one file edit. Invalid files are reported and nothing changes. Staged edits apply in staging order, and the file edit is applied as a field-by-field diff onto the state at that moment, so UI edits staged before or after it (voice, placements, sta
+  voice: Staged: the voice reaches a01 at the next turn boundary.
+  place: Staged: place fruit at (0, 0) 
+  plant rule: Staged: replace species rule "fruit_tree" (3 stages) 
+  context: Staged: run defaults recent_history_length change at the next turn boundary (agents with an override keep it).
+  set_stat: Staged: set a05.stats.health = 55 
+  staged (API): iv_0001:apply_working_files, iv_0002:voice, iv_0003:place_entity, iv_0004:update_plant_rules, iv_0005:update_context_settings, iv_0006:set_stat
+  staged (UI):
+      iv_0001 apply_working_filesfile edit apply working/ files (base turn r00000_init, 1 changes)
+      iv_0002 voiceUI voice to a01: "retest2 voice (file-then-ui)"
+      iv_0003 place_entityUI place fruit at (0, 0)
+      iv_0004 update_plant_rulesUI replace species rule "fruit_tree" (3 stages)
+      iv_0005 update_context_settingsUI context settings for run defaults: recent_history_length=3
+      iv_0006 set_statUI set a05.stats.health = 55
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/r1-file-then-ui-staged-1440x900.png
+  records: ["iv_0001:apply_working_files:ok [world.agents.a05.stats.health: 100 -> 77]","iv_0002:voice:ok [knowledge.a01.records[a01-k000002]: null -> {\"id\":\"a01-k000002\",\"agent_id\":\"a01\",\"ro]","iv_0003:place_entity:ok [world.fruits.f0013: null -> {\"kind\":\"fruit\",\"id\":\"f0013\",\"position\":]","iv_0004:update_plant_rules:ok [world.rules.plant_species.fruit_tree: {\"name\":\"fruit_tree\",\"description\":\"Defa -> {\"name\":\"fruit_tree\",\"description\":\"Defa]","iv_0005:update_context_settings:ok [settings.context.recent_history_length: 5 -> 3]","iv_0006:set_stat:ok [world.agents.a05.stats.health: 77 -> 55]"]
+  record order == staging order: true iv_0001,iv_0002,iv_0003,iv_0004,iv_0005,iv_0006
+  RESULT {"order":"file-then-ui","runId":"run_20260925_203258_a811","turn":"r00001_t01_a02","allOk":true,"inOrder":true,"voice":["retest2 voice (file-then-ui)"],"fruit33":["f0013"],"fruit_energy":"60 -> 70","recent_history":"5 -> 3 (effective view: 3)","a05_health":55,"expected_a05_health":55,"pass":true}
+  turn record (UI):
+      iv_0001 apply_working_files (file edit) — apply working/ files (base turn r00000_init, 1 changes) — applied field before after world.agents.a05.stats.health 100 77
+      iv_0002 voice (UI) — voice to a01: "retest2 voice (file-then-ui)" — applied field before after knowledge.a01.records[a01-k000002] added operator_voice record a01-k000002 for a01: "retest2 voice (file-
+      iv_0003 place_entity (UI) — place fruit at (0, 0) — applied field before after world.fruits.f0013 null {"kind":"fruit","id":"f0013","position":{"x":0,"y":0},"plant_id":null,"availabl…
+      iv_0004 update_plant_rules (UI) — replace species rule "fruit_tree" (3 stages) — applied field before after world.rules.plant_species.fruit_tree {"name":"fruit_tree","description":"Default determinist
+      iv_0005 update_context_settings (UI) — context settings for run defaults: recent_history_length=3 — applied field before after settings.context.recent_history_length 5 3
+      iv_0006 set_stat (UI) — set a05.stats.health = 55 — applied field before after world.agents.a05.stats.health 77 55
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/r1-file-then-ui-turn-record-1440x900.png
+  operator log lines:
+      #6 ~ [r1 t1] ~ operator ~ intervention ~ operator iv_0005 update_context_settings -> ok, 1 changes ~ context settings for run defaults: recent_history_length=3 · settings.context.recent_history_length: 5 → 3
+      #7 ~ [r1 t1] ~ operator ~ intervention ~ operator iv_0006 set_stat -> ok, 1 changes ~ set a05.stats.health = 55 · world.agents.a05.stats.health: 77 → 55
+      #2 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0001 apply_working_files -> ok, 1 changes ~ apply working/ files (base turn r00000_init, 1 changes) · world.agents.a05.stats.health: 100 → 
+      #3 ~ [r1 t1] ~ operator ~ operator_voice ~ OPERATOR ~ r00001_t01_a02 ~ operator voice to a01: "retest2 voice (file-then-ui)"
+      #4 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0003 place_entity -> ok, 1 changes ~ place fruit at (0, 0) · world.fruits.f0013: null → {"kind":"fruit","id":"f0013","position"…
+      #5 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0004 update_plant_rules -> ok, 1 changes ~ replace species rule "fruit_tree" (3 stages) · world.rules.plant_species.fruit_tree: {"name":"fr
+      #6 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0005 update_context_settings -> ok, 1 changes ~ context settings for run defaults: recent_history_length=3 · settings.context.recent_histor
+      #7 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0006 set_stat -> ok, 1 changes ~ set a05.stats.health = 55 · world.agents.a05.stats.health: 77 → 55
+R1 summary ui-then-file: PASS (run_20260925_203239_cc92) | file-then-ui: PASS (run_20260925_203258_a811)
+=== R1b conflict on run_20260925_203345_9f0c
+  remove: Staged: remove a05
+  reload changes shown: world.agents.a03.stats.health: 100 → 88
+world.agents.a05.stats.health: 100 → 77
+  records: ["iv_0001:remove_entity:ok","iv_0002:apply_working_files:FAILED: cannot apply the file edit onto the current state: world.agents.a05.stats.health: world.agents.a05 does not exist any more (removed or renamed by an earlier staged edit?)"]
+  a03 health 100 (expect 100: whole file edit rejected) | a05 removed | removed entry {"id":"a05","kind":"agent","position":{"x":0,"y":-1},"round":0,"reason":"operator"}
+  turn record (UI): ["iv_0001 remove_entity (UI) — remove a05 — applied field before after world.agents.a05 {\"kind\":\"agent\",\"id\":\"a05\",\"name\":\"Eos\",\"position\":{\"x\":0,\"y\":-1},\"stats\":{\"com… null","iv_0002 apply_working_files (file edit) — apply working/ files (base turn r00000_init, 2 changes) — failed: cannot apply the file edit onto the current state: world.agents.a05.stats.health: world.agents.a05 does not exist any more (removed or renamed by an earlier staged edit?)"]
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/r1b-conflict-turn-record.png
+  working/ entries after apply: BASE_TURN, README.txt, entities, map.json, pending_model_calls, rules.json, settings.json, staged_edits.json, world.json
+=== R2 setup run_20260925_203435_6758
+  step_round -> paused r00001_end
+  step_round -> paused r00002_end
+  step_round -> paused r00003_end
+   a01 observed_entities 2 believed {"x":0,"y":0} true {"x":0,"y":0}
+   a02 observed_entities 2 believed {"x":1,"y":0} true {"x":1,"y":0}
+   a03 observed_entities 2 believed {"x":0,"y":1} true {"x":0,"y":1}
+   a04 observed_entities 2 believed {"x":-1,"y":0} true {"x":-1,"y":0}
+   a05 observed_entities 2 believed {"x":0,"y":-1} true {"x":0,"y":-1}
+   a06 observed_entities 2 believed {"x":1,"y":1} true {"x":1,"y":1}
+   a07 observed_entities 2 believed {"x":-1,"y":-1} true {"x":-1,"y":-1}
+   a08 observed_entities 2 believed {"x":2,"y":0} true {"x":2,"y":0}
+  chosen agent a01 at {"x":0,"y":0}
+  cell B {"x":-2,"y":0}
+  staged 21 0
+  applied at r00004_t01_a07 failed: []
+  most crowded cells ["-2,0:16","0,0:7","1,0:2","0,1:2"] agent now at {"x":0,"y":0}
+  state {"runId":"run_20260925_203435_6758","agent":"a01","A":{"x":0,"y":0},"B":{"x":-2,"y":0},"keyA":"0,0","keyB":"-2,0","occA":["a01","p0001","f0013","f0014","f0015","s0001","res0001"],"occB":["f0016","f0017","f0018","f0019","f0020","f0021","f0022","f0023","s0002","s0003","s0004","s0005","res0002","res0003","res0004","res0005"]}
+  step_round -> paused r00004_end next ["a08","a06","a05","a02","a03","a04","a01","a07"]
+   a01 pos {"x":0,"y":0} observed 7 last action {"name":"observe","args":{"point":{"x":0,"y":0},"page":0}}
+   a02 pos {"x":1,"y":0} observed 2 last action {"name":"observe","args":{"point":{"x":1,"y":0},"page":0}}
+   a03 pos {"x":0,"y":1} observed 2 last action {"name":"observe","args":{"point":{"x":0,"y":1},"page":0}}
+   a04 pos {"x":-1,"y":0} observed 2 last action {"name":"observe","args":{"point":{"x":-1,"y":0},"page":0}}
+   a05 pos {"x":0,"y":-1} observed 2 last action {"name":"observe","args":{"point":{"x":0,"y":-1},"page":0}}
+   a06 pos {"x":1,"y":1} observed 2 last action {"name":"observe","args":{"point":{"x":1,"y":1},"page":0}}
+   a07 pos {"x":-1,"y":-1} observed 2 last action {"name":"observe","args":{"point":{"x":-1,"y":-1},"page":0}}
+   a08 pos {"x":2,"y":0} observed 2 last action {"name":"observe","args":{"point":{"x":2,"y":0},"page":0}}
+=== R3 1440x900 on run_20260925_203435_6758
+  layout (no selection): {"map":"27..387 w360","side":"397..1001 w604","log":"1024..1424 w400","docOverflow":0}
+  [1440x900 no-selection] hover -2,0: {"label":"1440x900 no-selection","key":"-2,0","vp":"1440x900","tooltip":{"x":170,"y":362,"w":390,"h":381,"r":560,"b":743},"cell":{"x":116,"y":362,"w":45,"h":45,"r":161,"b":407},"mapViewport":{"x":27,"y":133,"w":360,"h":480,"r":387,"b":613},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":false,"head":"(-2, 0) land · 16 occupants","items":8,"more":"+8 more — click the cell to list all","ok":false}
+     items: ["F f0016 compute 10 · essence 0","F f0017 compute 11 · essence 0","F f0018 compute 12 · essence 0"] …
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/08-crowded-cell-hover.png
+  wide inspector aria-pressed=true {"map":"27..387","viewport":"27..387","side":"397..1001"}
+  [1440x900 wide=true B] hover -2,0: {"label":"1440x900 wide=true B","key":"-2,0","vp":"1440x900","tooltip":{"x":170,"y":362,"w":390,"h":381,"r":560,"b":743},"cell":{"x":116,"y":362,"w":45,"h":45,"r":161,"b":407},"mapViewport":{"x":27,"y":133,"w":360,"h":480,"r":387,"b":613},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":false,"head":"(-2, 0) land · 16 occupants","items":8,"more":"+8 more — click the cell to list all","ok":false}
+     items: ["F f0016 compute 10 · essence 0","F f0017 compute 11 · essence 0","F f0018 compute 12 · essence 0"] …
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/h-1440x900-wide-true-hoverB.png
+  [1440x900 wide=true A] hover 0,0: {"label":"1440x900 wide=true A","key":"0,0","vp":"1440x900","tooltip":{"x":258,"y":362,"w":390,"h":341,"r":648,"b":703},"cell":{"x":204,"y":362,"w":45,"h":45,"r":249,"b":407},"mapViewport":{"x":27,"y":133,"w":360,"h":480,"r":387,"b":613},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":false,"head":"(0, 0) land · 7 occupants","items":7,"more":null,"ok":false}
+     items: ["A Aster (a01) health 100/100 · compute 199.796 · essence 20/100","P p0001 fruit_tree fruit_tree · mature (stage 2) · 0 fruit · essence 9","F f0013 compute 25 · essence 0"] …
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/h-1440x900-wide-true-hoverA.png
+  tooltip after page scroll: 0
+  wide inspector aria-pressed=false {"map":"27..562","viewport":"27..562","side":"572..1001"}
+  [1440x900 wide=false B] hover -2,0: {"label":"1440x900 wide=false B","key":"-2,0","vp":"1440x900","tooltip":{"x":258,"y":333,"w":390,"h":381,"r":648,"b":714},"cell":{"x":203,"y":333,"w":45,"h":45,"r":248,"b":378},"mapViewport":{"x":27,"y":104,"w":535,"h":480,"r":562,"b":584},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":false,"head":"(-2, 0) land · 16 occupants","items":8,"more":"+8 more — click the cell to list all","ok":false}
+     items: ["F f0016 compute 10 · essence 0","F f0017 compute 11 · essence 0","F f0018 compute 12 · essence 0"] …
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/h-1440x900-wide-false-hoverB.png
+  [1440x900 wide=false A] hover 0,0: {"label":"1440x900 wide=false A","key":"0,0","vp":"1440x900","tooltip":{"x":346,"y":333,"w":390,"h":341,"r":736,"b":674},"cell":{"x":291,"y":333,"w":45,"h":45,"r":336,"b":378},"mapViewport":{"x":27,"y":104,"w":535,"h":480,"r":562,"b":584},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":false,"head":"(0, 0) land · 7 occupants","items":7,"more":null,"ok":false}
+     items: ["A Aster (a01) health 100/100 · compute 199.796 · essence 20/100","P p0001 fruit_tree fruit_tree · mature (stage 2) · 0 fruit · essence 9","F f0013 compute 25 · essence 0"] …
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/h-1440x900-wide-false-hoverA.png
+  tooltip after page scroll: 0
+  wide now true
+  [1440x900] 16-cell list: head "Occupants at (-2, 0) · land 16 entities", scroll box {"sh":795,"ch":598,"maxH":"600px","top":0} box {"x":397,"y":35,"w":600,"h":600,"r":997,"b":635} cue 16 occupants — scroll for more ▾ {"x":398,"y":590,"w":598,"h":44,"r":996,"b":634} side column {"x":397,"y":8,"w":604,"h":706,"r":1001,"b":714} cue within window: true
+  [1440x900] rows 16/16, missing [], every row scrolled into full view: true
+  [1440x900] after reaching the last row: scroll {"top":197,"max":197} cue present: 0
+  [1440x900] last row click -> inspector head: S | Seed s0005 fruit_tree
+  [1440x900] back at top, cue: 16 occupants — scroll for more ▾
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/09-crowded-cell-occupants.png
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/o-1440x900-16-cell-end.png
+  [1440x900] 7-cell list: rows 7, scroll {"sh":446,"ch":446} overflows: false cue: 0
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/o-1440x900-7-cell.png
+=== R3 1100x750 on run_20260925_203435_6758
+  layout (no selection): {"map":"27..741 w714","side":"27..741 w714","log":"764..1084 w320","docOverflow":0}
+  [1100x750 no-selection] hover -2,0: {"label":"1100x750 no-selection","key":"-2,0","vp":"1100x750","tooltip":{"x":347,"y":333,"w":390,"h":381,"r":737,"b":714},"cell":{"x":293,"y":332,"w":45,"h":45,"r":338,"b":377},"mapViewport":{"x":27,"y":104,"w":714,"h":480,"r":741,"b":584},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":false,"head":"(-2, 0) land · 16 occupants","items":8,"more":"+8 more — click the cell to list all","ok":false}
+     items: ["F f0016 compute 10 · essence 0","F f0017 compute 11 · essence 0","F f0018 compute 12 · essence 0"] …
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/h-1100x750-no-selection-hoverB.png
+  wide inspector aria-pressed=false {"map":"27..741","viewport":"27..741","side":"27..741"}
+  [1100x750 wide=false B] hover -2,0: {"label":"1100x750 wide=false B","key":"-2,0","vp":"1100x750","tooltip":{"x":347,"y":333,"w":390,"h":381,"r":737,"b":714},"cell":{"x":293,"y":332,"w":45,"h":45,"r":338,"b":377},"mapViewport":{"x":27,"y":104,"w":714,"h":480,"r":741,"b":584},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":false,"head":"(-2, 0) land · 16 occupants","items":8,"more":"+8 more — click the cell to list all","ok":false}
+     items: ["F f0016 compute 10 · essence 0","F f0017 compute 11 · essence 0","F f0018 compute 12 · essence 0"] …
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/h-1100x750-wide-false-hoverB.png
+  [1100x750 wide=false A] hover 0,0: {"label":"1100x750 wide=false A","key":"0,0","vp":"1100x750","tooltip":{"x":435,"y":333,"w":390,"h":341,"r":825,"b":673},"cell":{"x":381,"y":332,"w":45,"h":45,"r":426,"b":377},"mapViewport":{"x":27,"y":104,"w":714,"h":480,"r":741,"b":584},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":false,"head":"(0, 0) land · 7 occupants","items":7,"more":null,"ok":false}
+     items: ["A Aster (a01) health 100/100 · compute 199.796 · essence 20/100","P p0001 fruit_tree fruit_tree · mature (stage 2) · 0 fruit · essence 9","F f0013 compute 25 · essence 0"] …
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/h-1100x750-wide-false-hoverA.png
+  tooltip after page scroll: 0
+=== R3 1440x900 on run_20260925_203435_6758
+  layout (no selection): {"map":"27..387 w360","side":"397..1001 w604","log":"1024..1424 w400","docOverflow":0}
+  [1440x900 no-selection] hover -2,0: {"label":"1440x900 no-selection","key":"-2,0","vp":"1440x900","tooltip":{"x":170,"y":362,"w":390,"h":381,"r":560,"b":743},"cell":{"x":116,"y":362,"w":45,"h":45,"r":161,"b":407},"mapViewport":{"x":27,"y":133,"w":360,"h":480,"r":387,"b":613},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":true,"head":"(-2, 0) land · 16 occupants","items":8,"more":"+8 more — click the cell to list all","ok":true}
+     items: ["F f0016 compute 10 · essence 0","F f0017 compute 11 · essence 0","F f0018 compute 12 · essence 0"] …
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/08-crowded-cell-hover.png
+  wide inspector aria-pressed=true {"map":"27..387","viewport":"27..387","side":"397..1001"}
+  [1440x900 wide=true B] hover -2,0: {"label":"1440x900 wide=true B","key":"-2,0","vp":"1440x900","tooltip":{"x":170,"y":362,"w":390,"h":381,"r":560,"b":743},"cell":{"x":116,"y":362,"w":45,"h":45,"r":161,"b":407},"mapViewport":{"x":27,"y":133,"w":360,"h":480,"r":387,"b":613},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":true,"head":"(-2, 0) land · 16 occupants","items":8,"more":"+8 more — click the cell to list all","ok":true}
+     items: ["F f0016 compute 10 · essence 0","F f0017 compute 11 · essence 0","F f0018 compute 12 · essence 0"] …
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/h-1440x900-wide-true-hoverB.png
+  [1440x900 wide=true A] hover 0,0: {"label":"1440x900 wide=true A","key":"0,0","vp":"1440x900","tooltip":{"x":258,"y":362,"w":390,"h":341,"r":648,"b":703},"cell":{"x":204,"y":362,"w":45,"h":45,"r":249,"b":407},"mapViewport":{"x":27,"y":133,"w":360,"h":480,"r":387,"b":613},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":true,"head":"(0, 0) land · 7 occupants","items":7,"more":null,"ok":true}
+     items: ["A Aster (a01) health 100/100 · compute 199.796 · essence 20/100","P p0001 fruit_tree fruit_tree · mature (stage 2) · 0 fruit · essence 9","F f0013 compute 25 · essence 0"] …
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/h-1440x900-wide-true-hoverA.png
+  tooltip after page scroll: 0
+  wide inspector aria-pressed=false {"map":"27..562","viewport":"27..562","side":"572..1001"}
+  [1440x900 wide=false B] hover -2,0: {"label":"1440x900 wide=false B","key":"-2,0","vp":"1440x900","tooltip":{"x":258,"y":333,"w":390,"h":381,"r":648,"b":714},"cell":{"x":203,"y":333,"w":45,"h":45,"r":248,"b":378},"mapViewport":{"x":27,"y":104,"w":535,"h":480,"r":562,"b":584},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":true,"head":"(-2, 0) land · 16 occupants","items":8,"more":"+8 more — click the cell to list all","ok":true}
+     items: ["F f0016 compute 10 · essence 0","F f0017 compute 11 · essence 0","F f0018 compute 12 · essence 0"] …
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/h-1440x900-wide-false-hoverB.png
+  [1440x900 wide=false A] hover 0,0: {"label":"1440x900 wide=false A","key":"0,0","vp":"1440x900","tooltip":{"x":346,"y":333,"w":390,"h":341,"r":736,"b":674},"cell":{"x":291,"y":333,"w":45,"h":45,"r":336,"b":378},"mapViewport":{"x":27,"y":104,"w":535,"h":480,"r":562,"b":584},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":true,"head":"(0, 0) land · 7 occupants","items":7,"more":null,"ok":true}
+     items: ["A Aster (a01) health 100/100 · compute 199.796 · essence 20/100","P p0001 fruit_tree fruit_tree · mature (stage 2) · 0 fruit · essence 9","F f0013 compute 25 · essence 0"] …
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/h-1440x900-wide-false-hoverA.png
+  tooltip after page scroll: 0
+  wide now true
+  [1440x900] 16-cell list: head "Occupants at (-2, 0) · land 16 entities", scroll box {"sh":795,"ch":598,"maxH":"600px","top":0} box {"x":397,"y":35,"w":600,"h":600,"r":997,"b":635} cue 16 occupants — scroll for more ▾ {"x":398,"y":590,"w":598,"h":44,"r":996,"b":634} side column {"x":397,"y":8,"w":604,"h":706,"r":1001,"b":714} cue within window: true
+  [1440x900] rows 16/16, missing [], every row scrolled into full view: true
+  [1440x900] after reaching the last row: scroll {"top":197,"max":197} cue present: 0
+  [1440x900] last row click -> inspector head: S | Seed s0005 fruit_tree
+  [1440x900] back at top, cue: 16 occupants — scroll for more ▾
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/09-crowded-cell-occupants.png
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/o-1440x900-16-cell-end.png
+  [1440x900] 7-cell list: rows 7, scroll {"sh":446,"ch":446} overflows: false cue: 0
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/o-1440x900-7-cell.png
+=== R3 1100x750 on run_20260925_203435_6758
+  layout (no selection): {"map":"27..741 w714","side":"27..741 w714","log":"764..1084 w320","docOverflow":0}
+  [1100x750 no-selection] hover -2,0: {"label":"1100x750 no-selection","key":"-2,0","vp":"1100x750","tooltip":{"x":347,"y":333,"w":390,"h":381,"r":737,"b":714},"cell":{"x":293,"y":332,"w":45,"h":45,"r":338,"b":377},"mapViewport":{"x":27,"y":104,"w":714,"h":480,"r":741,"b":584},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":true,"head":"(-2, 0) land · 16 occupants","items":8,"more":"+8 more — click the cell to list all","ok":true}
+     items: ["F f0016 compute 10 · essence 0","F f0017 compute 11 · essence 0","F f0018 compute 12 · essence 0"] …
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/h-1100x750-no-selection-hoverB.png
+  wide inspector aria-pressed=false {"map":"27..741","viewport":"27..741","side":"27..741"}
+  [1100x750 wide=false B] hover -2,0: {"label":"1100x750 wide=false B","key":"-2,0","vp":"1100x750","tooltip":{"x":347,"y":333,"w":390,"h":381,"r":737,"b":714},"cell":{"x":293,"y":332,"w":45,"h":45,"r":338,"b":377},"mapViewport":{"x":27,"y":104,"w":714,"h":480,"r":741,"b":584},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":true,"head":"(-2, 0) land · 16 occupants","items":8,"more":"+8 more — click the cell to list all","ok":true}
+     items: ["F f0016 compute 10 · essence 0","F f0017 compute 11 · essence 0","F f0018 compute 12 · essence 0"] …
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/h-1100x750-wide-false-hoverB.png
+  [1100x750 wide=false A] hover 0,0: {"label":"1100x750 wide=false A","key":"0,0","vp":"1100x750","tooltip":{"x":435,"y":333,"w":390,"h":341,"r":825,"b":673},"cell":{"x":381,"y":332,"w":45,"h":45,"r":426,"b":377},"mapViewport":{"x":27,"y":104,"w":714,"h":480,"r":741,"b":584},"inWindow":true,"overCell":false,"noInnerClip":true,"anyStatClipped":false,"onTop":true,"head":"(0, 0) land · 7 occupants","items":7,"more":null,"ok":true}
+     items: ["A Aster (a01) health 100/100 · compute 199.796 · essence 20/100","P p0001 fruit_tree fruit_tree · mature (stage 2) · 0 fruit · essence 9","F f0013 compute 25 · essence 0"] …
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/h-1100x750-wide-false-hoverA.png
+  tooltip after page scroll: 0
+  [1100x750] width toggle hidden (single-column layout: the inspector sits under the map), so there is no wide/narrow mode to switch
+  wide now false
+  [1100x750] 16-cell list: head "Occupants at (-2, 0) · land 16 entities", scroll box {"sh":795,"ch":598,"maxH":"600px","top":0} box {"x":27,"y":745,"w":714,"h":600,"r":741,"b":1345} cue 16 occupants — scroll for more ▾ {"x":28,"y":1301,"w":712,"h":44,"r":740,"b":1344} side column {"x":27,"y":718,"w":714,"h":706,"r":741,"b":1424} cue within window: false
+  [1100x750] rows 16/16, missing [], every row scrolled into full view: true
+  [1100x750] after reaching the last row: scroll {"top":197,"max":197} cue present: 0
+  [1100x750] last row click -> inspector head: S | Seed s0005 fruit_tree
+  [1100x750] back at top, cue: 16 occupants — scroll for more ▾
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/o-1100x750-16-cell-top.png
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/o-1100x750-16-cell-end.png
+  [1100x750] 7-cell list: rows 7, scroll {"sh":446,"ch":446} overflows: false cue: 0
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/o-1100x750-7-cell.png
+R3 hover summary: 1440x900 no-selection: ok | 1440x900 wide=true B: ok | 1440x900 wide=true A: ok | 1440x900 wide=false B: ok | 1440x900 wide=false A: ok | 1100x750 no-selection: ok | 1100x750 wide=false B: ok | 1100x750 wide=false A: ok
+=== R4 on run_20260925_203435_6758 at r00004_end; next_step new_round; next_round_order ["a08","a06","a05","a02","a03","a04","a01","a07"]
+  [1440x900] Next step: "start round 5 — likely order (8 agents): a08 Halcyon, a06 Ferrin, a05 Eos, a02 Boreas, a03 Cyrene, a04 Damaris, a01 Aster, a07 Galene (predicted; staged edits can change it)" | all 8 agents named: true, in order: true, clipped: false, white-space normal, row h 35, status bar h 191, doc overflow 0
+  [1440x900] Current action and result: Current action and result | last action	observe {"point":{"x":0,"y":0},"page":0} | result	ok | charge (compute / essence)	1 / 0 | round	4 | data	 | {"point":{"x":0,"y":0},"terrain":"land","entities":[{"id":"a01","kind":"agent","position":{"x":0,"y":0}},{"id":"p0001","kind":"plant","position":{"x":0,"y":0}},{"id":"f0013","kind":"fruit","position"…Show full JSON (518 chars)
+  [1440x900] Show full JSON buttons: 1 ["Show full JSON (518 chars)"]
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/10-agent-inspector.png
+  [1440x900] expanded data: 996 chars, contains all 6 co-located ids: true, pre 314/314 overflow-x auto, h 360; button now "Hide full JSON" aria-expanded=true
+  [1440x900] section body scrollWidth/clientWidth 598/598
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/d-1440x900-data-expanded.png
+  [1440x900] after Hide: full blocks 0, button "Show full JSON (518 chars)"
+  [1440x900] agent view ON. map note: "Agent view: only what Aster (a01) has observed. Each entity is drawn where a01 last saw it (its records name the round); a01 itself is drawn at its believed position. True positions, values and unobserved entities are hidden."
+  [1440x900] API observed_entities (7): f0001@0,0 r2 query, f0013@0,0 r4 observation, f0014@0,0 r4 observation, f0015@0,0 r4 observation, p0001@0,0 r4 observation, res0001@0,0 r4 observation, s0001@0,0 r4 observation | believed {"x":0,"y":0}
+  [1440x900] cells with badges in agent view: {"0,0":["A","P","O6"]}
+  [1440x900] badge cells not in the agent's knowledge: []
+  [1440x900] agent-view hover -2,0: (no tooltip)
+  [1440x900] agent-view hover 1,0: (no tooltip)
+  [1440x900] agent-view hover 0,0: (0, 0) land · 8 known here | agent view: only what Aster (a01) has observed | F f0001 fruit | queried in round 2 · at the position it was last seen | F f0013 fruit | observed in round 4 · at the position it was last seen | F f0014 fruit | observed in round 4 · at the position it was last seen | F f0015 fruit | observed in round 4 · at the position it was last seen | P p0001 plant | observed in rou
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/av-1440x900-hover-own-cell.png
+  [1440x900] agent-view list head "Known at (0, 0) · land 8 entities", note "agent view: only what this agent has observed. Aster (a01) knows of these entities at this point, each as of the round i"
+  [1440x900] agent-view rows (8): ["F f0001 fruit queried in round 2 · at the position it was last seen","F f0013 fruit observed in round 4 · at the position it was last seen","F f0014 fruit observed in round 4 · at the position it was last seen","F f0015 fruit observed in round 4 · at the position it was last seen","P p0001 plant observed in round 4 · at the position it was last seen","R res0001 residue observed in round 4 · at the position it was last seen","S s0001 seed observed in round 4 · at the position it was last seen","A a01 Aster (you) the viewing agent, at the position it believes it is at"]
+  [1440x900] rows == the agent's sightings at 0,0 + itself: true (f0001,f0013,f0014,f0015,p0001,res0001,s0001,a01 vs f0001,f0013,f0014,f0015,p0001,res0001,s0001,a01); true values shown: false
+  [1440x900] 'show removed-entity markers' control in agent view: 0
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/av-1440x900-map-and-list.png
+  [1440x900] after clicking sighting row f0013 in agent view: {"note":"Agent view is on, but no agent is selected (or its knowledge is still loading), so the map shows everything. Select an agent to see only what it has observed.","head":"Occupants at (0, 0) · land 7 entities","inspecting":"Inspecting f0013","toggle":1}
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/av-1440x900-after-sighting-click.png
+  [1440x900] re-selected a01 from the roster; note: Agent view: only what Aster (a01) has observed. Each entity is drawn where a01 last saw it
+  [1440x900] after clicking cell -2,0 in agent view: {"note":"Agent view is on, but no agent is selected (or its knowledge is still loading), so the map shows everything. Select an agent to see only what it has observed.","head":"Occupants at (-2, 0) · land 16 entities","rows":16}
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/av-1440x900-after-other-cell-click.png
+  [1440x900] Set stat a01.stats.compute exact 199.79560000000004: current row "Current value | 199.796 | stored exactly as 199.79560000000004"; New value input "199.7956" width 220px, text fits: true
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/s-1440x900-set-stat.png
+  [1100x750] Next step: "start round 5 — likely order (8 agents): a08 Halcyon, a06 Ferrin, a05 Eos, a02 Boreas, a03 Cyrene, a04 Damaris, a01 Aster, a07 Galene (predicted; staged edits can change it)" | all 8 agents named: true, in order: true, clipped: false, white-space normal, row h 53, status bar h 208, doc overflow 0
+  [1100x750] Current action and result: Current action and result | last action	observe {"point":{"x":0,"y":0},"page":0} | result	ok | charge (compute / essence)	1 / 0 | round	4 | data	 | {"point":{"x":0,"y":0},"terrain":"land","entities":[{"id":"a01","kind":"agent","position":{"x":0,"y":0}},{"id":"p0001","kind":"plant","position":{"x":0,"y":0}},{"id":"f0013","kind":"fruit","position"…Show full JSON (518 chars)
+  [1100x750] Show full JSON buttons: 1 ["Show full JSON (518 chars)"]
+  [1100x750] expanded data: 996 chars, contains all 6 co-located ids: true, pre 314/314 overflow-x auto, h 360; button now "Hide full JSON" aria-expanded=true
+  [1100x750] section body scrollWidth/clientWidth 712/712
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/d-1100x750-data-expanded.png
+  [1100x750] after Hide: full blocks 0, button "Show full JSON (518 chars)"
+  [1100x750] agent view ON. map note: "Agent view: only what Aster (a01) has observed. Each entity is drawn where a01 last saw it (its records name the round); a01 itself is drawn at its believed position. True positions, values and unobserved entities are hidden."
+  [1100x750] API observed_entities (7): f0001@0,0 r2 query, f0013@0,0 r4 observation, f0014@0,0 r4 observation, f0015@0,0 r4 observation, p0001@0,0 r4 observation, res0001@0,0 r4 observation, s0001@0,0 r4 observation | believed {"x":0,"y":0}
+  [1100x750] cells with badges in agent view: {"0,0":["A","P","O6"]}
+  [1100x750] badge cells not in the agent's knowledge: []
+  [1100x750] agent-view hover -2,0: (no tooltip)
+  [1100x750] agent-view hover 1,0: (no tooltip)
+  [1100x750] agent-view hover 0,0: (0, 0) land · 8 known here | agent view: only what Aster (a01) has observed | F f0001 fruit | queried in round 2 · at the position it was last seen | F f0013 fruit | observed in round 4 · at the position it was last seen | F f0014 fruit | observed in round 4 · at the position it was last seen | F f0015 fruit | observed in round 4 · at the position it was last seen | P p0001 plant | observed in rou
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/av-1100x750-hover-own-cell.png
+  [1100x750] agent-view list head "Known at (0, 0) · land 8 entities", note "agent view: only what this agent has observed. Aster (a01) knows of these entities at this point, each as of the round i"
+  [1100x750] agent-view rows (8): ["F f0001 fruit queried in round 2 · at the position it was last seen","F f0013 fruit observed in round 4 · at the position it was last seen","F f0014 fruit observed in round 4 · at the position it was last seen","F f0015 fruit observed in round 4 · at the position it was last seen","P p0001 plant observed in round 4 · at the position it was last seen","R res0001 residue observed in round 4 · at the position it was last seen","S s0001 seed observed in round 4 · at the position it was last seen","A a01 Aster (you) the viewing agent, at the position it believes it is at"]
+  [1100x750] rows == the agent's sightings at 0,0 + itself: true (f0001,f0013,f0014,f0015,p0001,res0001,s0001,a01 vs f0001,f0013,f0014,f0015,p0001,res0001,s0001,a01); true values shown: false
+  [1100x750] 'show removed-entity markers' control in agent view: 0
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/av-1100x750-map-and-list.png
+  [1100x750] after clicking sighting row f0013 in agent view: {"note":"Agent view is on, but no agent is selected (or its knowledge is still loading), so the map shows everything. Select an agent to see only what it has observed.","head":"Occupants at (0, 0) · land 7 entities","inspecting":"Inspecting f0013","toggle":1}
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/av-1100x750-after-sighting-click.png
+  [1100x750] re-selected a01 from the roster; note: Agent view: only what Aster (a01) has observed. Each entity is drawn where a01 last saw it
+  [1100x750] after clicking cell -2,0 in agent view: {"note":"Agent view is on, but no agent is selected (or its knowledge is still loading), so the map shows everything. Select an agent to see only what it has observed.","head":"Occupants at (-2, 0) · land 16 entities","rows":16}
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/av-1100x750-after-other-cell-click.png
+  [1100x750] Set stat a01.stats.compute exact 199.79560000000004: current row "Current value | 199.796 | stored exactly as 199.79560000000004"; New value input "199.7956" width 220px, text fits: true
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/s-1100x750-set-stat.png
+R4 done {"next_1440x900":{"allNamed":true,"orderOk":true,"clipped":false},"data_1440x900":{"hasAll":true,"len":996},"av_1440x900":{"extraCells":[],"rowsMatch":true,"leaksValues":false,"note":true},"avclick_1440x900":{"afterRow":{"note":"Agent view is on, but no agent is selected (or its knowledge is still loading), so the map shows everything. Select an agent to see only what it has observed.","head":"Occupants at (0, 0) · land 7 entities","inspecting":"Inspecting f0013","toggle":1},"afterCell":{"note":"Agent view is on, but no agent is selected (or its knowledge is still loading), so the map shows everything. Select an agent to see only what it has observed.","head":"Occupants at (-2, 0) · land 16 entities","rows":16}},"setstat_1440x900":{"exact":199.79560000000004,"cur":"Current value\n199.796\nstored exactly as 199.79560000000004","inp":{"value":"199.7956","w":220,"sw":218,"cw":218}},"next_1100x750":{"allNamed":true,"orderOk":true,"clipped":false},"data_1100x750":{"hasAll":true,"len":996},"av_1100x750":{"extraCells":[],"rowsMatch":true,"leaksValues":false,"note":true},"avclick_1100x750":{"afterRow":{"note":"Agent view is on, but no agent is selected (or its knowledge is still loading), so the map shows everything. Select an agent to see only what it has observed.","head":"Occupants at (0, 0) · land 7 entities","inspecting":"Inspecting f0013","toggle":1},"afterCell":{"note":"Agent view is on, but no agent is selected (or its knowledge is still loading), so the map shows everything.
+1100x750 after cell click: occupant heading box {"x":27,"y":740,"w":714,"h":21,"r":741,"b":761} first row box {"x":28,"y":794,"w":712,"h":45,"r":740,"b":839} scrollY 589
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/o-1100x750-right-after-click.png
+summaries in the plant-rule record: 2 ["{\"name\":\"fruit_tree\",\"description\":\"Default deterministic fruit/seed plant. Spr…","{\"name\":\"fruit_tree\",\"description\":\"Default deterministic fruit/seed plant. Spr…"]
+expanded text has fruit_energy 60 and 70: true true length 2771
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/r6-plant-rule-record-expanded.png
+run state after viewing paused
+=== R7 created run_20260925_204523_b57a paused r00000_init new_round ["a02","a01","a03","a04","a07","a08","a06","a05"]
+  Next step row: start round 1 — likely order (8 agents): a02 Boreas, a01 Aster, a03 Cyrene, a04 Damaris, a07 Galene, a08 Halcyon, a06 Ferrin, a05 Eos (predicted; staged edits can change it) | all named: true
+  badge Paused
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/04-run-paused.png
+=== R8 08 evidence: tooltip {"x":258,"y":362,"w":390,"h":341,"r":648,"b":703} cell {"x":204,"y":362,"w":45,"h":45,"r":249,"b":407} items 7 window 1440x900 inside: true
+  evidence: /home/ubuntu/antegensim/docs/evidence/screenshots/08-crowded-cell-hover.png
+=== R9 1440x900 at r00004_end (new_round): {"bar":191,"tabsY":403,"next":"start round 5 — likely order (8 agents): a08 Halcyon, a06 Fe"}
+  after Run turn, r00005_t01_a08 (agent_turn): {"bar":173,"tabsY":386,"next":"agent turn for a06 Ferrin"}
+=== R9 1100x750 at r00005_t01_a08 (agent_turn): {"bar":173,"tabsY":431,"next":"agent turn for a06 Ferrin"}
+  after step_round (new_round): {"bar":208,"tabsY":466,"next":"start round 6 — likely order (8 agents): a05 Eos, a02 Boreas"}
+  after Run turn, r00006_t01_a05 (agent_turn): {"bar":173,"tabsY":431,"next":"agent turn for a02 Boreas"}
+=== R1 [ui-then-file] run_20260925_204758_a27f at r00000_init; fruit_energy 60, recent_history 5, a05 health 100, terrain(0,0)?
+  voice: Staged: the voice reaches a01 at the next turn boundary.
+  place: Staged: place fruit at (0, 0) 
+  plant rule: Staged: replace species rule "fruit_tree" (3 stages) 
+  context: Staged: run defaults recent_history_length change at the next turn boundary (agents with an override keep it).
+  set_stat: Staged: set a05.stats.health = 55 
+  reload: Files and history / Reload working/ files / [hint]/ folder, then reload: they are validated and staged as one file edit. Invalid files are reported and nothing changes. Staged edits apply in staging order, and the file edit is applied as a field-by-field diff onto the state at that moment, so UI edits staged before or after it (voice, placements, sta
+  staged (API): iv_0001:voice, iv_0002:place_entity, iv_0003:update_plant_rules, iv_0004:update_context_settings, iv_0005:set_stat, iv_0006:apply_working_files
+  staged (UI):
+      iv_0001 voiceUI voice to a01: "retest2 voice (ui-then-file)"
+      iv_0002 place_entityUI place fruit at (0, 0)
+      iv_0003 update_plant_rulesUI replace species rule "fruit_tree" (3 stages)
+      iv_0004 update_context_settingsUI context settings for run defaults: recent_history_length=3
+      iv_0005 set_statUI set a05.stats.health = 55
+      iv_0006 apply_working_filesfile edit apply working/ files (base turn r00000_init, 1 changes)
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/r1-ui-then-file-staged-1100x750.png
+  records: ["iv_0001:voice:ok [knowledge.a01.records[a01-k000002]: null -> {\"id\":\"a01-k000002\",\"agent_id\":\"a01\",\"ro]","iv_0002:place_entity:ok [world.fruits.f0013: null -> {\"kind\":\"fruit\",\"id\":\"f0013\",\"position\":]","iv_0003:update_plant_rules:ok [world.rules.plant_species.fruit_tree: {\"name\":\"fruit_tree\",\"description\":\"Defa -> {\"name\":\"fruit_tree\",\"description\":\"Defa]","iv_0004:update_context_settings:ok [settings.context.recent_history_length: 5 -> 3]","iv_0005:set_stat:ok [world.agents.a05.stats.health: 100 -> 55]","iv_0006:apply_working_files:ok [world.agents.a05.stats.health: 55 -> 77]"]
+  record order == staging order: true iv_0001,iv_0002,iv_0003,iv_0004,iv_0005,iv_0006
+  RESULT {"order":"ui-then-file","runId":"run_20260925_204758_a27f","turn":"r00001_t01_a02","allOk":true,"inOrder":true,"voice":["retest2 voice (ui-then-file)"],"fruit33":["f0013"],"fruit_energy":"60 -> 70","recent_history":"5 -> 3 (effective view: 3)","a05_health":77,"expected_a05_health":77,"pass":true}
+  turn record (UI):
+      iv_0001 voice (UI) — voice to a01: "retest2 voice (ui-then-file)" — applied field before after knowledge.a01.records[a01-k000002] added operator_voice record a01-k000002 for a01: "retest2 voice (ui-th
+      iv_0002 place_entity (UI) — place fruit at (0, 0) — applied field before after world.fruits.f0013 null {"kind":"fruit","id":"f0013","position":{"x":0,"y":0},"plant_id":null,"availabl…
+      iv_0003 update_plant_rules (UI) — replace species rule "fruit_tree" (3 stages) — applied field before after world.rules.plant_species.fruit_tree {"name":"fruit_tree","description":"Default determinist
+      iv_0004 update_context_settings (UI) — context settings for run defaults: recent_history_length=3 — applied field before after settings.context.recent_history_length 5 3
+      iv_0005 set_stat (UI) — set a05.stats.health = 55 — applied field before after world.agents.a05.stats.health 100 55
+      iv_0006 apply_working_files (file edit) — apply working/ files (base turn r00000_init, 1 changes) — applied field before after world.agents.a05.stats.health 55 77
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/r1-ui-then-file-turn-record-1100x750.png
+  operator log lines:
+      #6 ~ [r1 t1] ~ operator ~ intervention ~ operator iv_0005 set_stat -> ok, 1 changes ~ set a05.stats.health = 55 · world.agents.a05.stats.health: 100 → 55
+      #7 ~ [r1 t1] ~ operator ~ intervention ~ operator iv_0006 apply_working_files -> ok, 1 changes ~ apply working/ files (base turn r00000_init, 1 changes) · world.agents.a05.stats.health: 55 → 77
+      #2 ~ [r1 t1] ~ operator ~ operator_voice ~ OPERATOR ~ r00001_t01_a02 ~ operator voice to a01: "retest2 voice (ui-then-file)"
+      #3 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0002 place_entity -> ok, 1 changes ~ place fruit at (0, 0) · world.fruits.f0013: null → {"kind":"fruit","id":"f0013","position"…
+      #4 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0003 update_plant_rules -> ok, 1 changes ~ replace species rule "fruit_tree" (3 stages) · world.rules.plant_species.fruit_tree: {"name":"fr
+      #5 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0004 update_context_settings -> ok, 1 changes ~ context settings for run defaults: recent_history_length=3 · settings.context.recent_histor
+      #6 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0005 set_stat -> ok, 1 changes ~ set a05.stats.health = 55 · world.agents.a05.stats.health: 100 → 55
+      #7 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0006 apply_working_files -> ok, 1 changes ~ apply working/ files (base turn r00000_init, 1 changes) · world.agents.a05.stats.health: 55 → 7
+=== R1 [file-then-ui] run_20260925_204817_b30a at r00000_init; fruit_energy 60, recent_history 5, a05 health 100, terrain(0,0)?
+  reload: Files and history / Reload working/ files / [hint]/ folder, then reload: they are validated and staged as one file edit. Invalid files are reported and nothing changes. Staged edits apply in staging order, and the file edit is applied as a field-by-field diff onto the state at that moment, so UI edits staged before or after it (voice, placements, sta
+  voice: Staged: the voice reaches a01 at the next turn boundary.
+  place: Staged: place fruit at (0, 0) 
+  plant rule: Staged: replace species rule "fruit_tree" (3 stages) 
+  context: Staged: run defaults recent_history_length change at the next turn boundary (agents with an override keep it).
+  set_stat: Staged: set a05.stats.health = 55 
+  staged (API): iv_0001:apply_working_files, iv_0002:voice, iv_0003:place_entity, iv_0004:update_plant_rules, iv_0005:update_context_settings, iv_0006:set_stat
+  staged (UI):
+      iv_0001 apply_working_filesfile edit apply working/ files (base turn r00000_init, 1 changes)
+      iv_0002 voiceUI voice to a01: "retest2 voice (file-then-ui)"
+      iv_0003 place_entityUI place fruit at (0, 0)
+      iv_0004 update_plant_rulesUI replace species rule "fruit_tree" (3 stages)
+      iv_0005 update_context_settingsUI context settings for run defaults: recent_history_length=3
+      iv_0006 set_statUI set a05.stats.health = 55
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/r1-file-then-ui-staged-1100x750.png
+  records: ["iv_0001:apply_working_files:ok [world.agents.a05.stats.health: 100 -> 77]","iv_0002:voice:ok [knowledge.a01.records[a01-k000002]: null -> {\"id\":\"a01-k000002\",\"agent_id\":\"a01\",\"ro]","iv_0003:place_entity:ok [world.fruits.f0013: null -> {\"kind\":\"fruit\",\"id\":\"f0013\",\"position\":]","iv_0004:update_plant_rules:ok [world.rules.plant_species.fruit_tree: {\"name\":\"fruit_tree\",\"description\":\"Defa -> {\"name\":\"fruit_tree\",\"description\":\"Defa]","iv_0005:update_context_settings:ok [settings.context.recent_history_length: 5 -> 3]","iv_0006:set_stat:ok [world.agents.a05.stats.health: 77 -> 55]"]
+  record order == staging order: true iv_0001,iv_0002,iv_0003,iv_0004,iv_0005,iv_0006
+  RESULT {"order":"file-then-ui","runId":"run_20260925_204817_b30a","turn":"r00001_t01_a02","allOk":true,"inOrder":true,"voice":["retest2 voice (file-then-ui)"],"fruit33":["f0013"],"fruit_energy":"60 -> 70","recent_history":"5 -> 3 (effective view: 3)","a05_health":55,"expected_a05_health":55,"pass":true}
+  turn record (UI):
+      iv_0001 apply_working_files (file edit) — apply working/ files (base turn r00000_init, 1 changes) — applied field before after world.agents.a05.stats.health 100 77
+      iv_0002 voice (UI) — voice to a01: "retest2 voice (file-then-ui)" — applied field before after knowledge.a01.records[a01-k000002] added operator_voice record a01-k000002 for a01: "retest2 voice (file-
+      iv_0003 place_entity (UI) — place fruit at (0, 0) — applied field before after world.fruits.f0013 null {"kind":"fruit","id":"f0013","position":{"x":0,"y":0},"plant_id":null,"availabl…
+      iv_0004 update_plant_rules (UI) — replace species rule "fruit_tree" (3 stages) — applied field before after world.rules.plant_species.fruit_tree {"name":"fruit_tree","description":"Default determinist
+      iv_0005 update_context_settings (UI) — context settings for run defaults: recent_history_length=3 — applied field before after settings.context.recent_history_length 5 3
+      iv_0006 set_stat (UI) — set a05.stats.health = 55 — applied field before after world.agents.a05.stats.health 77 55
+  shot: /home/ubuntu/antegensim/qa/retest2/shots/r1-file-then-ui-turn-record-1100x750.png
+  operator log lines:
+      #6 ~ [r1 t1] ~ operator ~ intervention ~ operator iv_0005 update_context_settings -> ok, 1 changes ~ context settings for run defaults: recent_history_length=3 · settings.context.recent_history_length: 5 → 3
+      #7 ~ [r1 t1] ~ operator ~ intervention ~ operator iv_0006 set_stat -> ok, 1 changes ~ set a05.stats.health = 55 · world.agents.a05.stats.health: 77 → 55
+      #2 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0001 apply_working_files -> ok, 1 changes ~ apply working/ files (base turn r00000_init, 1 changes) · world.agents.a05.stats.health: 100 → 
+      #3 ~ [r1 t1] ~ operator ~ operator_voice ~ OPERATOR ~ r00001_t01_a02 ~ operator voice to a01: "retest2 voice (file-then-ui)"
+      #4 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0003 place_entity -> ok, 1 changes ~ place fruit at (0, 0) · world.fruits.f0013: null → {"kind":"fruit","id":"f0013","position"…
+      #5 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0004 update_plant_rules -> ok, 1 changes ~ replace species rule "fruit_tree" (3 stages) · world.rules.plant_species.fruit_tree: {"name":"fr
+      #6 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0005 update_context_settings -> ok, 1 changes ~ context settings for run defaults: recent_history_length=3 · settings.context.recent_histor
+      #7 ~ [r1 t1] ~ operator ~ intervention ~ OPERATOR ~ r00001_t01_a02 ~ operator iv_0006 set_stat -> ok, 1 changes ~ set a05.stats.health = 55 · world.agents.a05.stats.health: 77 → 55
+R1 summary ui-then-file: PASS (run_20260925_204758_a27f) | file-then-ui: PASS (run_20260925_204817_b30a)

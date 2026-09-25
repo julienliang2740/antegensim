@@ -1,0 +1,23 @@
+import { launch, shot, log, loadState, api, status, BASE } from './lib.mjs';
+const st = loadState(); const runId = st.runId;
+const { browser, page } = await launch();
+log(`=== STEP 6: pause and leave (${runId})`);
+await page.goto(`${BASE}/#/run/${runId}`); await page.waitForTimeout(3000);
+const s = await status(runId);
+log('state', s.state, s.current_turn_id, JSON.stringify(s.real_usage));
+const pauseEnabled = await page.getByRole('button', { name: 'Pause', exact: true }).isEnabled();
+log('Pause enabled?', pauseEnabled);
+if (pauseEnabled) { await page.getByRole('button', { name: 'Pause', exact: true }).click(); await page.waitForTimeout(3000); }
+await page.locator('section.status-bar').screenshot({ path: new URL('./shots/60-final-statusbar.png', import.meta.url).pathname });
+log('status bar:', (await page.locator('section.status-bar').innerText()).replace(/\n/g, ' | '));
+await page.getByRole('button', { name: 'Back to sessions' }).click(); await page.waitForTimeout(2500);
+log('url', page.url());
+await shot(page, '61-sessions-after-leave');
+const body = await page.locator('body').innerText();
+const idx = body.indexOf(st.runName);
+log('entry text near run:', body.slice(Math.max(0, idx - 200), idx + 500).replace(/\n/g, ' | '));
+const s2 = await status(runId);
+log('after leave', s2.state, s2.current_turn_id, JSON.stringify(s2.real_usage));
+const r = await api(`/runs/${runId}`);
+log('run summary', JSON.stringify(r.body).slice(0, 700));
+await browser.close();

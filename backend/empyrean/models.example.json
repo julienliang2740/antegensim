@@ -1,0 +1,106 @@
+{
+  "_comment": "Model registry. credential_env lists ENV VAR NAMES only; values come from .env. Copy this file and point EMPYREAN_MODELS_FILE at it to customise. Keys are what agent cards and run defaults reference. mind_multiplier is snapshotted into each run at creation (rules.cognition.mind_multipliers); editing it here never changes an existing run. options: temperature, param_style ('chat' | 'reasoning'), strict_schema (bool, OpenAI family), tool_choice ('tool' default | 'auto', anthropic), api_key_env (env var NAME of the key), overhead_tokens (provider-side input tokens beyond messages and schema; model.FIXED_OVERHEAD_TOKENS by default), max_budget_usd, max_turns, max_model_requests (accepted CLI re-prompts per decision, config.CLI_MAX_MODEL_REQUESTS) and max_thinking_tokens (MAX_THINKING_TOKENS for the subprocess, 0 = off, null = CLI default; config.CLI_MAX_THINKING_TOKENS) (claude_cli). ${VAR} placeholders in endpoint/deployment/api_version/region are resolved from the environment.",
+  "models": [
+    {
+      "key": "fake-heuristic",
+      "provider": "fake",
+      "model_id": "fake-heuristic",
+      "credential_env": [],
+      "capabilities": {"supports_json_schema": true, "supports_json_mode": true, "context_window": 100000, "max_output_tokens": 4000, "reports_usage": false},
+      "mind_multiplier": 1.0,
+      "description": "Deterministic seeded survival policy; no network."
+    },
+    {
+      "key": "fake-scripted",
+      "provider": "fake",
+      "model_id": "fake-scripted",
+      "credential_env": [],
+      "capabilities": {"supports_json_schema": true, "supports_json_mode": true, "context_window": 100000, "max_output_tokens": 4000, "reports_usage": false},
+      "mind_multiplier": 1.0,
+      "description": "Replays per-agent decision scripts from request.metadata['fake_script']."
+    },
+    {
+      "key": "fake-malformed",
+      "provider": "fake",
+      "model_id": "fake-malformed",
+      "credential_env": [],
+      "capabilities": {"supports_json_schema": true, "supports_json_mode": true, "context_window": 100000, "max_output_tokens": 4000, "reports_usage": false},
+      "mind_multiplier": 1.0,
+      "description": "Returns invalid JSON / illegal actions on a schedule to test validation gates."
+    },
+    {
+      "key": "claude-cli-haiku",
+      "provider": "claude_cli",
+      "model_id": "haiku",
+      "credential_env": [],
+      "capabilities": {"supports_json_schema": true, "supports_json_mode": false, "context_window": 200000, "max_output_tokens": 8000, "reports_usage": true},
+      "mind_multiplier": 1.0,
+      "options": {"max_budget_usd": 0.05},
+      "description": "Hardened Claude Code CLI subprocess (no tools, no settings, no session, --json-schema); uses the CLI's own login. The served model is recorded as response_model."
+    },
+    {
+      "key": "claude-cli-haiku-prompted",
+      "provider": "claude_cli",
+      "model_id": "haiku",
+      "credential_env": [],
+      "capabilities": {"supports_json_schema": false, "supports_json_mode": false, "context_window": 200000, "max_output_tokens": 8000, "reports_usage": true},
+      "mind_multiplier": 1.0,
+      "options": {"max_budget_usd": 0.05, "overhead_tokens": 850},
+      "description": "Same hardened Claude Code CLI route without --json-schema: the decision format is described in the prompt and the reply is extracted and validated by the format gate. About half the input tokens of the schema route (no StructuredOutput tool)."
+    },
+    {
+      "key": "anthropic-haiku",
+      "provider": "anthropic",
+      "model_id": "claude-haiku-4-5",
+      "credential_env": ["ANTHROPIC_API_KEY"],
+      "capabilities": {"supports_json_schema": true, "supports_json_mode": false, "context_window": 200000, "max_output_tokens": 8000, "reports_usage": true},
+      "mind_multiplier": 1.0,
+      "options": {"temperature": 0.7},
+      "description": "Anthropic API, cheap model for short simulations (forced tool use carries the decision schema)."
+    },
+    {
+      "key": "openai-mini",
+      "provider": "openai",
+      "model_id": "gpt-4o-mini",
+      "credential_env": ["OPENAI_API_KEY"],
+      "capabilities": {"supports_json_schema": true, "supports_json_mode": true, "context_window": 128000, "max_output_tokens": 16000, "reports_usage": true},
+      "mind_multiplier": 1.0,
+      "options": {"temperature": 0.7, "param_style": "chat", "strict_schema": false},
+      "description": "OpenAI API, cheap model."
+    },
+    {
+      "key": "fireworks-llama",
+      "provider": "fireworks",
+      "model_id": "accounts/fireworks/models/llama-v3p1-8b-instruct",
+      "credential_env": ["FIREWORKS_API_KEY"],
+      "endpoint": "https://api.fireworks.ai/inference/v1",
+      "capabilities": {"supports_json_schema": true, "supports_json_mode": true, "context_window": 128000, "max_output_tokens": 8000, "reports_usage": true},
+      "mind_multiplier": 1.0,
+      "options": {"strict_schema": false},
+      "description": "Fireworks OpenAI-compatible endpoint."
+    },
+    {
+      "key": "bedrock-haiku",
+      "provider": "bedrock",
+      "model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
+      "credential_env": [],
+      "region": "us-east-1",
+      "capabilities": {"supports_json_schema": false, "supports_json_mode": false, "context_window": 200000, "max_output_tokens": 8000, "reports_usage": true},
+      "mind_multiplier": 1.0,
+      "description": "AWS Bedrock converse API using the boto3 default credential chain (env keys, profiles, roles, session tokens); region from this entry, AWS_REGION env overrides when set. Add AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY to credential_env to require static keys."
+    },
+    {
+      "key": "foundry-gpt",
+      "provider": "foundry",
+      "model_id": "gpt-4o-mini",
+      "credential_env": ["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY"],
+      "endpoint": "${AZURE_OPENAI_ENDPOINT}",
+      "deployment": "${AZURE_OPENAI_DEPLOYMENT}",
+      "api_version": "${AZURE_OPENAI_API_VERSION}",
+      "capabilities": {"supports_json_schema": true, "supports_json_mode": true, "context_window": 128000, "max_output_tokens": 16000, "reports_usage": true},
+      "mind_multiplier": 1.0,
+      "options": {"strict_schema": false},
+      "description": "Microsoft AI Foundry / Azure OpenAI deployment (Azure OpenAI deployments only). ${VAR} placeholders are resolved from the environment by the registry loader."
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+import { launch, shot, log, loadState, api, BASE } from './lib.mjs';
+const st = loadState(); const runId = st.runId;
+const { browser, page } = await launch();
+log('=== STEP 11: selection across history (f0001 lifecycle)');
+await page.goto(`${BASE}/#/run/${runId}?turn=r00006_t02_a06`); await page.waitForTimeout(3000);
+const tl = page.getByRole('region', { name: 'History timeline' });
+log('mode', (await tl.locator('.timeline-mode').innerText()).replace(/\n/g,' '));
+await page.getByPlaceholder(/e\.g\. a05/).fill('f0001');
+await page.getByRole('button', { name: 'Select entity' }).click(); await page.waitForTimeout(1500);
+const head = async () => (await page.locator('.insp-inspector').innerText().catch(()=> '')).split('\n').slice(0, 8).join(' / ');
+log('at r00006_t02_a06:', await head());
+await shot(page, '71-fruit-selected-when-present');
+await tl.getByRole('button', { name: /Previous turn/ }).click(); await page.waitForTimeout(1500);
+log('at previous turn (before placement):', await head());
+await shot(page, '72-fruit-before-birth');
+await tl.getByRole('button', { name: 'Return to live' }).click(); await page.waitForTimeout(2000);
+log('at live (after removal):', await head());
+await shot(page, '73-fruit-after-removal');
+// hide routine world events toggle
+const lg = page.getByRole('region', { name: 'Live activity log' });
+const before = (await lg.innerText()).split('\n')[0];
+await lg.getByLabel('Hide routine world events').check(); await page.waitForTimeout(600);
+const after = (await lg.innerText()).split('\n').slice(0,2).join(' ');
+log('hide routine toggle header', before, '=>', after);
+await lg.screenshot({ path: new URL('./shots/74-log-hide-routine.png', import.meta.url).pathname });
+await browser.close();

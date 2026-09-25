@@ -1,0 +1,343 @@
+{
+  "r1": [
+    {
+      "order": "ui-then-file",
+      "runId": "run_20260925_204758_a27f",
+      "turn": "r00001_t01_a02",
+      "allOk": true,
+      "inOrder": true,
+      "voice": [
+        "retest2 voice (ui-then-file)"
+      ],
+      "fruit33": [
+        "f0013"
+      ],
+      "fruit_energy": "60 -> 70",
+      "recent_history": "5 -> 3 (effective view: 3)",
+      "a05_health": 77,
+      "expected_a05_health": 77,
+      "pass": true
+    },
+    {
+      "order": "file-then-ui",
+      "runId": "run_20260925_204817_b30a",
+      "turn": "r00001_t01_a02",
+      "allOk": true,
+      "inOrder": true,
+      "voice": [
+        "retest2 voice (file-then-ui)"
+      ],
+      "fruit33": [
+        "f0013"
+      ],
+      "fruit_energy": "60 -> 70",
+      "recent_history": "5 -> 3 (effective view: 3)",
+      "a05_health": 55,
+      "expected_a05_health": 55,
+      "pass": true
+    }
+  ],
+  "r1b": {
+    "runId": "run_20260925_203345_9f0c",
+    "a03": 100,
+    "a05": "removed"
+  },
+  "main": {
+    "runId": "run_20260925_203435_6758",
+    "agent": "a01",
+    "A": {
+      "x": 0,
+      "y": 0
+    },
+    "B": {
+      "x": -2,
+      "y": 0
+    },
+    "keyA": "0,0",
+    "keyB": "-2,0",
+    "occA": [
+      "a01",
+      "p0001",
+      "f0013",
+      "f0014",
+      "f0015",
+      "s0001",
+      "res0001"
+    ],
+    "occB": [
+      "f0016",
+      "f0017",
+      "f0018",
+      "f0019",
+      "f0020",
+      "f0021",
+      "f0022",
+      "f0023",
+      "s0002",
+      "s0003",
+      "s0004",
+      "s0005",
+      "res0002",
+      "res0003",
+      "res0004",
+      "res0005"
+    ]
+  },
+  "r3": [
+    {
+      "label": "1440x900 no-selection",
+      "ok": true,
+      "tooltip": {
+        "x": 170,
+        "y": 362,
+        "w": 390,
+        "h": 381,
+        "r": 560,
+        "b": 743
+      },
+      "cell": {
+        "x": 116,
+        "y": 362,
+        "w": 45,
+        "h": 45,
+        "r": 161,
+        "b": 407
+      },
+      "inWindow": true,
+      "overCell": false
+    },
+    {
+      "label": "1440x900 wide=true B",
+      "ok": true,
+      "tooltip": {
+        "x": 170,
+        "y": 362,
+        "w": 390,
+        "h": 381,
+        "r": 560,
+        "b": 743
+      },
+      "cell": {
+        "x": 116,
+        "y": 362,
+        "w": 45,
+        "h": 45,
+        "r": 161,
+        "b": 407
+      },
+      "inWindow": true,
+      "overCell": false
+    },
+    {
+      "label": "1440x900 wide=true A",
+      "ok": true,
+      "tooltip": {
+        "x": 258,
+        "y": 362,
+        "w": 390,
+        "h": 341,
+        "r": 648,
+        "b": 703
+      },
+      "cell": {
+        "x": 204,
+        "y": 362,
+        "w": 45,
+        "h": 45,
+        "r": 249,
+        "b": 407
+      },
+      "inWindow": true,
+      "overCell": false
+    },
+    {
+      "label": "1440x900 wide=false B",
+      "ok": true,
+      "tooltip": {
+        "x": 258,
+        "y": 333,
+        "w": 390,
+        "h": 381,
+        "r": 648,
+        "b": 714
+      },
+      "cell": {
+        "x": 203,
+        "y": 333,
+        "w": 45,
+        "h": 45,
+        "r": 248,
+        "b": 378
+      },
+      "inWindow": true,
+      "overCell": false
+    },
+    {
+      "label": "1440x900 wide=false A",
+      "ok": true,
+      "tooltip": {
+        "x": 346,
+        "y": 333,
+        "w": 390,
+        "h": 341,
+        "r": 736,
+        "b": 674
+      },
+      "cell": {
+        "x": 291,
+        "y": 333,
+        "w": 45,
+        "h": 45,
+        "r": 336,
+        "b": 378
+      },
+      "inWindow": true,
+      "overCell": false
+    },
+    {
+      "label": "1100x750 no-selection",
+      "ok": true,
+      "tooltip": {
+        "x": 347,
+        "y": 333,
+        "w": 390,
+        "h": 381,
+        "r": 737,
+        "b": 714
+      },
+      "cell": {
+        "x": 293,
+        "y": 332,
+        "w": 45,
+        "h": 45,
+        "r": 338,
+        "b": 377
+      },
+      "inWindow": true,
+      "overCell": false
+    },
+    {
+      "label": "1100x750 wide=false B",
+      "ok": true,
+      "tooltip": {
+        "x": 347,
+        "y": 333,
+        "w": 390,
+        "h": 381,
+        "r": 737,
+        "b": 714
+      },
+      "cell": {
+        "x": 293,
+        "y": 332,
+        "w": 45,
+        "h": 45,
+        "r": 338,
+        "b": 377
+      },
+      "inWindow": true,
+      "overCell": false
+    },
+    {
+      "label": "1100x750 wide=false A",
+      "ok": true,
+      "tooltip": {
+        "x": 435,
+        "y": 333,
+        "w": 390,
+        "h": 341,
+        "r": 825,
+        "b": 673
+      },
+      "cell": {
+        "x": 381,
+        "y": 332,
+        "w": 45,
+        "h": 45,
+        "r": 426,
+        "b": 377
+      },
+      "inWindow": true,
+      "overCell": false
+    }
+  ],
+  "r4": {
+    "next_1440x900": {
+      "allNamed": true,
+      "orderOk": true,
+      "clipped": false
+    },
+    "data_1440x900": {
+      "hasAll": true,
+      "len": 996
+    },
+    "av_1440x900": {
+      "extraCells": [],
+      "rowsMatch": true,
+      "leaksValues": false,
+      "note": true
+    },
+    "avclick_1440x900": {
+      "afterRow": {
+        "note": "Agent view is on, but no agent is selected (or its knowledge is still loading), so the map shows everything. Select an agent to see only what it has observed.",
+        "head": "Occupants at (0, 0) · land 7 entities",
+        "inspecting": "Inspecting f0013",
+        "toggle": 1
+      },
+      "afterCell": {
+        "note": "Agent view is on, but no agent is selected (or its knowledge is still loading), so the map shows everything. Select an agent to see only what it has observed.",
+        "head": "Occupants at (-2, 0) · land 16 entities",
+        "rows": 16
+      }
+    },
+    "setstat_1440x900": {
+      "exact": 199.79560000000004,
+      "cur": "Current value\n199.796\nstored exactly as 199.79560000000004",
+      "inp": {
+        "value": "199.7956",
+        "w": 220,
+        "sw": 218,
+        "cw": 218
+      }
+    },
+    "next_1100x750": {
+      "allNamed": true,
+      "orderOk": true,
+      "clipped": false
+    },
+    "data_1100x750": {
+      "hasAll": true,
+      "len": 996
+    },
+    "av_1100x750": {
+      "extraCells": [],
+      "rowsMatch": true,
+      "leaksValues": false,
+      "note": true
+    },
+    "avclick_1100x750": {
+      "afterRow": {
+        "note": "Agent view is on, but no agent is selected (or its knowledge is still loading), so the map shows everything. Select an agent to see only what it has observed.",
+        "head": "Occupants at (0, 0) · land 7 entities",
+        "inspecting": "Inspecting f0013",
+        "toggle": 1
+      },
+      "afterCell": {
+        "note": "Agent view is on, but no agent is selected (or its knowledge is still loading), so the map shows everything. Select an agent to see only what it has observed.",
+        "head": "Occupants at (-2, 0) · land 16 entities",
+        "rows": 16
+      }
+    },
+    "setstat_1100x750": {
+      "exact": 199.79560000000004,
+      "cur": "Current value\n199.796\nstored exactly as 199.79560000000004",
+      "inp": {
+        "value": "199.7956",
+        "w": 220,
+        "sw": 218,
+        "cw": 218
+      }
+    }
+  },
+  "created": "run_20260925_204523_b57a"
+}

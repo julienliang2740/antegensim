@@ -1,0 +1,14 @@
+import { chromium } from 'playwright';
+const BASE = process.env.BASE_URL || 'http://127.0.0.1:5173';
+const [w,h] = (process.env.VP || '1440x900').split('x').map(Number);
+const url = process.argv[2] || BASE;
+const out = process.argv[3] || 'shots/explore.png';
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: w, height: h } });
+page.on('console', m => { if (m.type()==='error') console.log('CONSOLE', m.text()); });
+await page.goto(url);
+await page.waitForTimeout(1500);
+await page.screenshot({ path: out, fullPage: process.env.FULL==='1' });
+const btns = await page.$$eval('button, a, input, select, textarea, [role=button]', els => els.map(e => `${e.tagName} ${e.getAttribute('aria-label')||''} | ${(e.innerText||e.value||e.placeholder||'').slice(0,40).replace(/\n/g,' ')} | ${e.title||''}`));
+console.log(btns.slice(0, 200).join('\n'));
+await browser.close();

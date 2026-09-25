@@ -1,0 +1,73 @@
+Empyrean headless run: model fake-malformed (provider fake), 8 agents, 3 rounds, seed 1
+worlds dir /tmp/claude-1000/-home-ubuntu-antegensim/da98fe04-2eb4-430b-9718-4f30d7d422bd/scratchpad/worlds
+created run_20260925_193944_683d in world_20260925_193944_19ac
+  round 1: state paused, turn r00001_end, living 8, 0.6s
+  round 2: state paused, turn r00002_end, living 8, 1.3s
+  round 3: state paused, turn r00003_end, living 8, 1.9s
+
+==============================================================================
+Run run_20260925_193944_683d  (paused, current turn r00003_end, round 3)
+==============================================================================
+
+Agents
+  id    name       model              alive   health    compute  essence       pos skills
+  a01   Aster      fake-malformed     True     100.0    194.405    20.00     (0,0)      0
+  a02   Boreas     fake-malformed     True     100.0    194.426    20.00     (1,0)      0
+  a03   Cyrene     fake-malformed     True     100.0    194.401    20.00     (0,1)      0
+  a04   Damaris    fake-malformed     True     100.0    194.404    20.00    (-1,0)      0
+  a05   Eos        fake-malformed     True     100.0    194.427    20.00    (0,-1)      0
+  a06   Ferrin     fake-malformed     True     100.0    194.401    20.00     (1,1)      0
+  a07   Galene     fake-malformed     True     100.0    194.403    20.00   (-1,-1)      0
+  a08   Halcyon    fake-malformed     True     100.0    194.426    20.00     (2,0)      0
+
+Actions: 8 (0 via skill)
+  by kind:   observe 8
+  by result: ok 8
+  other:     decision_invalid 16
+
+Model calls: 24
+  by status (record/result): completed/ok 16, failed/malformed 8
+  tokens in 60,779, out 552
+  latency ms: mean 0.2, max 0.3
+
+Compute charged (world units)
+  cognition 12.708 (uncharged overdraft 0.000), actions 8.000, interpreter 0.000, upkeep paid 24.000
+Real provider usage: calls 24 (interrupted 0), billed in 60,779, out 552, cost $0.0000
+
+Deaths: 0
+World: plants 12 living / 12, fruit 12 (compute 720.0), seeds 0, residues 0
+
+Storage: run folder /tmp/claude-1000/-home-ubuntu-antegensim/da98fe04-2eb4-430b-9718-4f30d7d422bd/scratchpad/worlds/world_20260925_193944_19ac/runs/run_20260925_193944_683d
+  total 2,982,690 B; 28 turn dirs, 2,817,441 B
+  bytes per agent turn: mean 109,176, max 115,614
+  bytes per round-end turn: mean 47,911
+
+Tree of turns/r00003_t08_a07/  (115,614 B)
+  decision_packets/  (26,431 B)
+    pk_r00003_t08_a07.json  26,431 B
+  entities/  (29,409 B)
+    agents/  (11,474 B)
+      a01.json  1,317 B
+      a02.json  1,754 B
+      a03.json  1,120 B
+      a04.json  1,323 B
+      a05.json  1,770 B
+      a06.json  1,120 B
+      a07.json  1,324 B
+      a08.json  1,746 B
+    knowledge/  (8,360 B)
+      a07.json  8,360 B
+    fruits.json  2,641 B
+    plants.json  6,925 B
+    removed.json  3 B
+    residues.json  3 B
+    seeds.json  3 B
+  model_calls/  (33,764 B)
+    index.json  545 B
+    mc_r00003_t08_a07_01.json  33,219 B
+  events.json  2,713 B
+  map.json  9,791 B
+  rules.json  3,480 B
+  settings.json  560 B
+  state.json  731 B
+  world.json  8,735 B

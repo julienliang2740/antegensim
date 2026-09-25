@@ -1,0 +1,27 @@
+import { launch, shot, log, loadState, api, BASE } from './lib.mjs';
+const st = loadState(); const runId = st.runId;
+const { browser, page } = await launch('1100x750');
+log('=== STEP 10: 1100x750 spot-check');
+await page.goto(`${BASE}/#/`); await page.waitForTimeout(800); await shot(page, 's-62-entry-1100');
+await page.goto(`${BASE}/#/new`); await page.waitForTimeout(1500); await shot(page, 's-63-new-session-1100');
+const ov = await page.evaluate(() => ({ docW: document.documentElement.scrollWidth, winW: innerWidth }));
+log('new session horizontal overflow', ov);
+await page.goto(`${BASE}/#/run/${runId}`); await page.waitForTimeout(2500); await shot(page, 's-64-run-page-1100');
+const ov2 = await page.evaluate(() => ({ docW: document.documentElement.scrollWidth, winW: innerWidth }));
+log('run page horizontal overflow', ov2);
+const rects = await page.evaluate(() => {
+  const q = s => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }; };
+  return { controls: q('.run-controls'), status: q('.status-bar'), timeline: q('.timeline'), log: q('.activity-log'), side: q('.area-side'), map: q('svg[role=img]') };
+});
+log('layout rects 1100', rects);
+await page.locator('rect[data-coord="0,2"]').click().catch(e => log('click 0,2 failed', String(e).slice(0,120)));
+await page.waitForTimeout(800);
+await page.locator('.insp-occupant-row').first().click().catch(()=>{}); await page.waitForTimeout(1500);
+await shot(page, 's-65-inspector-1100');
+await page.evaluate(() => window.scrollTo(0, 500)); await page.waitForTimeout(300);
+await shot(page, 's-66-inspector-1100-scrolled');
+await page.getByRole('tab', { name: /God mode/ }).click(); await page.waitForTimeout(1200);
+await shot(page, 's-67-godmode-1100');
+await page.goto(`${BASE}/#/run/${st.errRunId}`); await page.waitForTimeout(2500);
+await shot(page, 's-68-error-run-1100');
+await browser.close();

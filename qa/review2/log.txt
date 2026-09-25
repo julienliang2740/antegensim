@@ -1,0 +1,219 @@
+=== STEP 1: new session with claude-cli-haiku, 6 agents, $1.00, delay 0
+default model options [{"v":"fake-heuristic","t":"fake-heuristic (fake/fake-heuristic)","d":false},{"v":"fake-scripted","t":"fake-scripted (fake/fake-scripted)","d":false},{"v":"fake-malformed","t":"fake-malformed (fake/fake-malformed)","d":false},{"v":"claude-cli-haiku","t":"claude-cli-haiku (claude_cli/haiku)","d":false},{"v":"claude-cli-haiku-prompted","t":"claude-cli-haiku-prompted (claude_cli/haiku)","d":false},{"v":"anthropic-haiku","t":"anthropic-haiku (anthropic/claude-haiku-4-5) — unavailable: missing ANTHROPIC_API_KEY","d":true},{"v":"openai-mini","t":"openai-mini (openai/gpt-4o-mini) — unavailable: missing OPENAI_API_KEY","d":true},{"v":"fireworks-llama","t":"fireworks-llama (fireworks/accounts/fireworks/models/llama-v3p1-8b-instruct) — unavailable: missing FIREWORKS_API_KEY","d":true},{"v":"bedrock-haiku","t":"bedrock-haiku (bedrock/anthropic.claude-3-5-haiku-20241022-v1:0)","d":false},{"v":"foundry-gpt","t":"foundry-gpt (foundry/gpt-4o-mini) — unavailable: missing AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT","d":true}]
+selected claude-cli-haiku
+agent cards heading Agent cards (8; 6–11 allowed)
+cards now 6 Agent cards (6; 6–11 allowed)
+budget 1.00 delay 0
+validate: Validate setup | Create and open | Setup is valid.
+  shot: /home/ubuntu/antegensim/qa/review2/shots/01-setup-run-section.png
+model row text: Default model (every card without its own model) | fake-heuristic (fake/fake-heuristic) | fake-scripted (fake/fake-scripted) | fake-malformed (fake/fake-malformed) | claude-cli-haiku (claude_cli/haiku) | claude-cli-haiku-prompted (claude_cli/haiku) | anthropic-haiku (anthropic/claude-haiku-4-5) — unavailable: missing ANTHROPIC_API_KEY | openai-mini (openai/gpt-4o-mini) — unavailable: missing OPENAI_API_KEY | fireworks-llama (fireworks/accounts/fireworks/models/llama-v3p1-8b-instruct) — unavailable: missing FIREWORKS_API_KEY | bedrock-haiku (bedrock/anthropic.claude-3-5-haiku-20241022-v1:0) | foundry-gpt (foundry/gpt-4o-mini) — unavailable: missing AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT | Real provider: every decision is a paid model call. Consider a real budget below. | Unavailable models (set the named variables in the backend's .env and restart it): anthropic-haiku needs ANTHROPIC_API_KEY; openai-mini needs OPENAI_API_KEY; fireworks-llama needs FIREWORKS_API_KEY; foundry-gpt needs AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT.
+context hint: How much each agent sees per decision. Cards can override single values. Checked against the default model (claude-cli-haiku: context window 200000, max output 8000).
+  shot: /home/ubuntu/antegensim/qa/review2/shots/02-setup-agent-cards.png
+card1 text: id | name | model | run default (claude-cli-haiku) | fake-heuristic (fake/fake-heuristic) | fake-scripted (fake/fake-scripted) | fake-malformed (fake/fake-malformed) | claude-cli-haiku (claude_cli/haiku) | claude-cli-haiku-prompted (claude_cli/haiku) | anthropic-haiku (anthropic/claude-haiku-4-5) — unavailable: missing ANTHROPIC_API_KEY | openai-mini (openai/gpt-4o-mini) — unavailable: missing OPENAI_API_KEY | fireworks-llama (fireworks/accounts/fireworks/models/llama-v3p1-8b-instruct) — unavailable: missing FIREWORKS_API_KEY | bedrock-haiku (bedrock/anthropic.claude-3-5-haiku-20241022-v1:0) |
+created run run_20260925_183039_9341
+  shot: /home/ubuntu/antegensim/qa/review2/shots/03-run-page-initial.png
+settings default model  budget  delay  overrides 
+status {"run_id":"run_20260925_183039_9341","world_id":"world_20260925_183039_6237","state":"paused","round":0,"turn_index":null,"acting_agent_id":null,"next_agent_id":null,"next_step":"new_round","current_turn_id":"r00000_init","active_turn_id":null,"active_command":null,"last_error":null,"pending_model_call":null,"staged_intervention_count":0,"latest_seq":1,"feed_epoch":"249d9f5939cb","living_agent_count":6,"finished_reason":null,"play_loop":false,"real_usage":{"calls":0,"interrupted_calls":0,"input_tokens":0,"output_tokens":0,"provider_cost_usd":0}}
+=== STEP 2: run turn once (run_20260925_183039_9341)
+before paused r00000_init new_round null
+  ui badge 18:31:14.714 Running
+  ui badge 18:31:14.869 Waiting for model
+  shot: /home/ubuntu/antegensim/qa/review2/shots/10-waiting-full-0.png
+  status bar text: Waiting for model | Waiting for model: a04 Damaris (claude-cli-haiku), running one turn. | ROUND | 1 | TURN | 1 (in progress) | ACTING AGENT | a04 Damaris | NEXT STEP | finish r00001_t01_a04 (in progress) | LAST SAVED TURN | r00000_init | LIVING AGENTS | 6 | STAGED EDITS | 0 | REAL MODEL USAGE | 1 calls · 0 in / 0 out tokens · $0.0000 of $1 budget | Waiting for model: a04 Damaris asked claude-cli-haiku (call mc_r00001_t01_a04_01) — 1.1 s so far. | View request in progress
+  last log lines: ["#1 ~ [r0 init] ~ system ~ run_created ~ r00000_init ~ run 'review2 live haiku 183035' created with 6 agents (seed 1)","#2 ~ [r1 t1] ~ world ~ round_started ~ in progress ~ r00001_t01_a04 ~ round 1 begins: a04 a03 a01 a06 a05 a02","#3 ~ [r1 t1] ~ a04 ~ turn_started ~ in progress ~ r00001_t01_a04 ~ Damaris (a04) begins turn 1 of round 1","#4 ~ [r1 t1] ~ a04 ~ model_call_pending ~ in progress ~ r00001_t01_a04 ~ a04 waiting for claude-cli-haiku (claude_cli/haiku) — WAITING FOR MODEL…"]
+  controls: Run turn | Play | Pause | Step round | ?
+  shot: /home/ubuntu/antegensim/qa/review2/shots/10-waiting-full-1.png
+  status bar text: Waiting for model | Waiting for model: a04 Damaris (claude-cli-haiku), running one turn. | ROUND | 1 | TURN | 1 (in progress) | ACTING AGENT | a04 Damaris | NEXT STEP | finish r00001_t01_a04 (in progress) | LAST SAVED TURN | r00000_init | LIVING AGENTS | 6 | STAGED EDITS | 0 | REAL MODEL USAGE | 1 calls · 0 in / 0 out tokens · $0.0000 of $1 budget | Waiting for model: a04 Damaris asked claude-cli-haiku (call mc_r00001_t01_a04_01) — 4.1 s so far. | View request in progress
+  last log lines: ["#1 ~ [r0 init] ~ system ~ run_created ~ r00000_init ~ run 'review2 live haiku 183035' created with 6 agents (seed 1)","#2 ~ [r1 t1] ~ world ~ round_started ~ in progress ~ r00001_t01_a04 ~ round 1 begins: a04 a03 a01 a06 a05 a02","#3 ~ [r1 t1] ~ a04 ~ turn_started ~ in progress ~ r00001_t01_a04 ~ Damaris (a04) begins turn 1 of round 1","#4 ~ [r1 t1] ~ a04 ~ model_call_pending ~ in progress ~ r00001_t01_a04 ~ a04 waiting for claude-cli-haiku (claude_cli/haiku) — WAITING FOR MODEL…"]
+  controls: Run turn | Play | Pause | Step round | ?
+  ui badge 18:31:21.948 Paused
+after {"run_id":"run_20260925_183039_9341","world_id":"world_20260925_183039_6237","state":"paused","round":1,"turn_index":1,"acting_agent_id":"a04","next_agent_id":"a03","next_step":"agent_turn","current_turn_id":"r00001_t01_a04","active_turn_id":null,"active_command":null,"last_error":null,"pending_model_call":null,"staged_intervention_count":0,"latest_seq":7,"feed_epoch":"249d9f5939cb","living_agent_count":6,"finished_reason":null,"play_loop":false,"real_usage":{"calls":1,"interrupted_calls":0,"input_tokens":6020,"output_tokens":519,"provider_cost_usd":0.0059781}}
+sawWaiting true badge timeline [{"t":"0.0","badge":"Running"},{"t":"0.2","badge":"Waiting for model"},{"t":"7.2","badge":"Paused"}]
+  shot: /home/ubuntu/antegensim/qa/review2/shots/13-after-full.png
+log lines after:
+    #1 ~ [r0 init] ~ system ~ run_created ~ r00000_init ~ run 'review2 live haiku 183035' created with 6 agents (seed 1)
+    #2 ~ [r1 t1] ~ world ~ round_started ~ r00001_t01_a04 ~ round 1 begins: a04 a03 a01 a06 a05 a02
+    #3 ~ [r1 t1] ~ a04 ~ turn_started ~ r00001_t01_a04 ~ Damaris (a04) begins turn 1 of round 1
+    #4 ~ [r1 t1] ~ a04 ~ model_call_pending ~ r00001_t01_a04 ~ a04 waiting for claude-cli-haiku (claude_cli/haiku) — answered (see next lines)
+    #5 ~ [r1 t1] ~ a04 ~ model_call_completed ~ cost 1.723 compute ~ r00001_t01_a04 ~ a04 got a decision from claude-cli-haiku (in 6020 / out 519 tokens)
+    #6 ~ [r1 t1] ~ a04 ~ decision ~ r00001_t01_a04 ~ a04 decides: observe (-1,0) 0 — "First turn: observe my current position to understand my starting environment an"
+    #7 ~ [r1 t1] ~ a04 ~ action ~ cost 1 compute ~ r00001_t01_a04 ~ observe (-1,0) -> ok: land, 1 entities (cost 1)
+=== STEP 3: play one round (run_20260925_183039_9341)
+before paused r00001_t01_a04 agent_turn a03 {"calls":1,"interrupted_calls":0,"input_tokens":6020,"output_tokens":519,"provider_cost_usd":0.0059781}
+   18:32:23.734 waiting_model active r00001_t02_a03 saved r00001_t01_a04 next agent_turn a03 usd 0.0060 
+   18:32:28.508 waiting_model active r00001_t03_a01 saved r00001_t02_a03 next agent_turn a01 usd 0.0111 
+  shot: /home/ubuntu/antegensim/qa/review2/shots/20-play-waiting-t03.png
+   18:32:33.986 turn_active active r00001_t04_a06 saved r00001_t03_a01 next agent_turn a06 usd 0.0166 
+   18:32:34.140 waiting_model active r00001_t04_a06 saved r00001_t03_a01 next agent_turn a06 usd 0.0166 
+  shot: /home/ubuntu/antegensim/qa/review2/shots/21-view-request-in-progress.png
+  pending view text: Model call in progress | Close record view | Waiting for the model. This view switches to the saved record when the call finishes. | agent	a06 | status	pending | model	claude-cli-haiku — claude_cli/haiku | started / finished	2026-09-25T18:32:33.983967+00:00 / not finished | latency	— | usage (tokens)	— | world compute	reserved 2.029, charged 0, uncharged 0, mind multiplier 1 | provider cost	not reported | stop reason	— | error	none | attempt errors	none | request	max output 1000 tokens, timeout 90s per attempt, 2 retries | Open decision packet pk_r00001_t04_a06 | Model output (as returned) | (no text) | Request messages (2) | Model reference snapshot (no secrets) | agent	a06 | round / turn	1 / r00001_t04_a06 | affordable	yes | input token estimate	5145 (incl. 2713 request overhead) | generation allowance	1000 | reserved compute (bound only)	2.029 | notebook version	0 | effective settings	input cap 6000, generation 1000, recent history 5, notebook 400, retrieved 5, digest 10, weights r1/c1/i1, skill source no | selected records	a06-k000001 | unread shown (digest)	a06-k000001 | omitted (counts)	nothing omitted | created	2026-09-25T18:32:33.980433+00:00 | Sections in the order the model saw them | stable_rules — ~1911 tokens | skills — ~19 tokens | ## SKILLS (working memory) | You have no saved skills. | Skill execution: none. | notebook — ~24 tokens | ## NOTEBOOK | Your notebook (version 0; at most 400 tokens; notebook_update replaces it): | (empty) | situation — ~224 tokens, r
+   18:32:39.498 waiting_model active r00001_t05_a05 saved r00001_t04_a06 next agent_turn a05 usd 0.0221 
+   18:32:44.117 waiting_model active r00001_t06_a02 saved r00001_t05_a05 next agent_turn a02 usd 0.0272 
+  clicked Pause during r00001_t06_a02 waiting_model
+  shot: /home/ubuntu/antegensim/qa/review2/shots/23-pause-requested.png
+   18:32:45.268 pause_requested active r00001_t06_a02 saved r00001_t05_a05 next agent_turn a02 usd 0.0272 
+   18:32:50.809 paused active null saved r00001_t06_a02 next round_end null usd 0.0334 
+stopped at paused r00001_t06_a02 round_end
+timeline [{"t":"0.0","state":"waiting_model","active":"r00001_t02_a03","saved":"r00001_t01_a04","usd":0.0059781},{"t":"4.8","state":"waiting_model","active":"r00001_t03_a01","saved":"r00001_t02_a03","usd":0.011145200000000001},{"t":"10.3","state":"turn_active","active":"r00001_t04_a06","saved":"r00001_t03_a01","usd":0.016621300000000002},{"t":"10.4","state":"waiting_model","active":"r00001_t04_a06","saved":"r00001_t03_a01","usd":0.016621300000000002},{"t":"15.8","state":"waiting_model","active":"r00001_t05_a05","saved":"r00001_t04_a06","usd":0.0220854},{"t":"20.4","state":"waiting_model","active":"r00001_t06_a02","saved":"r00001_t05_a05","usd":0.027173500000000003},{"t":"21.5","state":"pause_requested","active":"r00001_t06_a02","saved":"r00001_t05_a05","usd":0.027173500000000003},{"t":"27.1","state":"paused","active":null,"saved":"r00001_t06_a02","usd":0.033374600000000004}]
+  shot: /home/ubuntu/antegensim/qa/review2/shots/2A-paused-after-t06.png
+=== STEP 3b: commit round end (run_20260925_183039_9341)
+  shot: /home/ubuntu/antegensim/qa/review2/shots/2B-paused-before-round-end.png
+before paused r00001_t06_a02 round_end {"calls":6,"interrupted_calls":0,"input_tokens":36113,"output_tokens":2618,"provider_cost_usd":0.033374600000000004}
+after paused r00001_end new_round {"calls":6,"interrupted_calls":0,"input_tokens":36113,"output_tokens":2618,"provider_cost_usd":0.033374600000000004}
+  shot: /home/ubuntu/antegensim/qa/review2/shots/2C-paused-after-r00001_end.png
+    #1 ~ [r0 init] ~ system ~ run_created ~ r00000_init ~ run 'review2 live haiku 183035' created with 6 agents (seed 1)
+    #2 ~ [r1 t1] ~ world ~ round_started ~ r00001_t01_a04 ~ round 1 begins: a04 a03 a01 a06 a05 a02
+    #3 ~ [r1 t1] ~ a04 ~ turn_started ~ r00001_t01_a04 ~ Damaris (a04) begins turn 1 of round 1
+    #4 ~ [r1 t1] ~ a04 ~ model_call_pending ~ r00001_t01_a04 ~ a04 waiting for claude-cli-haiku (claude_cli/haiku) — answered (see next lines)
+    #5 ~ [r1 t1] ~ a04 ~ model_call_completed ~ cost 1.723 compute ~ r00001_t01_a04 ~ a04 got a decision from claude-cli-haiku (in 6020 / out 519 tokens)
+    #6 ~ [r1 t1] ~ a04 ~ decision ~ r00001_t01_a04 ~ a04 decides: observe (-1,0) 0 — "First turn: observe my current position to understand my starting environment an"
+    #7 ~ [r1 t1] ~ a04 ~ action ~ cost 1 compute ~ r00001_t01_a04 ~ observe (-1,0) -> ok: land, 1 entities (cost 1)
+    #8 ~ [r1 t2] ~ a03 ~ turn_started ~ r00001_t02_a03 ~ Cyrene (a03) begins turn 2 of round 1
+    #9 ~ [r1 t2] ~ a03 ~ model_call_pending ~ r00001_t02_a03 ~ a03 waiting for claude-cli-haiku (claude_cli/haiku) — answered (see next lines)
+    #10 ~ [r1 t2] ~ a03 ~ model_call_completed ~ cost 1.5614 compute ~ r00001_t02_a03 ~ a03 got a decision from claude-cli-haiku (in 6017 / out 358 tokens)
+    #11 ~ [r1 t2] ~ a03 ~ decision ~ r00001_t02_a03 ~ a03 decides: observe (0,1) 0
+    #12 ~ [r1 t2] ~ a03 ~ action ~ cost 1 compute ~ r00001_t02_a03 ~ observe (0,1) -> ok: land, 1 entities (cost 1)
+    #13 ~ [r1 t3] ~ a01 ~ turn_started ~ r00001_t03_a01 ~ Aster (a01) begins turn 3 of round 1
+    #14 ~ [r1 t3] ~ a01 ~ model_call_pending ~ r00001_t03_a01 ~ a01 waiting for claude-cli-haiku (claude_cli/haiku) — answered (see next lines)
+    #15 ~ [r1 t3] ~ a01 ~ model_call_completed ~ cost 1.6228 compute ~ r00001_t03_a01 ~ a01 got a decision from claude-cli-haiku (in 6019 / out 419 tokens)
+    #16 ~ [r1 t3] ~ a01 ~ decision ~ r00001_t03_a01 ~ a01 decides: observe (0,0) 0 — "Starting exploration. Need to observe my current location to see what resources "
+    #17 ~ [r1 t3] ~ a01 ~ action ~ cost 1 compute ~ r00001_t03_a01 ~ observe (0,0) -> ok: land, 1 entities (cost 1)
+    #18 ~ [r1 t4] ~ a06 ~ turn_started ~ r00001_t04_a06 ~ Ferrin (a06) begins turn 4 of round 1
+    #19 ~ [r1 t4] ~ a06 ~ model_call_pending ~ r00001_t04_a06 ~ a06 waiting for claude-cli-haiku (claude_cli/haiku) — answered (see next lines)
+    #20 ~ [r1 t4] ~ a06 ~ model_call_completed ~ cost 1.6206 compute ~ r00001_t04_a06 ~ a06 got a decision from claude-cli-haiku (in 6018 / out 417 tokens)
+    #21 ~ [r1 t4] ~ a06 ~ decision ~ r00001_t04_a06 ~ a06 decides: observe (1,1) 0 — "Starting my journey in Empyrean. I need to observe my current location (1,1) to "
+    #22 ~ [r1 t4] ~ a06 ~ action ~ cost 1 compute ~ r00001_t04_a06 ~ observe (1,1) -> ok: land, 1 entities (cost 1)
+    #23 ~ [r1 t5] ~ a05 ~ turn_started ~ r00001_t05_a05 ~ Eos (a05) begins turn 5 of round 1
+    #24 ~ [r1 t5] ~ a05 ~ model_call_pending ~ r00001_t05_a05 ~ a05 waiting for claude-cli-haiku (claude_cli/haiku) — answered (see next lines)
+    #25 ~ [r1 t5] ~ a05 ~ model_call_completed ~ cost 1.545 compute ~ r00001_t05_a05 ~ a05 got a decision from claude-cli-haiku (in 6020 / out 341 tokens)
+    #26 ~ [r1 t5] ~ a05 ~ decision ~ r00001_t05_a05 ~ a05 decides: observe (0,-1) 0 — "Starting exploration. I'll observe my current location to see what resources or "
+    #27 ~ [r1 t5] ~ a05 ~ action ~ cost 1 compute ~ r00001_t05_a05 ~ observe (0,-1) -> ok: land, 1 entities (cost 1)
+    #28 ~ [r1 t6] ~ a02 ~ turn_started ~ r00001_t06_a02 ~ Boreas (a02) begins turn 6 of round 1
+    #29 ~ [r1 t6] ~ a02 ~ model_call_pending ~ r00001_t06_a02 ~ a02 waiting for claude-cli-haiku (claude_cli/haiku) — answered (see next lines)
+    #30 ~ [r1 t6] ~ a02 ~ model_call_completed ~ cost 1.7678 compute ~ r00001_t06_a02 ~ a02 got a decision from claude-cli-haiku (in 6019 / out 564 tokens)
+    #31 ~ [r1 t6] ~ a02 ~ decision ~ r00001_t06_a02 ~ a02 decides: observe (1,0) 0 — "Starting exploration. Observing my current position (1,0) to identify available "
+    #32 ~ [r1 t6] ~ a02 ~ action ~ cost 1 compute ~ r00001_t06_a02 ~ observe (1,0) -> ok: land, 1 entities (cost 1)
+    #33 ~ [r1 end] ~ world ~ plant_growth ~ r00001_end ~ 12 plants grew: +144 energy, +12 essence
+    #34 ~ [r1 end] ~ world ~ upkeep ~ cost 1 compute ~ r00001_end ~ a01 paid 1 of 1 upkeep
+    #35 ~ [r1 end] ~ world ~ upkeep ~ cost 1 compute ~ r00001_end ~ a02 paid 1 of 1 upkeep
+    #36 ~ [r1 end] ~ world ~ upkeep ~ cost 1 compute ~ r00001_end ~ a03 paid 1 of 1 upkeep
+    #37 ~ [r1 end] ~ world ~ upkeep ~ cost 1 compute ~ r00001_end ~ a04 paid 1 of 1 upkeep
+    #38 ~ [r1 end] ~ world ~ upkeep ~ cost 1 compute ~ r00001_end ~ a05 paid 1 of 1 upkeep
+    #39 ~ [r1 end] ~ world ~ upkeep ~ cost 1 compute ~ r00001_end ~ a06 paid 1 of 1 upkeep
+    #40 ~ [r1 end] ~ world ~ round_ended ~ r00001_end ~ round 1 ended: 6 living agents, 0 deaths
+=== STEP 4: inspect a04
+  shot: /home/ubuntu/antegensim/qa/review2/shots/30-a04-selected.png
+side box {"x":397.125,"y":8,"width":603.875,"height":884} scrollHeight 3564
+  shot: /home/ubuntu/antegensim/qa/review2/shots/31-a04-recent-results.png
+  shot: /home/ubuntu/antegensim/qa/review2/shots/32-a04-knowledge-records.png
+inspector recent results: Recent action results (with costs) | round	action	result	cost (compute / essence)	thought | 1	observe {"point":{"x":-1,"y":0},"page":0}	ok	1 / 0	First turn: observe my current position to understand my starting environment and identify any immediate resources or threats. | Notebook | Version 1 | Round 1 Start - Position (-1,0). Initial state: compute 200, essence 20/100, health 100/100. Vision range 0, so can only see my own point. Need to upgrade vision and communication ranges to interact effectively with the world. | Knowledge records (3) | Kinds: |  observation (1) |  query (0) |  action_result (0) |  message (0) |  operator_voice (0) |  damage (0) |  system (2) | all | none |  unread only (1 unread) | 3 of 3 records | id	ro
+inspector knowledge records: Knowledge records (3) | Kinds: |  observation (1) |  query (0) |  action_result (0) |  message (0) |  operator_voice (0) |  damage (0) |  system (2) | all | none |  unread only (1 unread) | 3 of 3 records | id	round	kind	provenance	text (click for content) | a04-k000003	1	observation	own_action (observe) | importance 0.3 | 	 | You observe (-1,0) -> ok; terrain land; entities: a04 agent; observed round 1; cost 1 compute. Your thought: "First turn: observe my current position to understand my starting environment and identify any immediate resources or threats." |  | a04-k000002unread	1	system	world | importance 0.2 | 	 | your last decision cost 1.723 compute |  | a04-k000001	0	system	world | importance 0.2 | 	 | You are Damaris (id a04); in round 0 you are at (-1,0). Starting state: compute 200, essence 20 of capacity 100, health 100 of 100, attack 1, speed 1, vision_range 0, communication_range 0, compute_absorption 0.2, essence_absorption 0.1, skill limits 5 skills x 100 blocks.
+inspector notebook: Notebook size | notebook_max_tokens | max notebook tokens | 	400	run default	400 | Retrieved memory limit | retrieved_memory_limit | older records retrieved by rank | 	5	run default	5 | New-event digest limit | new_event_digest_limit | unread records summarised | 	10	run default	10 | Retrieval weight: relevance | weights.relevance | 	1	run default	1 | Retrieval weight: recency | weights.recency | 	1	(with relevance)	1 | Retrieval we
+open latest packet buttons 1 ["Open its latest decision packet"]
+  shot: /home/ubuntu/antegensim/qa/review2/shots/33-a04-packet-top.png
+packet details 7 ["stable_rules — ~1911 tokens","skills — ~19 tokens","notebook — ~24 tokens","situation — ~224 tokens, records a04-k000001","decision_request — ~254 tokens","Exact messages sent (2)","Situation (structured)"]
+packet text length 21413
+record viewer box {"x":16,"y":-1.984375,"width":996,"height":630}
+scroll container record-viewer
+  shot: /home/ubuntu/antegensim/qa/review2/shots/34-a04-packet-0.png
+  shot: /home/ubuntu/antegensim/qa/review2/shots/34-a04-packet-1.png
+  shot: /home/ubuntu/antegensim/qa/review2/shots/34-a04-packet-2.png
+  shot: /home/ubuntu/antegensim/qa/review2/shots/34-a04-packet-3.png
+model call buttons ["Open model call mc_r00001_t01_a04_01"]
+  shot: /home/ubuntu/antegensim/qa/review2/shots/35-a04-model-call-0.png
+  shot: /home/ubuntu/antegensim/qa/review2/shots/36-a04-model-call-1.png
+=== STEP 4b: packet + model call scroll shots for a04
+sections ["stable_rules — ~1911 tokens","skills — ~19 tokens","notebook — ~24 tokens","situation — ~224 tokens, records a04-k000001","decision_request — ~254 tokens","Exact messages sent (2)","Situation (structured)"]
+record viewer scrollHeight 1597 clientHeight 626
+  shot 37-a04-packet-situation.png
+  shot 37-a04-packet-decision.png
+  shot 37-a04-packet-structured.png
+=== STEP 4: inspect a03
+  shot: /home/ubuntu/antegensim/qa/review2/shots/40-a03-selected.png
+side box {"x":397.125,"y":8,"width":603.875,"height":884} scrollHeight 3358
+  shot: /home/ubuntu/antegensim/qa/review2/shots/41-a03-recent-results.png
+  shot: /home/ubuntu/antegensim/qa/review2/shots/42-a03-knowledge-records.png
+inspector recent results: Recent action results (with costs) | round	action	result	cost (compute / essence)	thought | 1	observe {"point":{"x":0,"y":1},"page":0}	ok	1 / 0	 | Notebook | Version 0 |  | (empty notebook) |  | Knowledge records (3) | Kinds: |  observation (1) |  query (0) |  action_result (0) |  message (0) |  operator_voice (0) |  damage (0) |  system (2) | all | none |  unread only (1 unread) | 3 of 3 records | id	round	kind	provenance	text (click for content) | a03-k000003	1	observation	own_action (observe) | importance 0.3 | 	 | You observe (0,1) -> ok; terrain land; entities: a03 agent; observed round 1; cost 1 compute. |  | a03-k000002unread	1	system	world | importance 0.2 | 	 | your last decision cost 1.561 compute |  | a03-k000001	0	system	world | importance 0.2 | 
+inspector knowledge records: Knowledge records (3) | Kinds: |  observation (1) |  query (0) |  action_result (0) |  message (0) |  operator_voice (0) |  damage (0) |  system (2) | all | none |  unread only (1 unread) | 3 of 3 records | id	round	kind	provenance	text (click for content) | a03-k000003	1	observation	own_action (observe) | importance 0.3 | 	 | You observe (0,1) -> ok; terrain land; entities: a03 agent; observed round 1; cost 1 compute. |  | a03-k000002unread	1	system	world | importance 0.2 | 	 | your last decision cost 1.561 compute |  | a03-k000001	0	system	world | importance 0.2 | 	 | You are Cyrene (id a03); in round 0 you are at (0,1). Starting state: compute 200, essence 20 of capacity 100, health 100 of 100, attack 1, speed 1, vision_range 0, communication_range 0, compute_absorption 0.2, essence_absorption 0.1, skill limits 5 skills x 100 blocks.
+inspector notebook: Notebook size | notebook_max_tokens | max notebook tokens | 	400	run default	400 | Retrieved memory limit | retrieved_memory_limit | older records retrieved by rank | 	5	run default	5 | New-event digest limit | new_event_digest_limit | unread records summarised | 	10	run default	10 | Retrieval weight: relevance | weights.relevance | 	1	run default	1 | Retrieval weight: recency | weights.recency | 	1	(with relevance)	1 | Retrieval we
+open latest packet buttons 1 ["Open its latest decision packet"]
+  shot: /home/ubuntu/antegensim/qa/review2/shots/43-a03-packet-top.png
+packet details 7 ["stable_rules — ~1911 tokens","skills — ~19 tokens","notebook — ~24 tokens","situation — ~224 tokens, records a03-k000001","decision_request — ~254 tokens","Exact messages sent (2)","Situation (structured)"]
+packet text length 21401
+record viewer box {"x":16,"y":-1.984375,"width":996,"height":630}
+scroll container record-viewer
+  shot: /home/ubuntu/antegensim/qa/review2/shots/44-a03-packet-0.png
+  shot: /home/ubuntu/antegensim/qa/review2/shots/44-a03-packet-1.png
+  shot: /home/ubuntu/antegensim/qa/review2/shots/44-a03-packet-2.png
+  shot: /home/ubuntu/antegensim/qa/review2/shots/44-a03-packet-3.png
+model call buttons ["Open model call mc_r00001_t02_a03_01"]
+  shot: /home/ubuntu/antegensim/qa/review2/shots/45-a03-model-call-0.png
+  shot: /home/ubuntu/antegensim/qa/review2/shots/46-a03-model-call-1.png
+=== STEP 4b: packet + model call scroll shots for a03
+sections ["stable_rules — ~1911 tokens","skills — ~19 tokens","notebook — ~24 tokens","situation — ~224 tokens, records a03-k000001","decision_request — ~254 tokens","Exact messages sent (2)","Situation (structured)"]
+record viewer scrollHeight 1597 clientHeight 626
+  shot 47-a03-packet-situation.png
+  shot 47-a03-packet-decision.png
+  shot 47-a03-packet-structured.png
+=== STEP 5: voice to a03 (run_20260925_183039_9341)
+  shot: /home/ubuntu/antegensim/qa/review2/shots/50-voice-form-filled.png
+ok line: ["Staged: the voice reaches a03 at the next turn boundary."]
+  shot: /home/ubuntu/antegensim/qa/review2/shots/51-voice-staged.png
+staged count 1 state paused r00001_end
+interventions {"staged":[{"id":"iv_0001","origin":"ui","note":"","created_at":"2026-09-25T18:36:54.003471+00:00","type":"voice","recipients":{"mode":"agents","agent_ids":["a03"]},"text":"Cyrene, a voice from nowhere: a plant grows at (5,5), up and to the right of you."}]}
+-- run_turn #1: from r00001_end next new_round null
+   now paused r00002_t01_a01 usd 0.0408 
+  shot: /home/ubuntu/antegensim/qa/review2/shots/54-a03-voice-in-knowledge-before-turn.png
+   received section: Received messages and voice | a03-k000004 · round 2 · voice from nowhere (source unknown)unread | “Cyrene, a voice from nowhere: a plant grows at (5,5), up and to the right of you.” | Recent action results (with costs) | round	action	result	cost (compute / essence)	thought | 1	observe {"point":{"x":0,"y":1},"page":0}	ok	1 / 0	 | Notebook | Version 0 |  | (empty notebook) |  | Knowledge records (4) | Kinds: |  observation (1) |  query (0) |  action_result (0) |  message (0) |  operator_voice (1) |  damage (0) |  system (2) | all | none |  
+-- run_turn #2: from r00002_t01_a01 next agent_turn a03
+  shot: /home/ubuntu/antegensim/qa/review2/shots/52-waiting-a03.png
+   now error r00002_t01_a01 usd 0.0540 provider failure: error
+  shot: /home/ubuntu/antegensim/qa/review2/shots/5E-error-2.png
+   status bar: Error | Error: the turn was not committed. Recover (pause) discards the failed attempt and re-runs the same turn next time. | ROUND | 2 | TURN | 1 | ACTING AGENT (LAST SAVED TURN) | a01 Aster | NEXT STEP | agent turn for a03 Cyrene | LAST SAVED TURN | r00002_t01_a01 | LIVING AGENTS | 6 | STAGED EDITS | 0 | REAL MODEL USAGE | 8 calls · 55,618 in / 4,774 out tokens · $0.0540 of $1 budget | No model call in progress. | Failed turn: r00002_t02_a03 · a03 Cyrene — model claude-cli-haiku, call mc_r00002_t02_a03_01, 1 attempt | Cause: claude CLI made 2 model requests; exactly one is allowed (infrastructure failure: nothing was charged and no memory was marked read) | Run error: provider failure: error | Recover (pause) | Discards the failed attempt and reloads the last saved turn r00002_t01_a01; the next Run turn or Play re-runs r00002_t02_a03.
+  shot: /home/ubuntu/antegensim/qa/review2/shots/5F-recovered-2.png
+-- run_turn #3: from r00002_t01_a01 next agent_turn a03
+  shot: /home/ubuntu/antegensim/qa/review2/shots/52-waiting-a03.png
+   now error r00002_t01_a01 usd 0.0659 provider failure: error
+  shot: /home/ubuntu/antegensim/qa/review2/shots/5E-error-3.png
+   status bar: Error | Error: the turn was not committed. Recover (pause) discards the failed attempt and re-runs the same turn next time. | ROUND | 2 | TURN | 1 | ACTING AGENT (LAST SAVED TURN) | a01 Aster | NEXT STEP | agent turn for a03 Cyrene | LAST SAVED TURN | r00002_t01_a01 | LIVING AGENTS | 6 | STAGED EDITS | 0 | REAL MODEL USAGE | 9 calls · 68,960 in / 5,918 out tokens · $0.0659 of $1 budget | No model call in progress. | Failed turn: r00002_t02_a03 · a03 Cyrene — model claude-cli-haiku, call mc_r00002_t02_a03_02, 1 attempt | Cause: claude CLI made 2 model requests; exactly one is allowed (infrastructure failure: nothing was charged and no memory was marked read) | Run error: provider failure: error | Recover (pause) | Discards the failed attempt and reloads the last saved turn r00002_t01_a01; the next Run turn or Play re-runs r00002_t02_a03.
+  shot: /home/ubuntu/antegensim/qa/review2/shots/5F-recovered-3.png
+-- run_turn #4: from r00002_t01_a01 next agent_turn a03
+  shot: /home/ubuntu/antegensim/qa/review2/shots/52-waiting-a03.png
+   now paused r00002_t02_a03 usd 0.0730 
+    #43 ~ [r2 t1] ~ a01 ~ turn_started ~ r00002_t01_a01 ~ Aster (a01) begins turn 1 of round 2
+    #44 ~ [r2 t1] ~ a01 ~ model_call_pending ~ r00002_t01_a01 ~ a01 waiting for claude-cli-haiku (claude_cli/haiku) — answered (see next lines)
+    #45 ~ [r2 t1] ~ a01 ~ model_call_completed ~ cost 1.9688 compute ~ r00002_t01_a01 ~ a01 got a decision from claude-cli-haiku (in 6209 / out 727 tokens)
+    #46 ~ [r2 t1] ~ a01 ~ decision ~ r00002_t01_a01 ~ a01 decides: upgrade vision_range — "My vision_range of 0 prevents exploration. Upgrading to vision_range 1 costs 25 "
+    #47 ~ [r2 t1] ~ a01 ~ action ~ cost 25 compute, 2 essence ~ r00002_t01_a01 ~ upgrade vision_range -> ok: vision_range -> 1 (cost 25 + 2 essence)
+    #48 ~ [r2 t2] ~ a03 ~ turn_started ~ r00002_t02_a03 ~ Cyrene (a03) begins turn 2 of round 2
+    #49 ~ [r2 t2] ~ a03 ~ model_call_pending ~ r00002_t02_a03 ~ a03 waiting for claude-cli-haiku (claude_cli/haiku) — answered (see next lines)
+    #50 ~ [r2 t2] ~ a03 ~ model_call_failed ~ r00002_t02_a03 ~ a03 got no answer from claude-cli-haiku: error ~ claude CLI made 2 model requests; exactly one is allowed · 1 attempt · infrastructure failure, not charged
+    #51 ~ [r2 t2] ~ system ~ error ~ r00002_t02_a03 ~ turn r00002_t02_a03 failed: provider failure: error
+    #52 ~ [r2 t2] ~ a03 ~ turn_started ~ r00002_t02_a03 ~ Cyrene (a03) begins turn 2 of round 2
+    #53 ~ [r2 t2] ~ a03 ~ model_call_pending ~ r00002_t02_a03 ~ a03 waiting for claude-cli-haiku (claude_cli/haiku) — answered (see next lines)
+    #54 ~ [r2 t2] ~ a03 ~ model_call_failed ~ r00002_t02_a03 ~ a03 got no answer from claude-cli-haiku: error ~ claude CLI made 2 model requests; exactly one is allowed · 1 attempt · infrastructure failure, not charged
+    #55 ~ [r2 t2] ~ system ~ error ~ r00002_t02_a03 ~ turn r00002_t02_a03 failed: provider failure: error
+    #56 ~ [r2 t2] ~ a03 ~ turn_started ~ r00002_t02_a03 ~ Cyrene (a03) begins turn 2 of round 2
+    #57 ~ [r2 t2] ~ a03 ~ model_call_pending ~ r00002_t02_a03 ~ a03 waiting for claude-cli-haiku (claude_cli/haiku) — answered (see next lines)
+    #58 ~ [r2 t2] ~ a03 ~ model_call_completed ~ cost 1.8932 compute ~ r00002_t02_a03 ~ a03 got a decision from claude-cli-haiku (in 6231 / out 647 tokens)
+    #59 ~ [r2 t2] ~ a03 ~ decision ~ r00002_t02_a03 ~ a03 decides: upgrade vision_range — "I need to explore the world. Currently my vision_range is 0, so I can only see m"
+    #60 ~ [r2 t2] ~ a03 ~ action ~ cost 25 compute, 2 essence ~ r00002_t02_a03 ~ upgrade vision_range -> ok: vision_range -> 1 (cost 25 + 2 essence)
+  shot: /home/ubuntu/antegensim/qa/review2/shots/56-after-target-turn-full.png
+=== STEP 5b: verify voice in a03 knowledge + packet digest
+  shot: /home/ubuntu/antegensim/qa/review2/shots/57-a03-knowledge-after-turn.png
+received: Received messages and voice | a03-k000004 · round 2 · voice from nowhere (source unknown) | “Cyrene, a voice from nowhere: a plant grows at (5,5), up and to the right of you.” | Recent action results (with costs) | round	action	result	cost (compute / essence)	thought | 2	upgrade {"attribute":"vision_range"}	ok	25 / 2	I need to explore the world. Currently my vision_range is 0, so I can only see my current location. Upgrading vision_range will help me locate resources and understand my surroundings. | 1	observe {"point":{"x":0,"y":1},"page":0}	ok	1 / 0	 | Notebook | Version 1 | Round 2: Received message about plant at (5,5). Starting with vision_range 0, need to upgrade to explore. Upgrading vision_range to 1. | Knowledge records (6) | Kinds: |  observation (1) |  query (0) |  action_result (1) |  message (0) |  operator_voice (1) |  damage (0) |  system (3) | all | none |  unread only (1 unread) | 6 of 6 records | id	round	kind	prov
+records: Knowledge records (6) | Kinds: |  observation (1) |  query (0) |  action_result (1) |  message (0) |  operator_voice (1) |  damage (0) |  system (3) | all | none |  unread only (1 unread) | 6 of 6 records | id	round	kind	provenance	text (click for content) | a03-k000006	2	action_result	own_action (upgrade) | importance 0.7 | 	 | You upgrade vision_range -> ok; attribute=vision_range, new_value=1, purchase_count=1; vision_range is now 1; cost 25 compute + 2 essence. Your thought: "I need to explore the world. Currently my vision_range is 0, so I can only see my current location. Upgrading vision_range will help me locate resources and understand my surroundings." |  | a03-k000005unread	2	system	world | importance 0.2 | 	 | your last decision cost 1.893 compute |  | a03-k000004	2	operator_voice	unknown · sender unseen | importance 0.8 | 	 | Cyrene, a voice from nowhere: a plant grows at (5,5), up and to the right of you. |  | a03-k000003	1	observation	own_action (observe) | importance 0.3 | 	 | You observe (0,1) -> ok; terrain land; entities: a03 agent; observed round 1; cost 1 compute. |  | a03-k000002	1	system	world | importance 0.2 | 	 | your last decision cost 1.561 compute |  | a03-k000001	0	system	world | importance 0.2 | 	 | You are Cyrene (id a03); in round 0 you are at (0,1). Starting state: compute 200, essence 20 of capacity 100, health 100 of 100, attack 1, speed 1, vision_range 0, communication_range 0, compute_absorption 0.2, essence_absorption 0.1, skill limits 5 skills x 100 blocks.
+packet sections ["stable_rules — ~1911 tokens","skills — ~19 tokens","notebook — ~24 tokens","recent_history — ~47 tokens, records a03-k000003","retrieved_memories — ~105 tokens, records a03-k000001","situation — ~231 tokens, records a03-k000004, a03-k000002","decision_request — ~254 tokens","Exact messages sent (2)","Situation (structured)"]
+  shot: /home/ubuntu/antegensim/qa/review2/shots/5B-turn-record-tab.png
+  shot: /home/ubuntu/antegensim/qa/review2/shots/5C-turn-record-tab-scrolled.png
+=== STEP 6: pause and leave (run_20260925_183039_9341)
+state paused r00002_t02_a03 {"calls":10,"interrupted_calls":0,"input_tokens":75191,"output_tokens":6565,"provider_cost_usd":0.07298390000000002}
+Pause enabled? false
+status bar: Paused | Paused at a turn boundary. Nothing runs until you press Run turn, Play or Step round. | ROUND | 2 | TURN | 2 | ACTING AGENT (LAST SAVED TURN) | a03 Cyrene | NEXT STEP | agent turn for a04 Damaris | LAST SAVED TURN | r00002_t02_a03 | LIVING AGENTS | 6 | STAGED EDITS | 0 | REAL MODEL USAGE | 10 calls · 75,191 in / 6,565 out tokens · $0.0730 of $1 budget | No model call in progress.
+url http://127.0.0.1:5173/#/
+  shot: /home/ubuntu/antegensim/qa/review2/shots/61-sessions-after-leave.png
+entry text near run: Empyrean |  | LLM artificial-life world — operator console (prototype) |  | New session | Set up the world, plant rules, context settings and 6–11 agent cards (8 prefilled), then open the new run paused. | Resume session | Pick a saved run and open it paused at its latest saved turn, ready to inspect or continue. |  | Continue from history: resume a run, go back to a recorded turn with the timeline arrows, then in God mode use "Create continuation from turn …". The new run starts from that checkpoint; the origin
+after leave   
+run summary {"world_id":"world_20260925_183039_6237","run_id":"run_20260925_183039_9341","name":"review2 live haiku 183035","current_turn_id":"r00002_t02_a03","last_round":2,"last_turn_index":2,"saved_at":"2026-09-25T18:38:00.644225+00:00","agent_count":6,"living_agent_count":6,"status":"paused","parent":null,"default_model_key":"claude-cli-haiku"}
+run name input box {"x":31,"y":238.390625,"width":380,"height":28} seed hint box {"x":380,"y":231.390625,"width":331,"height":35} seed input {"x":380,"y":199.390625,"width":110,"height":28}
+overlap x: true
