@@ -32,6 +32,7 @@ REPO = Path(__file__).resolve().parent.parent
 FAKE = "fake-assistant"
 for profile in ("CHAT", "NARRATOR", "AUTHOR", "SUMMARIZER"):
     os.environ[f"EMPYREAN_ASSISTANT_MODEL_{profile}"] = FAKE  # forced: this launcher never spends
+os.environ["EMPYREAN_DEFAULT_MODEL"] = "fake-heuristic"  # forced: runs created from the defaults never use a paid agent model
 os.environ.setdefault("EMPYREAN_WHISPER_PRELOAD", "0")
 os.environ.setdefault("EMPYREAN_API_PORT", "8020")
 os.environ.setdefault("EMPYREAN_WORLDS_DIR", str(REPO / "qa" / "worlds-assistant"))

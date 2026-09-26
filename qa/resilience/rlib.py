@@ -68,7 +68,8 @@ def current_pid() -> Optional[int]:
 def start_server(port: int = PORT, log: Path = LOG, pid_file: Path = PID_FILE, worlds: Path = WORLDS) -> int:
     """Start `python -m empyrean.main` exactly like the task's command (cwd backend,
     EMPYREAN_API_PORT / EMPYREAN_WORLDS_DIR), appending to the log. Returns the PID."""
-    env = dict(os.environ, EMPYREAN_API_PORT=str(port), EMPYREAN_WORLDS_DIR=str(worlds))
+    # EMPYREAN_DEFAULT_MODEL is forced to the fake so runs created from /defaults never spend money.
+    env = dict(os.environ, EMPYREAN_API_PORT=str(port), EMPYREAN_WORLDS_DIR=str(worlds), EMPYREAN_DEFAULT_MODEL="fake-heuristic")
     env.pop("CLAUDECODE", None)
     fh = open(log, "ab")
     fh.write(f"\n===== start_server port={port} at {time.strftime('%H:%M:%S')} =====\n".encode())
