@@ -491,9 +491,9 @@ def test_same_seed_runs_produce_identical_event_summaries(api):
     assert finals[0] == finals[1]
 
 
-@pytest.mark.parametrize("agent_count", [6, 11])
-def test_defaults_support_six_to_eleven_cards(api, agent_count):
-    """Spec 'Purpose and scope': 6-11 initial agents; GET /defaults prefills the cards."""
+@pytest.mark.parametrize("agent_count", [6, 12])
+def test_defaults_support_six_to_twelve_cards(api, agent_count):
+    """Spec 'Purpose and scope' (6-11 initially); config allows 6-12. GET /defaults prefills the cards."""
     request = base_request(api, f"e2e {agent_count} agents", agent_count=agent_count)
     assert len(request["agents"]) == agent_count
     summary = api.create_run(request)

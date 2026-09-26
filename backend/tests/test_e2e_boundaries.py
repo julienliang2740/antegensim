@@ -1,8 +1,9 @@
 """
 End-to-end: module and provider boundaries (QA).
 
-* U4 / U15 and spec "A single model boundary": no provider SDK is imported outside
-  ``model.py``; callers never branch on providers.
+* U4 / U15 and spec "A single model boundary": no provider SDK (and, rev 4, no speech
+  package: faster_whisper / ctranslate2 / av) is imported outside ``model.py``, scanning the
+  package recursively; callers never branch on providers.
 * Completion criterion "stored playback requires no model calls": every history
   route serves recorded turns without touching a model adapter, also after the run
   is closed (history routes read from disk and work for any run).
@@ -23,9 +24,32 @@ import pytest
 from e2e_support import base_request
 
 PACKAGE_DIR = Path(__file__).resolve().parent.parent / "empyrean"
-PROVIDER_SDKS = ("anthropic", "openai", "boto3", "botocore", "httpx", "requests", "subprocess")
+# rev 4: local speech recognition (faster_whisper and the ctranslate2 / av packages it runs on)
+# is a model call too, so it lives behind model.py like the provider SDKs.
+SPEECH_MODULES = ("faster_whisper", "ctranslate2", "av")
+PROVIDER_SDKS = ("anthropic", "openai", "boto3", "botocore", "httpx", "requests", "subprocess") + SPEECH_MODULES
 SDK_IMPORT = re.compile(r"^\s*(?:import|from)\s+(" + "|".join(PROVIDER_SDKS) + r")\b", re.MULTILINE)
+# Dynamic imports by name (importlib.import_module / __import__ / model._import_sdk).
+DYNAMIC_IMPORT = re.compile(
+    r"(?:import_module|__import__|_import_sdk)\(\s*f?[\"'](" + "|".join(p for p in PROVIDER_SDKS if p != "subprocess") + r")\b"
+)
+# Any reference to a speech package as an import or a string literal (model.py names it in
+# WHISPER_PACKAGE and imports it lazily through _import_sdk).
+SPEECH_REFERENCE = re.compile(
+    r"^\s*(?:import|from)\s+(?:" + "|".join(SPEECH_MODULES) + r")\b|[\"'](?:" + "|".join(SPEECH_MODULES) + r")(?:[\"'.])",
+    re.MULTILINE,
+)
 LIVE_BILLING_RATIO_LIMIT = 1.5
+
+
+def _package_sources() -> list[tuple[str, str]]:
+    """(path relative to the package, source) for every module in the package, recursively
+    (assistant/ and any future subpackage included; no allowlist)."""
+    return [
+        (path.relative_to(PACKAGE_DIR).as_posix(), path.read_text(encoding="utf-8"))
+        for path in sorted(PACKAGE_DIR.rglob("*.py"))
+        if "__pycache__" not in path.parts
+    ]
 
 
 def test_default_rules_equal_schema_defaults():
@@ -37,25 +61,37 @@ def test_default_rules_equal_schema_defaults():
 
 
 def test_provider_sdks_are_imported_only_by_model_py():
-    """U4/U15: 'all model calls should go through some sorta model.py'.  Provider SDKs
-    and raw HTTP/subprocess clients appear only in model.py (storage may use subprocess
-    for the git revision, which is not a model call)."""
+    """U4/U15: 'all model calls should go through some sorta model.py'.  Provider SDKs, raw
+    HTTP/subprocess clients and the speech packages appear only in model.py (storage may use
+    subprocess for the git revision, which is not a model call).  The scan is recursive."""
+    sources = _package_sources()
+    assert any(rel.startswith("assistant/") for rel, _ in sources), "the recursive scan must see the assistant package"
     offenders = {}
-    for path in sorted(PACKAGE_DIR.glob("*.py")):
-        if path.name == "model.py":
+    for rel, text in sources:
+        if rel == "model.py":
             continue
-        found = set(SDK_IMPORT.findall(path.read_text(encoding="utf-8")))
-        if path.name == "storage.py":
+        found = set(SDK_IMPORT.findall(text)) | set(DYNAMIC_IMPORT.findall(text))
+        if rel == "storage.py":
             found.discard("subprocess")  # code_revision() runs git
         if found:
-            offenders[path.name] = sorted(found)
+            offenders[rel] = sorted(found)
     assert offenders == {}, f"provider/HTTP clients imported outside model.py: {offenders}"
-    for path in sorted(PACKAGE_DIR.glob("*.py")):
-        if path.name == "model.py":
+    for rel, text in sources:
+        if rel == "model.py":
             continue
-        text = path.read_text(encoding="utf-8")
         for provider in ("anthropic", "openai", "fireworks", "bedrock", "foundry", "claude_cli"):
-            assert not re.search(rf"provider\s*==\s*['\"]{provider}['\"]", text), f"{path.name} branches on provider {provider}"
+            assert not re.search(rf"provider\s*==\s*['\"]{provider}['\"]", text), f"{rel} branches on provider {provider}"
+
+
+def test_speech_packages_are_referenced_only_by_model_py():
+    """rev 4 (R3): Whisper inference is a model call.  faster_whisper / ctranslate2 / av are
+    referenced (imported or named for a lazy import) by model.py and by no other module, and
+    model.py never imports them at module level (the app starts without them)."""
+    referencing = {rel for rel, text in _package_sources() if SPEECH_REFERENCE.search(text)}
+    assert referencing == {"model.py"}, f"speech packages referenced outside model.py: {sorted(referencing - {'model.py'})}"
+    model_source = (PACKAGE_DIR / "model.py").read_text(encoding="utf-8")
+    top_level = re.findall(r"^(?:import|from)\s+(" + "|".join(SPEECH_MODULES) + r")\b", model_source, re.MULTILINE)
+    assert top_level == [], "model.py must import the speech packages lazily"
 
 
 def test_playback_reads_history_without_model_calls(api, monkeypatch):

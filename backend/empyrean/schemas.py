@@ -650,7 +650,7 @@ class WhisperStatus(StrictModel):
 
 class ModelResult(StrictModel):
     request_id: str
-    ok: bool  # True only when status == "ok" and parsed is a dict
+    ok: bool  # JSON mode: status == "ok" and parsed is a dict; text mode (response_format="text"): status == "ok" and text is non-empty (parsed None)
     status: ModelResultStatus
     text: Optional[str] = None  # provider-exposed text; for forced tool use, json.dumps(tool input)
     parsed: Optional[dict[str, Any]] = None  # decoded JSON object when decodable

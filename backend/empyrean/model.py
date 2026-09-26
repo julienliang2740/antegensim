@@ -27,6 +27,30 @@ Owns
 * The decision format gate ``parse_decision`` (spec "Two distinct validation
   gates": format validation).
 
+rev 4 (assistant) additions
+---------------------------
+* Text response mode: ``ModelRequest.response_format="text"`` sends no JSON-only
+  instruction, no schema / forced tool / ``json_object`` mode (all four real adapters), uses
+  ``CLI_TEXT_SYSTEM_PROMPT`` as the CLI fallback system prompt, and classifies the reply with
+  ``_text_status`` (non-empty text -> ok, ``parsed`` None; empty -> malformed; refusal /
+  truncated as usual).  ``request_overhead_tokens(..., response_format="text")`` counts only
+  the route's fixed overhead.
+* ``fake-assistant``: schema-agnostic replies from ``metadata["fake_script"][
+  metadata["fake_script_index"]]``, else ``metadata["fake_reply"]``, else invalid_config.
+* ``ModelResult.error_code``: budget_exceeded (CLI subtype error_max_budget_usd),
+  rate_limited (HTTP 429/529), schema_mismatch (JSON-mode malformed, incl. the CLI
+  validator's error_max_turns), cancelled, timeout, not_logged_in (CLI login text or 401),
+  cli_missing (no ``claude`` on PATH).
+* ``call_model(..., cancel=threading.Event)``: the CLI adapter polls the event every
+  CLI_CANCEL_POLL_SECONDS and kills its process group; ``kill_inflight()`` kills every live CLI
+  process group (API lifespan and atexit).
+* ``provider_cost_usd`` is summed over the attempts that reported a cost.
+* The CLI adapter refuses any argv string over ``config.CLI_ARGV_MAX_BYTES`` (invalid_config).
+* Structured-output names follow ``request.purpose`` (``structured_output_names``): the forced
+  tool is ``submit_decision`` / schema ``decision`` only for purpose "decision".
+* Local speech recognition: ``transcribe`` / ``whisper_status`` / ``preload_whisper`` run
+  faster-whisper (imported lazily, only here) on CPU int8.
+
 Must not
 --------
 * Apply gameplay rules, charge compute, or touch world/knowledge state.
@@ -66,9 +90,11 @@ Test hooks (no network needed)
 
 from __future__ import annotations
 
+import atexit
 import copy
 import importlib
 import importlib.util
+import io
 import json
 import logging
 import math
@@ -83,7 +109,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional, Protocol
+from typing import Any, Callable, Iterable, Optional, Protocol, get_args
 
 from pydantic import ValidationError
 
@@ -93,6 +119,7 @@ from .schemas import (
     AGENT_OUTPUT_STATUSES,
     Decision,
     ModelCapabilities,
+    ModelErrorCode,
     ModelInfo,
     ModelRef,
     ModelRequest,
@@ -125,6 +152,33 @@ DECISION_TOOL_DESCRIPTION = "Submit your decision for this turn as one JSON obje
 
 # Name of the json_schema response format (OpenAI family).
 DECISION_SCHEMA_NAME = "decision"
+
+# rev 4: every purpose other than "decision" gets neutral structured-output names, so an
+# assistant brief or a summary is never framed as "your decision for this turn".
+RESPONSE_TOOL_NAME = "submit_response"
+RESPONSE_TOOL_DESCRIPTION = "Submit your reply as one JSON object that matches the input schema."
+# purpose -> OpenAI json_schema name (letters, digits, underscores; <= 64 chars).
+STRUCTURED_SCHEMA_NAMES: dict[str, str] = {
+    "decision": DECISION_SCHEMA_NAME,
+    "summarize": "summary",
+    "assistant": "assistant_reply",
+    "narrative": "narrative",
+    "test": "response",
+}
+
+
+def structured_output_names(purpose: str) -> tuple[str, str, str]:
+    """(forced tool name, tool description, OpenAI json_schema name) for ``request.purpose``.
+    Decision-flavoured names only for purpose ``"decision"``; every other purpose gets
+    ``submit_response`` and a purpose-named schema (``assistant_reply``, ``narrative`` ...)."""
+    if purpose == "decision":
+        return DECISION_TOOL_NAME, DECISION_TOOL_DESCRIPTION, DECISION_SCHEMA_NAME
+    return RESPONSE_TOOL_NAME, RESPONSE_TOOL_DESCRIPTION, STRUCTURED_SCHEMA_NAMES.get(purpose, "response")
+
+
+def _schema_label(purpose: str) -> str:
+    """How error messages name the schema a structured reply had to match."""
+    return "decision schema" if purpose == "decision" else "response schema"
 
 DEFAULT_FIREWORKS_BASE_URL = "https://api.fireworks.ai/inference/v1"
 
@@ -176,6 +230,19 @@ CLI_MAX_THINKING_TOKENS_ENV = "MAX_THINKING_TOKENS"
 # claude_cli: system prompt used when the request has no system message (never let the
 # CLI fall back to its own default system prompt).
 CLI_DEFAULT_SYSTEM_PROMPT = "You are a participant in a simulation. Reply with one JSON object."
+# rev 4, text response mode: the neutral fallback (no JSON wording) when a text request has no
+# system message.
+CLI_TEXT_SYSTEM_PROMPT = "You are a helpful assistant. Reply in plain text."
+# claude_cli: seconds between cancel checks while the subprocess runs (``call_model(cancel=...)``).
+CLI_CANCEL_POLL_SECONDS = 0.5
+# claude_cli: stdout/stderr/result text that means the CLI has no usable login (error_code
+# "not_logged_in"; the UI tells the operator to run ``claude`` once in a terminal).
+CLI_NOT_LOGGED_IN = re.compile(
+    r"not logged in|please run /login|invalid api key|oauth token (?:has )?expired|authentication_error",
+    re.IGNORECASE,
+)
+# HTTP statuses reported as error_code "rate_limited" (429 rate limit, 529 overloaded).
+RATE_LIMIT_HTTP_STATUSES: frozenset[int] = frozenset({429, 529})
 
 # Env vars that commonly hold secrets; always excluded from the CLI env and redacted.
 DEFAULT_SECRET_ENV_NAMES: frozenset[str] = frozenset(
@@ -903,27 +970,43 @@ def _fixed_overhead(ref: ModelRef) -> int:
     return FIXED_OVERHEAD_TOKENS.get(ref.provider, 0)
 
 
-def _overhead_for(ref: ModelRef, schema: Optional[dict[str, Any]]) -> int:
+def _text_mode(request: ModelRequest) -> bool:
+    """rev 4: ``response_format == "text"`` (no JSON instruction, no schema, prose is ok)."""
+    return request.response_format == "text"
+
+
+def _overhead_for(ref: ModelRef, schema: Optional[dict[str, Any]], text_mode: bool = False) -> int:
+    """Provider-side input tokens beyond the messages.  Text mode adds no schema and no
+    JSON-only instruction: only the route's fixed overhead."""
     if ref.provider == "fake":
         return 0
+    if text_mode:
+        return _fixed_overhead(ref)
     if _sends_native_schema(ref, schema):
         assert schema is not None
         return estimate_tokens(_compact_json(_native_schema_payload(ref, schema))) + _fixed_overhead(ref)
     return estimate_tokens(_json_instruction(ref, schema)) + _fixed_overhead(ref)
 
 
-def request_overhead_tokens(model_key: str, registry: ModelRegistry) -> int:
+def _request_overhead(ref: ModelRef, request: ModelRequest) -> int:
+    return _overhead_for(ref, request.response_schema, _text_mode(request))
+
+
+def request_overhead_tokens(model_key: str, registry: ModelRegistry, *, response_format: str = "json") -> int:
     """Provider-side input tokens the adapter will add beyond ``request.messages`` for a
     decision request (A-COG-8): the transformed decision schema when a native schema /
     forced tool is sent (``capabilities.supports_json_schema``) plus the route's fixed
     overhead (FIXED_OVERHEAD_TOKENS or ``ref.options["overhead_tokens"]``); otherwise the
     JSON-only instruction appended to the system prompt plus the fixed overhead.  The
     textual schema description in the stable rules (no native schema) is context's and is
-    NOT counted here.  0 for fake refs and unknown keys."""
+    NOT counted here.  ``response_format="text"`` (rev 4) counts the fixed overhead only (no
+    JSON instruction, no schema).  0 for fake refs and unknown keys."""
     try:
         ref = registry.resolved(model_key)
     except UnknownModelError:
         return 0
+    if response_format == "text":
+        return _overhead_for(ref, None, text_mode=True)
     return _overhead_for(ref, decision_json_schema())
 
 
@@ -1016,6 +1099,23 @@ def classify_exception(exc: BaseException) -> tuple[str, Optional[int], Optional
     return "error", http_status, None
 
 
+def derive_error_code(status: str, http_status: Optional[int], *, text_mode: bool = False) -> Optional[str]:
+    """The generic part of ``ModelResult.error_code`` (rev 4), used when an adapter did not set
+    a more specific code: ``timeout`` for status timeout, ``rate_limited`` for HTTP 429/529,
+    ``schema_mismatch`` for a JSON-mode ``malformed`` reply (no object / not the schema).
+    Adapter-specific codes (``budget_exceeded``, ``cancelled``, ``not_logged_in``,
+    ``cli_missing``) are set where they are detected.  None for ok and unclassified failures."""
+    if status == "ok":
+        return None
+    if status == "timeout":
+        return "timeout"
+    if http_status in RATE_LIMIT_HTTP_STATUSES:
+        return "rate_limited"
+    if status == "malformed" and not text_mode:
+        return "schema_mismatch"
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Adapter plumbing
 # ---------------------------------------------------------------------------
@@ -1088,13 +1188,19 @@ def _make_result(
     provider_cost_usd: Optional[float] = None,
     error: Optional[str] = None,
     stop_reason: Optional[str] = None,
+    error_code: Optional[str] = None,
 ) -> ModelResult:
-    parsed = parsed if status == "ok" and isinstance(parsed, dict) else None
+    """Assemble one attempt's result.  ``ok``: JSON mode -> status ok and ``parsed`` is a dict;
+    text mode (rev 4) -> status ok and the text is non-empty (``parsed`` is always None)."""
+    text_mode = _text_mode(request)
+    parsed = parsed if status == "ok" and isinstance(parsed, dict) and not text_mode else None
+    clean = sanitize_text(text)
+    ok = status == "ok" and (bool((clean or "").strip()) if text_mode else parsed is not None)
     return ModelResult(
         request_id=request.request_id,
-        ok=status == "ok" and parsed is not None,
+        ok=ok,
         status=status,  # type: ignore[arg-type]
-        text=sanitize_text(text),
+        text=clean,
         parsed=parsed,
         usage=usage or ModelUsage(),
         provider=ref.provider,
@@ -1103,6 +1209,7 @@ def _make_result(
         provider_cost_usd=provider_cost_usd,
         error=redact(error),
         stop_reason=stop_reason,
+        error_code=error_code,  # type: ignore[arg-type]
     )
 
 
@@ -1116,13 +1223,20 @@ def _failure(
     retry_after: Optional[float] = None,
     retryable: Optional[bool] = None,
     usage: Optional[ModelUsage] = None,
+    error_code: Optional[str] = None,
 ) -> Attempt:
     return Attempt(
-        _make_result(request, ref, status, error=error, usage=usage),
+        _make_result(request, ref, status, error=error, usage=usage, error_code=error_code),
         http_status=http_status,
         retry_after=retry_after,
         retryable=retryable,
     )
+
+
+def _cancelled(request: ModelRequest, ref: ModelRef, detail: str) -> Attempt:
+    """A call stopped by ``call_model(cancel=...)`` or ``kill_inflight``: status error,
+    error_code cancelled, never retried."""
+    return _failure(request, ref, "error", f"cancelled: {detail}", retryable=False, error_code="cancelled")
 
 
 def _attempt_from_exception(request: ModelRequest, ref: ModelRef, exc: BaseException) -> Attempt:
@@ -1153,6 +1267,28 @@ def _output_status(
     if candidate is None or reply_problem(candidate) is not None:
         return "malformed", None
     return "ok", candidate
+
+
+def _text_status(text: Optional[str], *, refused: bool, truncated: bool) -> tuple[str, None]:
+    """Text response mode (rev 4) classification: refusal / truncated (the text is kept; the
+    caller decides whether a cut-off narrative is usable) / ok for any non-empty text /
+    malformed for an empty reply.  Never parses JSON (a code example in prose stays prose)."""
+    if refused:
+        return "refusal", None
+    if truncated:
+        return "truncated", None
+    if not (text or "").strip():
+        return "malformed", None
+    return "ok", None
+
+
+def _classify(
+    request: ModelRequest, parsed: Optional[dict[str, Any]], text: Optional[str], *, refused: bool, truncated: bool
+) -> tuple[str, Optional[dict[str, Any]]]:
+    """``_text_status`` in text mode, else ``_output_status``."""
+    if _text_mode(request):
+        return _text_status(text, refused=refused, truncated=truncated)
+    return _output_status(parsed, text, refused=refused, truncated=truncated)
 
 
 def _split_messages(request: ModelRequest, ref: Optional[ModelRef] = None) -> tuple[str, list[tuple[str, str]]]:
@@ -1637,19 +1773,39 @@ class FakeAdapter(BaseAdapter):
     with ``fake_attempt_ordinal`` (across the calls of one turn), so with the default two
     retries ``failing_attempts: 1`` succeeds on the retry and ``failing_attempts: 3``
     exhausts call ``_01`` while call ``_02`` succeeds.  Usage is estimated; ``status="ok"``
-    with ``parsed`` set unless a failure is scheduled."""
+    with ``parsed`` set unless a failure is scheduled.
+
+    rev 4 additions:
+
+    * ``fake-assistant`` (assistant_only): returns ``metadata["fake_script"][metadata[
+      "fake_script_index"]]`` when that entry exists (the engine sets the index to the step
+      ordinal), else ``metadata["fake_reply"]``, else ``invalid_config`` ("fake-assistant has no
+      reply").  Schema-agnostic: the caller supplies replies that fit its own schema.
+    * Text mode (``request.response_format == "text"``, every mode): a non-empty string reply is
+      ``ok`` with ``text`` set and ``parsed`` None; a dict reply is returned as its JSON text.
+      JSON mode: a dict reply is ``ok`` with ``parsed``; a string is classified like a real reply
+      (prose -> malformed, a JSON object in the text -> ok).
+    * ``fake_options.sleep_ms`` waits on the ``cancel`` event when one is passed: setting it
+      ends the attempt at once with status error / error_code cancelled.
+    * ``fake_options.fail.error_code`` (any ``ModelErrorCode``) is copied onto a scheduled
+      failure; ``fake_options.cost_usd`` (number) is reported as ``provider_cost_usd`` on every
+      attempt (ledger tests)."""
 
     def attempt(self, ref: ModelRef, request: ModelRequest, attempt_no: int, *, cancel: Optional[threading.Event] = None) -> Attempt:
         metadata = request.metadata or {}
         options = metadata.get("fake_options") if isinstance(metadata.get("fake_options"), dict) else {}
+        if cancel is not None and cancel.is_set():
+            return _cancelled(request, ref, "cancel was set before the fake attempt")
         sleep_ms = options.get("sleep_ms")
         if isinstance(sleep_ms, (int, float)) and not isinstance(sleep_ms, bool) and sleep_ms > 0:
             if sleep_ms / 1000.0 > request.timeout_seconds:
-                time.sleep(request.timeout_seconds)
+                if _fake_wait(request.timeout_seconds, cancel):
+                    return _cancelled(request, ref, "fake attempt interrupted")
                 return _failure(
                     request, ref, "timeout", f"fake latency {sleep_ms} ms exceeds the attempt timeout", retryable=True
                 )
-            time.sleep(sleep_ms / 1000.0)
+            if _fake_wait(sleep_ms / 1000.0, cancel):
+                return _cancelled(request, ref, "fake attempt interrupted")
         situation = _situation_from_metadata(metadata)
         round_no = metadata.get("round")
         if not isinstance(round_no, int) or isinstance(round_no, bool):
@@ -1665,15 +1821,13 @@ class FakeAdapter(BaseAdapter):
             return fake_heuristic_decision(agent_id, round_no, turn_id, situation, options)
 
         mode = ref.model_id
+        script = metadata.get("fake_script")
+        index = metadata.get("fake_script_index")
+        scripted = isinstance(script, list) and isinstance(index, int) and not isinstance(index, bool) and 0 <= index < len(script)
         if mode == "fake-heuristic":
             reply: Any = heuristic()
         elif mode == "fake-scripted":
-            script = metadata.get("fake_script")
-            index = metadata.get("fake_script_index")
-            if isinstance(script, list) and isinstance(index, int) and 0 <= index < len(script):
-                reply = script[index]
-            else:
-                reply = heuristic()
+            reply = script[index] if scripted else heuristic()  # type: ignore[index]
         elif mode == "fake-malformed":
             phase = (round_no + fake_agent_index(agent_id)) % 3
             if phase == 0:
@@ -1682,10 +1836,24 @@ class FakeAdapter(BaseAdapter):
                 reply = {"thought": "Try a move that does not exist.", "action": {"name": "teleport", "args": {"to": "anywhere"}}}
             else:
                 reply = heuristic()
+        elif mode == "fake-assistant":
+            if scripted:
+                reply = script[index]  # type: ignore[index]
+            elif metadata.get("fake_reply") is not None:
+                reply = metadata["fake_reply"]
+            else:
+                return _failure(
+                    request, ref, "invalid_config",
+                    "fake-assistant has no reply: set metadata fake_script + fake_script_index or fake_reply",
+                    retryable=False,
+                )
         else:
             return _failure(request, ref, "invalid_config", f"unknown fake mode {mode!r}", retryable=False)
 
-        if isinstance(reply, dict):
+        if _text_mode(request):
+            text = json.dumps(reply) if isinstance(reply, (dict, list)) else str(reply)
+            status, parsed = _text_status(text, refused=False, truncated=False)
+        elif isinstance(reply, dict):
             text = json.dumps(reply)
             status, parsed = "ok", reply
         else:
@@ -1700,6 +1868,7 @@ class FakeAdapter(BaseAdapter):
                 parsed=parsed,
                 usage=estimate_usage(request, text),
                 response_model=ref.model_id,
+                provider_cost_usd=_fake_cost(options),
                 stop_reason="end_turn",
             )
         )
@@ -1721,20 +1890,49 @@ class FakeAdapter(BaseAdapter):
         ordinal = fake_attempt_ordinal(request, attempt_no)
         if isinstance(failing, int) and not isinstance(failing, bool) and ordinal > failing:
             return None
+        code = fail.get("error_code") if fail.get("error_code") in MODEL_ERROR_CODES else None
         if status in _FAKE_FAILURE_TEXT:
             text = _FAKE_FAILURE_TEXT[status]
             stop = {"refusal": "refusal", "truncated": "max_tokens"}.get(status, "end_turn")
             return Attempt(
-                _make_result(request, ref, status, text=text, usage=estimate_usage(request, text), response_model=ref.model_id, stop_reason=stop)
+                _make_result(
+                    request, ref, status, text=text, usage=estimate_usage(request, text), response_model=ref.model_id,
+                    provider_cost_usd=_fake_cost(options), stop_reason=stop, error_code=code,
+                )
             )
         message = f"fake scheduled {status} (attempt {ordinal} of the turn)"
         if status == "timeout":
-            return _failure(request, ref, "timeout", message, retryable=True)
+            return _failure(request, ref, "timeout", message, retryable=True, error_code=code)
         if status == "invalid_config":
-            return _failure(request, ref, "invalid_config", message, retryable=False)
+            return _failure(request, ref, "invalid_config", message, retryable=False, error_code=code)
         http_status = fail.get("http_status", 500)
         http_status = http_status if isinstance(http_status, int) and not isinstance(http_status, bool) else 500
-        return _failure(request, ref, "error", f"HTTP {http_status}: {message}", http_status=http_status)
+        attempt = _failure(request, ref, "error", f"HTTP {http_status}: {message}", http_status=http_status, error_code=code)
+        cost = _fake_cost(options)
+        if cost is not None:
+            attempt.result = attempt.result.model_copy(update={"provider_cost_usd": cost})
+        return attempt
+
+
+# Every ModelResult.error_code value (schemas.ModelErrorCode).
+MODEL_ERROR_CODES: frozenset[str] = frozenset(get_args(ModelErrorCode))
+
+
+def _fake_wait(seconds: float, cancel: Optional[threading.Event]) -> bool:
+    """Sleep ``seconds`` (fake latency); with a cancel event, wait on it instead.  True when
+    the wait was interrupted by the event."""
+    if cancel is None:
+        time.sleep(seconds)
+        return False
+    return cancel.wait(seconds)
+
+
+def _fake_cost(options: dict[str, Any]) -> Optional[float]:
+    """``fake_options.cost_usd`` as a provider cost (finite, >= 0), else None."""
+    value = options.get("cost_usd")
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0:
+        return float(value)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -1797,7 +1995,8 @@ def _missing_sdk(request: ModelRequest, ref: ModelRef, exc: ImportError) -> Atte
 
 class AnthropicAdapter(BaseAdapter):
     """``anthropic`` SDK Messages API (client ``max_retries=0``).  Structured output: the
-    compact decision schema as the ``input_schema`` of tool ``submit_decision``, forced
+    compact schema as the ``input_schema`` of tool ``submit_decision`` (purpose "decision";
+    ``submit_response`` for every other purpose, see ``structured_output_names``), forced
     with ``tool_choice={"type": "tool"}`` when ``supports_json_schema`` (set
     ``ref.options["tool_choice"] = "auto"`` for models that reject forced tool use; the
     system prompt then names the tool); otherwise the JSON-only instruction + extraction.
@@ -1815,20 +2014,23 @@ class AnthropicAdapter(BaseAdapter):
         temperature = _temperature(ref, request)
         if temperature is not None:
             kwargs["temperature"] = temperature
-        if _sends_native_schema(ref, request.response_schema):
+        tool_name, tool_description, _schema_name = structured_output_names(request.purpose)
+        if _text_mode(request):
+            pass  # rev 4 text mode: no tool, no JSON-only instruction
+        elif _sends_native_schema(ref, request.response_schema):
             assert request.response_schema is not None
             kwargs["tools"] = [
                 {
-                    "name": DECISION_TOOL_NAME,
-                    "description": DECISION_TOOL_DESCRIPTION,
+                    "name": tool_name,
+                    "description": tool_description,
                     "input_schema": compact_schema(request.response_schema),
                 }
             ]
             if ref.options.get("tool_choice") == "auto":
                 kwargs["tool_choice"] = {"type": "auto"}
-                system = f"{system}\n\nSubmit your decision by calling the {DECISION_TOOL_NAME} tool exactly once.".strip()
+                system = f"{system}\n\nSubmit your {'decision' if request.purpose == 'decision' else 'reply'} by calling the {tool_name} tool exactly once.".strip()
             else:
-                kwargs["tool_choice"] = {"type": "tool", "name": DECISION_TOOL_NAME}
+                kwargs["tool_choice"] = {"type": "tool", "name": tool_name}
         else:
             system = f"{system}\n\n{_json_instruction(ref, request.response_schema)}".strip()
         if system:
@@ -1836,24 +2038,25 @@ class AnthropicAdapter(BaseAdapter):
         return kwargs
 
     def parse_response(self, ref: ModelRef, request: ModelRequest, response: Any) -> ModelResult:
+        tool_name = structured_output_names(request.purpose)[0]
         tool_input: Any = None
         texts: list[str] = []
         for block in _field(response, "content") or []:
             kind = _field(block, "type")
-            if kind == "tool_use" and _field(block, "name") == DECISION_TOOL_NAME and tool_input is None:
+            if kind == "tool_use" and _field(block, "name") == tool_name and tool_input is None:
                 tool_input = _field(block, "input")
             elif kind == "text":
                 texts.append(_field(block, "text") or "")
-        if tool_input is not None:
+        if tool_input is not None and not _text_mode(request):
             text: Optional[str] = json.dumps(tool_input)
             native = tool_input if isinstance(tool_input, dict) else None
         else:
             text = "".join(texts) or None
             native = None
         stop = _field(response, "stop_reason")
-        status, parsed = _output_status(native, text, refused=stop == "refusal", truncated=stop == "max_tokens")
+        status, parsed = _classify(request, native, text, refused=stop == "refusal", truncated=stop == "max_tokens")
         usage = usage_from_anthropic(_field(response, "usage")) or estimate_usage(
-            request, text, extra_input_tokens=_overhead_for(ref, request.response_schema)
+            request, text, extra_input_tokens=_request_overhead(ref, request)
         )
         return _make_result(
             request, ref, status, text=text, parsed=parsed, usage=usage,
@@ -1904,8 +2107,9 @@ class OpenAIAdapter(BaseAdapter):
 
     def build_kwargs(self, ref: ModelRef, request: ModelRequest) -> dict[str, Any]:
         system, chat = _split_messages(request, ref)
-        native = _sends_native_schema(ref, request.response_schema)
-        if not native:
+        text_mode = _text_mode(request)
+        native = not text_mode and _sends_native_schema(ref, request.response_schema)
+        if not native and not text_mode:
             system = f"{system}\n\n{_json_instruction(ref, request.response_schema)}".strip()
         messages = ([{"role": "system", "content": system}] if system else []) + [
             {"role": role, "content": content} for role, content in chat
@@ -1923,12 +2127,12 @@ class OpenAIAdapter(BaseAdapter):
             kwargs["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
-                    "name": DECISION_SCHEMA_NAME,
+                    "name": structured_output_names(request.purpose)[2],
                     "schema": openai_strict_schema(request.response_schema),
                     "strict": ref.options.get("strict_schema") is True,
                 },
             }
-        elif ref.capabilities.supports_json_mode:
+        elif ref.capabilities.supports_json_mode and not text_mode:
             kwargs["response_format"] = {"type": "json_object"}
         return kwargs
 
@@ -1943,11 +2147,11 @@ class OpenAIAdapter(BaseAdapter):
         refused = bool(refusal) or finish == "content_filter"
         if refused and not text and isinstance(refusal, str):
             text = refusal
-        status, parsed = _output_status(None, text, refused=refused, truncated=finish == "length")
+        status, parsed = _classify(request, None, text, refused=refused, truncated=finish == "length")
         if parsed is not None and request.response_schema:
             parsed = strip_transform_nulls(parsed, request.response_schema)
         usage = usage_from_openai(_field(response, "usage")) or estimate_usage(
-            request, text, extra_input_tokens=_overhead_for(ref, request.response_schema)
+            request, text, extra_input_tokens=_request_overhead(ref, request)
         )
         return _make_result(
             request, ref, status, text=text, parsed=parsed, usage=usage,
@@ -2050,7 +2254,8 @@ class BedrockAdapter(BaseAdapter):
 
     def build_kwargs(self, ref: ModelRef, request: ModelRequest) -> dict[str, Any]:
         system, chat = _split_messages(request, ref)
-        system = f"{system}\n\n{_json_instruction(ref, request.response_schema)}".strip()
+        if not _text_mode(request):
+            system = f"{system}\n\n{_json_instruction(ref, request.response_schema)}".strip()
         inference: dict[str, Any] = {"maxTokens": request.max_output_tokens}
         temperature = _temperature(ref, request)
         if temperature is not None:
@@ -2069,11 +2274,11 @@ class BedrockAdapter(BaseAdapter):
         texts = [_field(block, "text") for block in (_field(message, "content") or [])]
         text = "".join(t for t in texts if isinstance(t, str)) or None
         stop = _field(response, "stopReason")
-        status, parsed = _output_status(
-            None, text, refused=stop in ("guardrail_intervened", "content_filtered"), truncated=stop == "max_tokens"
+        status, parsed = _classify(
+            request, None, text, refused=stop in ("guardrail_intervened", "content_filtered"), truncated=stop == "max_tokens"
         )
         usage = usage_from_bedrock(_field(response, "usage")) or estimate_usage(
-            request, text, extra_input_tokens=_overhead_for(ref, request.response_schema)
+            request, text, extra_input_tokens=_request_overhead(ref, request)
         )
         return _make_result(
             request, ref, status, text=text, parsed=parsed, usage=usage, response_model=ref.model_id, stop_reason=stop
@@ -2135,6 +2340,55 @@ def _kill_process_group(proc: Any) -> None:
         os.killpg(proc.pid, signal.SIGKILL)
     except (ProcessLookupError, PermissionError, OSError):
         pass
+
+
+# rev 4: every live CLI subprocess started by ClaudeCliAdapter, keyed by id(proc), so
+# ``kill_inflight`` (API lifespan shutdown, atexit) can kill their process groups and no
+# orphaned ``claude`` keeps running (and billing) after the server stops.
+_INFLIGHT_LOCK = threading.Lock()
+_INFLIGHT: dict[int, Any] = {}
+_KILLED_INFLIGHT: set[int] = set()  # ids killed by kill_inflight (reported as cancelled)
+
+
+def _register_inflight(proc: Any) -> None:
+    with _INFLIGHT_LOCK:
+        _INFLIGHT[id(proc)] = proc
+
+
+def _unregister_inflight(proc: Any) -> bool:
+    """Forget ``proc``; True when ``kill_inflight`` killed it meanwhile."""
+    with _INFLIGHT_LOCK:
+        _INFLIGHT.pop(id(proc), None)
+        killed = id(proc) in _KILLED_INFLIGHT
+        _KILLED_INFLIGHT.discard(id(proc))
+        return killed
+
+
+def inflight_count() -> int:
+    """Number of CLI subprocesses currently running (diagnostics and tests)."""
+    with _INFLIGHT_LOCK:
+        return len(_INFLIGHT)
+
+
+def kill_inflight() -> int:
+    """Kill every live CLI process group started by ``ClaudeCliAdapter`` (called from the API
+    lifespan and at interpreter exit so no orphaned ``claude`` subprocess keeps billing).  The
+    interrupted calls return status ``error`` with error_code ``cancelled`` and are not retried.
+    Returns the number of processes signalled.  Never raises."""
+    try:
+        with _INFLIGHT_LOCK:
+            procs = list(_INFLIGHT.items())
+            _KILLED_INFLIGHT.update(key for key, _proc in procs)
+        for _key, proc in procs:
+            _kill_process_group(proc)
+        if procs:
+            logger.info("killed %d in-flight CLI process group(s)", len(procs))
+        return len(procs)
+    except Exception:  # noqa: BLE001 - shutdown helper never raises
+        return 0
+
+
+atexit.register(kill_inflight)
 
 
 class _CliTranscript:
@@ -2220,7 +2474,13 @@ class ClaudeCliAdapter(BaseAdapter):
     (CLI_MAX_MODEL_REQUESTS = 2: the CLI's own re-prompt after a text-only first response)
     are accepted with a note in ``attempt_errors`` and the summed usage charged; more ->
     "error".  A live test asserts billed input <= 1.5 x the packet estimate (catches leaked
-    CLAUDE.md or system-prompt text)."""
+    CLAUDE.md or system-prompt text).
+
+    rev 4: text mode (no ``--json-schema``, no JSON instruction, CLI_TEXT_SYSTEM_PROMPT
+    fallback); any argv string over ``config.CLI_ARGV_MAX_BYTES`` -> invalid_config before the
+    process starts; ``cancel`` polled every CLI_CANCEL_POLL_SECONDS (process group killed,
+    error_code cancelled); every live process is registered for ``kill_inflight``; error codes
+    budget_exceeded / not_logged_in / cli_missing / schema_mismatch / timeout are filled here."""
 
     @staticmethod
     def max_turns(ref: ModelRef) -> int:
@@ -2247,9 +2507,12 @@ class ClaudeCliAdapter(BaseAdapter):
         return CLI_MAX_THINKING_TOKENS
 
     def build_argv(self, ref: ModelRef, request: ModelRequest, executable: str) -> list[str]:
+        """The CLI argv.  JSON mode: native ``--json-schema`` or the JSON-only instruction;
+        text mode (rev 4): neither, and CLI_TEXT_SYSTEM_PROMPT when there is no system message."""
         system, _chat = _split_messages(request, ref)
-        native = _sends_native_schema(ref, request.response_schema)
-        if not native:
+        text_mode = _text_mode(request)
+        native = not text_mode and _sends_native_schema(ref, request.response_schema)
+        if not native and not text_mode:
             system = f"{system}\n\n{_json_instruction(ref, request.response_schema)}".strip()
         argv = [
             executable,
@@ -2269,7 +2532,7 @@ class ClaudeCliAdapter(BaseAdapter):
             "--no-session-persistence",
             "--disable-slash-commands",
             "--system-prompt",
-            system or CLI_DEFAULT_SYSTEM_PROMPT,
+            system or (CLI_TEXT_SYSTEM_PROMPT if text_mode else CLI_DEFAULT_SYSTEM_PROMPT),
         ]
         if native:
             assert request.response_schema is not None
@@ -2286,13 +2549,55 @@ class ClaudeCliAdapter(BaseAdapter):
             return chat[0][1]
         return "\n\n".join(f"{role.upper()}:\n{content}" for role, content in chat)
 
+    @staticmethod
+    def oversized_argument(argv: list[str]) -> Optional[int]:
+        """Byte length of the first argv string over ``config.CLI_ARGV_MAX_BYTES`` (Linux caps one
+        argument at 128 KiB; the system prompt and the schema travel on argv), else None."""
+        for part in argv:
+            size = len(part.encode("utf-8", "replace"))
+            if size > config.CLI_ARGV_MAX_BYTES:
+                return size
+        return None
+
+    @staticmethod
+    def _communicate(proc: Any, body: str, timeout_seconds: float, cancel: Optional[threading.Event]) -> tuple[Optional[tuple[str, str]], Optional[str]]:
+        """Feed ``body`` on stdin and wait for the process.  Without ``cancel``: one
+        ``communicate`` bounded by the attempt timeout.  With ``cancel``: ``communicate`` in
+        CLI_CANCEL_POLL_SECONDS slices (the stdin write continues across slices), checking the
+        event between slices.  Returns ((stdout, stderr), None) or (None, "timeout"|"cancelled")."""
+        deadline = time.monotonic() + timeout_seconds
+        started = False
+        while True:
+            remaining = max(0.0, deadline - time.monotonic())
+            last_slice = cancel is None or remaining <= CLI_CANCEL_POLL_SECONDS
+            try:
+                output = proc.communicate(input=None if started else body, timeout=remaining if last_slice else CLI_CANCEL_POLL_SECONDS)
+                return (output[0] or "", output[1] or ""), None
+            except subprocess.TimeoutExpired:
+                started = True
+                if cancel is not None and cancel.is_set():
+                    return None, "cancelled"
+                if last_slice:
+                    return None, "timeout"
+
     def attempt(self, ref: ModelRef, request: ModelRequest, attempt_no: int, *, cancel: Optional[threading.Event] = None) -> Attempt:
         executable = shutil.which(config.CLAUDE_CLI_EXECUTABLE)
         if executable is None:
             return _failure(
-                request, ref, "invalid_config", f"{config.CLAUDE_CLI_EXECUTABLE} executable not found on PATH", retryable=False
+                request, ref, "invalid_config", f"{config.CLAUDE_CLI_EXECUTABLE} executable not found on PATH",
+                retryable=False, error_code="cli_missing",
             )
+        if cancel is not None and cancel.is_set():
+            return _cancelled(request, ref, "cancel was set before the claude CLI started")
         argv = self.build_argv(ref, request, executable)
+        oversized = self.oversized_argument(argv)
+        if oversized is not None:
+            return _failure(
+                request, ref, "invalid_config",
+                f"claude CLI argument of {oversized} bytes exceeds CLI_ARGV_MAX_BYTES ({config.CLI_ARGV_MAX_BYTES}); "
+                "shorten the system prompt or schema",
+                retryable=False,
+            )
         schema_sent = "--json-schema" in argv
         with tempfile.TemporaryDirectory(prefix="empyrean_cli_") as workdir:
             if Path(workdir).resolve().is_relative_to(config.REPO_DIR.resolve()):
@@ -2312,21 +2617,32 @@ class ClaudeCliAdapter(BaseAdapter):
                 )
             except OSError as exc:
                 return _failure(request, ref, "error", f"cannot start the CLI: {exc}", retryable=False)
+            _register_inflight(proc)
+            killed_at_shutdown = False
             try:
-                stdout, stderr = proc.communicate(input=self.prompt_body(request), timeout=request.timeout_seconds)
-            except subprocess.TimeoutExpired:
-                _kill_process_group(proc)
-                try:
-                    proc.communicate(timeout=CLI_KILL_GRACE_SECONDS)
-                except (subprocess.TimeoutExpired, OSError, ValueError):
-                    pass
-                return _failure(
-                    request, ref, "timeout", f"claude CLI exceeded {request.timeout_seconds} s; process group killed", retryable=True
-                )
+                output, stopped = self._communicate(proc, self.prompt_body(request), request.timeout_seconds, cancel)
+                if stopped is not None:
+                    _kill_process_group(proc)
+                    try:
+                        proc.communicate(timeout=CLI_KILL_GRACE_SECONDS)
+                    except (subprocess.TimeoutExpired, OSError, ValueError):
+                        pass
             finally:
                 if proc.poll() is None:
                     _kill_process_group(proc)
-        return self.parse_output(ref, request, stdout or "", stderr or "", proc.returncode, schema_sent)
+                killed_at_shutdown = _unregister_inflight(proc)
+        if stopped == "cancelled":
+            return _cancelled(request, ref, "claude CLI process group killed")
+        if killed_at_shutdown:
+            return _cancelled(request, ref, "claude CLI process group killed at shutdown")
+        if stopped == "timeout":
+            return _failure(
+                request, ref, "timeout", f"claude CLI exceeded {request.timeout_seconds} s; process group killed",
+                retryable=True, error_code="timeout",
+            )
+        assert output is not None
+        stdout, stderr = output
+        return self.parse_output(ref, request, stdout, stderr, proc.returncode, schema_sent)
 
     def parse_output(
         self, ref: ModelRef, request: ModelRequest, stdout: str, stderr: str, returncode: Optional[int], schema_sent: bool
@@ -2335,7 +2651,8 @@ class ClaudeCliAdapter(BaseAdapter):
         if not isinstance(envelope, dict):
             excerpt = (stderr or stdout).strip()[-400:]
             return _failure(
-                request, ref, "error", f"claude CLI exit {returncode}; no JSON envelope; stderr: {excerpt}", retryable=False
+                request, ref, "error", f"claude CLI exit {returncode}; no JSON envelope; stderr: {excerpt}", retryable=False,
+                error_code="not_logged_in" if CLI_NOT_LOGGED_IN.search(stderr or stdout or "") else None,
             )
         usage_raw = envelope.get("usage")
         model_usage = envelope.get("modelUsage")
@@ -2346,15 +2663,18 @@ class ClaudeCliAdapter(BaseAdapter):
         structured = envelope.get("structured_output")
         usage = usage_from_claude_cli(usage_raw if isinstance(usage_raw, dict) else None)
         if usage is None:
-            usage = estimate_usage(request, result_text, extra_input_tokens=_overhead_for(ref, request.response_schema))
+            usage = estimate_usage(request, result_text, extra_input_tokens=_request_overhead(ref, request))
 
-        def error(message: str, http_status: Optional[int] = None, retryable: Optional[bool] = False) -> Attempt:
+        def error(
+            message: str, http_status: Optional[int] = None, retryable: Optional[bool] = False, error_code: Optional[str] = None
+        ) -> Attempt:
             # 401/403/404 and schema/param 400s are configuration errors (INTERFACES 4.4),
             # exactly as classify_exception maps them for the SDK adapters.
             status = "invalid_config" if http_status in CONFIG_HTTP_STATUSES else "error"
             result = _make_result(
                 request, ref, status, text=result_text, usage=usage, response_model=response_model,
                 provider_cost_usd=cost, error=message, stop_reason=envelope.get("stop_reason"),
+                error_code=error_code or derive_error_code(status, http_status),
             )
             return Attempt(result, http_status=http_status, retryable=False if status == "invalid_config" else retryable)
 
@@ -2366,25 +2686,35 @@ class ClaudeCliAdapter(BaseAdapter):
             rejected = transcript.tool_inputs[-1] if transcript.tool_inputs else None
             text = json.dumps(rejected) if rejected is not None else (result_text or transcript.prose or None)
             verdict = transcript.tool_results[-1] if transcript.tool_results else None
-            message = "structured output did not match the decision schema"
+            message = f"structured output did not match the {_schema_label(request.purpose)}"
             if verdict:
                 message = f"{message}: {verdict}"
             result = _make_result(
                 request, ref, "malformed", text=text, usage=usage, response_model=response_model,
                 provider_cost_usd=cost, error=message, stop_reason=envelope.get("stop_reason"),
+                error_code="schema_mismatch",
             )
             notes = [f"model prose before the structured reply: {transcript.prose}"] if transcript.prose else []
             return Attempt(result, notes=notes)
         if envelope.get("is_error") or (subtype is not None and subtype != "success"):
             http_status = envelope.get("api_error_status")
             http_status = http_status if isinstance(http_status, int) and not isinstance(http_status, bool) else None
+            detail = (result_text or "").strip()
+            if subtype == "error_max_budget_usd":
+                code: Optional[str] = "budget_exceeded"
+            elif http_status == 401 or CLI_NOT_LOGGED_IN.search(detail):
+                code = "not_logged_in"
+            else:
+                code = None
             return error(
-                f"claude CLI error ({subtype}): {(result_text or '').strip()[:300]}",
+                f"claude CLI error ({subtype}): {detail[:300]}",
                 http_status=http_status,
                 retryable=None if http_status is not None else False,
+                error_code=code,
             )
         if returncode not in (0, None):
-            return error(f"claude CLI exit {returncode}; stderr: {stderr.strip()[-300:]}")
+            code = "not_logged_in" if CLI_NOT_LOGGED_IN.search(stderr or "") else None
+            return error(f"claude CLI exit {returncode}; stderr: {stderr.strip()[-300:]}", error_code=code)
         num_turns = envelope.get("num_turns")
         if isinstance(num_turns, int) and not isinstance(num_turns, bool):
             model_requests = num_turns - (1 if schema_sent else 0)
@@ -2400,13 +2730,14 @@ class ClaudeCliAdapter(BaseAdapter):
                 f"(usage and cost are the sum)"
             )
         stop = envelope.get("stop_reason")
-        native = structured if isinstance(structured, dict) else None
+        native = structured if isinstance(structured, dict) and not _text_mode(request) else None
         text = result_text if result_text is not None else (json.dumps(structured) if structured is not None else None)
-        status, parsed = _output_status(native, text, refused=stop == "refusal", truncated=stop == "max_tokens")
+        status, parsed = _classify(request, native, text, refused=stop == "refusal", truncated=stop == "max_tokens")
         return Attempt(
             _make_result(
                 request, ref, status, text=text, parsed=parsed, usage=usage, response_model=response_model,
                 provider_cost_usd=cost, stop_reason=stop,
+                error_code=derive_error_code(status, None, text_mode=_text_mode(request)),
             ),
             notes=notes,
         )
@@ -2451,19 +2782,34 @@ def _backoff_delay(retry_index: int, retry_after: Optional[float]) -> float:
 
 
 def _config_failure(
-    request: ModelRequest, ref: Optional[ModelRef], message: str, started: float, registry: Optional[ModelRegistry]
+    request: ModelRequest,
+    ref: Optional[ModelRef],
+    message: str,
+    started: float,
+    registry: Optional[ModelRegistry],
+    *,
+    status: str = "invalid_config",
+    error_code: Optional[str] = None,
 ) -> ModelResult:
     return ModelResult(
         request_id=request.request_id,
         ok=False,
-        status="invalid_config",
+        status=status,  # type: ignore[arg-type]
         provider=ref.provider if ref else "unknown",
         model_id=ref.model_id if ref else "",
         latency_ms=(time.monotonic() - started) * 1000.0,
         attempts=0,
         attempt_errors=[],
         error=redact(message, registry),
+        error_code=error_code,  # type: ignore[arg-type]
     )
+
+
+def sum_provider_cost(costs: Iterable[Optional[float]]) -> Optional[float]:
+    """rev 4: the provider-reported cost of a call = the sum over the attempts that reported one
+    (a failed CLI attempt is billed too); None when no attempt reported a cost."""
+    reported = [float(c) for c in costs if c is not None]
+    return sum(reported) if reported else None
 
 
 def _log_call(result: ModelResult) -> None:
@@ -2494,14 +2840,12 @@ def default_registry() -> ModelRegistry:
 
 def call_model(request: ModelRequest, registry: Optional[ModelRegistry] = None, *, cancel: Optional[threading.Event] = None) -> ModelResult:
     """Resolve ``request.model_key`` -> ``ModelRef`` -> adapter.  Never raises.
-    ``registry`` defaults to ``default_registry()``.  ``cancel`` (rev 4, keyword-only) is
-    handed to the adapter: when set mid-call the CLI adapter kills its process group and the
-    result is ``status="error"``, ``error_code="cancelled"`` (behaviour lands with the
-    model-boundary work package; the parameter is plumbed here so callers can pass it now).
+    ``registry`` defaults to ``default_registry()``.
 
     * unknown key / missing credentials / unknown provider / ``max_output_tokens`` outside
       ``1..capabilities.max_output_tokens`` -> ``status="invalid_config"`` (no attempt
-      made, ``attempts == 0``).
+      made, ``attempts == 0``; a claude_cli route whose executable is missing also carries
+      ``error_code="cli_missing"``).
     * up to ``request.max_retries`` retries ONLY when retryable (``is_retryable`` or the
       adapter's explicit flag for connection errors), with backoff
       config.RETRY_BACKOFF_SECONDS honouring Retry-After up to RETRY_AFTER_MAX_SECONDS;
@@ -2509,8 +2853,21 @@ def call_model(request: ModelRequest, registry: Optional[ModelRegistry] = None, 
       (max_retries + 1)``.  ``timeout_seconds`` applies per attempt.
     * fills ``provider``/``model_id`` (configured)/``response_model``/``latency_ms``
       (total)/``attempts``/``attempt_errors`` (one redacted line per failed attempt),
-      sums usage across attempts and returns.  ``ok`` is True only when ``status == "ok"``
-      and ``parsed`` is a dict.  ``request.metadata`` never reaches a real provider."""
+      sums usage across attempts and returns.  ``request.metadata`` never reaches a real
+      provider.
+    * ``ok``: JSON mode -> ``status == "ok"`` and ``parsed`` is a dict; text mode
+      (``request.response_format == "text"``, rev 4) -> ``status == "ok"`` and ``text`` is
+      non-empty (``parsed`` is always None).
+    * ``provider_cost_usd`` (rev 4) is the SUM over the attempts that reported a cost (a
+      failed or retried CLI attempt is billed too); None when no attempt reported one.
+    * ``error_code`` (rev 4): the final attempt's machine-readable failure class
+      (budget_exceeded | rate_limited | schema_mismatch | cancelled | timeout | not_logged_in |
+      cli_missing), None when ok or unclassified.
+    * ``cancel`` (rev 4, keyword-only ``threading.Event``): checked before every attempt and
+      handed to the adapter; the CLI adapter polls it every CLI_CANCEL_POLL_SECONDS and kills
+      its process group, the fake adapter's ``sleep_ms`` waits on it.  A cancelled call returns
+      ``status="error"``, ``error_code="cancelled"`` and is never retried; its cost is
+      unknown (None) unless an earlier attempt reported one."""
     started = time.monotonic()
     try:
         if registry is None:
@@ -2539,7 +2896,10 @@ def _call_model(request: ModelRequest, registry: ModelRegistry, started: float, 
     missing = registry.missing_requirements(request.model_key)
     if missing:
         message = f"model '{request.model_key}' is not available: missing {', '.join(missing)}"
-        return _config_failure(request, public_ref, message, started, registry)
+        cli_missing = public_ref.provider == "claude_cli" and shutil.which(config.CLAUDE_CLI_EXECUTABLE) is None
+        return _config_failure(
+            request, public_ref, message, started, registry, error_code="cli_missing" if cli_missing else None
+        )
     ref = registry.resolved(request.model_key)
     limit = ref.capabilities.max_output_tokens
     if not 1 <= request.max_output_tokens <= limit:
@@ -2554,8 +2914,17 @@ def _call_model(request: ModelRequest, registry: ModelRegistry, started: float, 
     deadline = started + request.timeout_seconds * (max_retries + 1)
     attempts: list[Attempt] = []
     attempt_errors: list[str] = []
+    cancelled_between_attempts = False
     while True:
         attempt_no = len(attempts) + 1
+        if cancel is not None and cancel.is_set():
+            if not attempts:
+                return _config_failure(
+                    request, public_ref, "cancelled before the first attempt", started, registry,
+                    status="error", error_code="cancelled",
+                )
+            cancelled_between_attempts = True
+            break
         try:
             outcome = adapter.attempt(ref, request, attempt_no, cancel=cancel)
         except Exception as exc:  # noqa: BLE001 - an adapter bug is an infrastructure error
@@ -2576,68 +2945,239 @@ def _call_model(request: ModelRequest, registry: ModelRegistry, started: float, 
             break
         _sleep(delay)
 
-    final = attempts[-1].result
-    parsed = final.parsed if final.status == "ok" and isinstance(final.parsed, dict) else None
+    final_attempt = attempts[-1]
+    final = final_attempt.result
+    text_mode = _text_mode(request)
+    status = final.status
+    error = final.error
+    error_code = final.error_code or derive_error_code(status, final_attempt.http_status, text_mode=text_mode)
+    if cancelled_between_attempts:
+        status, error_code = "error", "cancelled"
+        error = f"cancelled before retry {len(attempts) + 1}; last attempt: {final.status}: {final.error or 'no detail'}"
+    parsed = final.parsed if status == "ok" and isinstance(final.parsed, dict) and not text_mode else None
+    ok = status == "ok" and (bool((final.text or "").strip()) if text_mode else parsed is not None)
     return final.model_copy(
         update={
             "request_id": request.request_id,
             "provider": public_ref.provider,
             "model_id": public_ref.model_id,
-            "ok": final.status == "ok" and parsed is not None,
+            "ok": ok,
+            "status": status,
             "parsed": parsed,
             "usage": sum_usage(a.result.usage for a in attempts),
+            "provider_cost_usd": sum_provider_cost(a.result.provider_cost_usd for a in attempts),
             "latency_ms": (time.monotonic() - started) * 1000.0,
             "attempts": len(attempts),
             "attempt_errors": attempt_errors,
-            "error": redact(final.error, registry),
+            "error": redact(error, registry),
+            "error_code": None if status == "ok" else error_code,
         }
     )
 
 
 # ---------------------------------------------------------------------------
-# rev 4 boundary additions: in-flight CLI processes and local speech recognition.  The bodies
-# below are the CONTRACT (signatures, never-raise semantics); the model-boundary work package
-# fills them (process-group registry, faster_whisper adapter with lazy import).
+# rev 4: local speech recognition (faster-whisper) behind the model boundary.  faster_whisper
+# (and through it ctranslate2 and av) is imported ONLY here and only lazily, through
+# ``_import_sdk``; tests replace that hook with a fake module.  Decoding uses
+# faster_whisper.decode_audio on the raw bytes (PyAV; no ffmpeg binary needed).
 # ---------------------------------------------------------------------------
 
+WHISPER_PACKAGE = "faster_whisper"
+WHISPER_SAMPLE_RATE = 16000  # faster_whisper.decode_audio resamples to this
+WHISPER_BEAM_SIZE = 5
+WHISPER_VAD_FILTER = True
+# EMPYREAN_WHISPER_MODEL values that switch speech recognition off (whisper_status "disabled").
+WHISPER_OFF_VALUES = frozenset({"", "off", "none", "disabled", "0"})
 
-def kill_inflight() -> int:
-    """Kill every live CLI process group started by ``ClaudeCliAdapter`` (called from the API
-    lifespan and atexit so no orphaned ``claude`` subprocess keeps billing).  Returns the number
-    of processes signalled.  Never raises."""
-    return 0
+
+class _WhisperState:
+    """The process-wide Whisper model (one per process; loading takes ~16 s for
+    large-v3-turbo on CPU).  ``state``: idle | loading | ready | failed."""
+
+    def __init__(self) -> None:
+        self.load_lock = threading.Lock()  # one load at a time
+        self.run_lock = threading.Lock()  # one inference at a time (the speech executor has 1 worker)
+        self.model: Any = None
+        self.model_name: Optional[str] = None
+        self.state = "idle"
+        self.error: Optional[str] = None
 
 
-def whisper_status() -> WhisperStatus:
-    """Whether ``transcribe`` can serve: ``ready`` (model loaded), ``loading`` (preload in
-    progress), ``unavailable`` (package missing / load failed; ``reason`` says why) or
-    ``disabled``.  Never raises."""
+_WHISPER_STATE = _WhisperState()
+
+
+def _whisper_disabled() -> bool:
+    return (config.WHISPER_MODEL or "").strip().lower() in WHISPER_OFF_VALUES
+
+
+def _whisper_status(state: str, reason: Optional[str] = None) -> WhisperStatus:
     return WhisperStatus(
-        status="unavailable",
+        status=state,  # type: ignore[arg-type]
         model=config.WHISPER_MODEL,
         device=config.WHISPER_DEVICE,
         compute_type=config.WHISPER_COMPUTE_TYPE,
-        reason="local whisper adapter not loaded in this build",
+        reason=reason,
     )
+
+
+def whisper_model_cached(name: Optional[str] = None) -> bool:
+    """True when faster-whisper is installed and the model ``name`` (default
+    ``config.WHISPER_MODEL``) is already in the local Hugging Face cache, so loading it needs no
+    download.  Used by tests (the ``whisper`` marker) and diagnostics.  Never raises."""
+    try:
+        if not _sdk_installed(WHISPER_PACKAGE):
+            return False
+        utils = _import_sdk(f"{WHISPER_PACKAGE}.utils")
+        utils.download_model(name or config.WHISPER_MODEL, local_files_only=True)
+        return True
+    except Exception:  # noqa: BLE001 - absent cache, no package, offline hub: all "not cached"
+        return False
+
+
+def _ensure_whisper() -> _WhisperState:
+    """Load ``config.WHISPER_MODEL`` once (device/compute type/threads from config) and return
+    the state; a failed load is retried on the next call.  Never raises (a failure is recorded
+    in ``state.error``)."""
+    state = _WHISPER_STATE
+    name = config.WHISPER_MODEL
+    if state.state == "ready" and state.model_name == name:
+        return state
+    with state.load_lock:
+        if state.state == "ready" and state.model_name == name:
+            return state
+        state.state, state.error = "loading", None
+        started = time.monotonic()
+        try:
+            whisper = _import_sdk(WHISPER_PACKAGE)
+            state.model = whisper.WhisperModel(
+                name,
+                device=config.WHISPER_DEVICE,
+                compute_type=config.WHISPER_COMPUTE_TYPE,
+                cpu_threads=config.WHISPER_CPU_THREADS,
+            )
+            state.model_name = name
+            state.state = "ready"
+            logger.info("whisper model=%s loaded in %.1f s", name, time.monotonic() - started)
+        except ImportError as exc:
+            state.model, state.state = None, "failed"
+            state.error = f"faster-whisper is not installed ({exc.name or exc}); pip install faster-whisper"
+        except Exception as exc:  # noqa: BLE001 - never raises; surfaced by whisper_status
+            state.model, state.state = None, "failed"
+            state.error = redact(f"could not load whisper model {name!r}: {type(exc).__name__}: {exc}")
+            logger.warning("whisper model=%s failed to load: %s", name, type(exc).__name__)
+    return state
+
+
+def whisper_status() -> WhisperStatus:
+    """Whether ``transcribe`` can serve.  Never raises.
+
+    * ``ready``: the model is loaded.
+    * ``loading``: a load (``preload_whisper`` or a first ``transcribe``) is in progress.
+    * ``unavailable``: faster-whisper is not installed, or the last load failed (``reason``).
+    * ``disabled``: EMPYREAN_WHISPER_MODEL is off, or the model is not loaded yet and no load
+      was started (preload off); ``reason`` says which.  A ``transcribe`` call still loads it."""
+    try:
+        if _whisper_disabled():
+            return _whisper_status("disabled", "speech recognition is switched off (EMPYREAN_WHISPER_MODEL)")
+        state = _WHISPER_STATE
+        if state.state == "ready" and state.model_name == config.WHISPER_MODEL:
+            return _whisper_status("ready")
+        if state.state == "loading":
+            return _whisper_status("loading", "loading the whisper model")
+        if state.state == "failed":
+            return _whisper_status("unavailable", state.error or "the whisper model failed to load")
+        if not _sdk_installed(WHISPER_PACKAGE):
+            return _whisper_status("unavailable", "faster-whisper is not installed (pip install faster-whisper)")
+        return _whisper_status(
+            "disabled", "the whisper model is not loaded (preload off); the first transcription loads it"
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _whisper_status("unavailable", redact(f"whisper status failed: {type(exc).__name__}"))
 
 
 def preload_whisper() -> None:
     """Load the Whisper model (``config.WHISPER_MODEL``, CPU int8) on the calling thread so the
     first ``transcribe`` does not pay the ~16 s cold start.  Called by ``main`` only (never by
     tests).  Never raises; a failure shows up in ``whisper_status().reason``."""
-    return None
+    try:
+        if not _whisper_disabled():
+            _ensure_whisper()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _whisper_language(language: Optional[str]) -> Optional[str]:
+    """``"en"`` / ``"en-US"`` -> ``"en"``; None / "" / "auto" -> None (auto-detect)."""
+    if not language:
+        return None
+    code = str(language).strip().lower().replace("_", "-").split("-", 1)[0]
+    return None if code in ("", "auto") else code
 
 
 def transcribe(audio: bytes, *, language: Optional[str] = None, initial_prompt: Optional[str] = None) -> TranscriptionResult:
-    """Speech to text through the model boundary (faster_whisper / ctranslate2 / av are imported
-    only inside model.py, lazily).  ``audio`` is the raw container bytes (webm/opus from
-    MediaRecorder, wav, ...).  Never raises: ``status`` is ok | error | unavailable, like
-    ``call_model``."""
-    status = whisper_status()
-    return TranscriptionResult(
-        status="unavailable",
-        model=status.model,
-        language=language,
-        error=status.reason or "speech recognition unavailable",
-    )
+    """Speech to text through the model boundary.  ``audio`` is the raw container bytes (webm/opus
+    from MediaRecorder, wav, flac, ...), decoded with ``faster_whisper.decode_audio`` (PyAV) at
+    16 kHz; ``language`` (e.g. "en"; None/"auto" detects) and ``initial_prompt`` (vocabulary
+    hint: agent names, glossary, control labels) are passed to the model with ``vad_filter`` on
+    and ``beam_size`` 5.  Loads the model on first use when it is not preloaded.
 
+    Never raises.  ``status``: ``ok`` (``text`` may be empty when no speech was heard) |
+    ``error`` (empty / oversized / undecodable / too long audio, unsupported language, inference
+    failure; ``error`` says which, redacted) | ``unavailable`` (switched off, package missing,
+    model failed to load).  Logs only sizes, durations and status, never the transcript."""
+    started = time.monotonic()
+    name = config.WHISPER_MODEL
+    lang = _whisper_language(language)
+
+    def result(status: str, *, text: str = "", error: Optional[str] = None, duration: Optional[float] = None,
+               detected: Optional[str] = None) -> TranscriptionResult:
+        logger.info(
+            "transcribe model=%s status=%s audio_s=%s latency_ms=%.0f",
+            name, status, "-" if duration is None else f"{duration:.1f}", (time.monotonic() - started) * 1000.0,
+        )
+        return TranscriptionResult(
+            status=status,  # type: ignore[arg-type]
+            text=text,
+            language=detected or lang,
+            duration_s=None if duration is None else round(duration, 3),
+            model=name,
+            error=redact(error),
+        )
+
+    try:
+        if _whisper_disabled():
+            return result("unavailable", error="speech recognition is switched off (EMPYREAN_WHISPER_MODEL)")
+        if not isinstance(audio, (bytes, bytearray, memoryview)) or len(audio) == 0:
+            return result("error", error="no audio received")
+        if len(audio) > config.WHISPER_MAX_AUDIO_BYTES:
+            return result("error", error=f"audio is {len(audio)} bytes; the limit is {config.WHISPER_MAX_AUDIO_BYTES}")
+        state = _ensure_whisper()
+        if state.model is None:
+            return result("unavailable", error=state.error or "the whisper model is not loaded")
+        whisper = _import_sdk(WHISPER_PACKAGE)
+        try:
+            samples = whisper.decode_audio(io.BytesIO(bytes(audio)), sampling_rate=WHISPER_SAMPLE_RATE)
+        except Exception as exc:  # noqa: BLE001 - PyAV raises many error types
+            return result("error", error=f"could not decode the audio: {type(exc).__name__}: {exc}")
+        duration = len(samples) / float(WHISPER_SAMPLE_RATE)
+        if duration <= 0:
+            return result("error", error="the audio contains no samples", duration=0.0)
+        if duration > config.WHISPER_MAX_SECONDS:
+            return result(
+                "error", error=f"audio is {duration:.0f} s long; the limit is {config.WHISPER_MAX_SECONDS} s", duration=duration
+            )
+        prompt = (initial_prompt or "").strip() or None
+        with state.run_lock:
+            segments, info = state.model.transcribe(
+                samples,
+                language=lang,
+                initial_prompt=prompt,
+                vad_filter=WHISPER_VAD_FILTER,
+                beam_size=WHISPER_BEAM_SIZE,
+            )
+            # segments is a lazy generator: the decoding happens while iterating.
+            text = " ".join(part for part in ((getattr(s, "text", "") or "").strip() for s in segments) if part)
+        detected = getattr(info, "language", None)
+        return result("ok", text=sanitize_text(text) or "", duration=duration, detected=detected if isinstance(detected, str) else None)
+    except Exception as exc:  # noqa: BLE001 - the boundary never raises
+        return result("error", error=f"transcription failed: {type(exc).__name__}: {exc}")

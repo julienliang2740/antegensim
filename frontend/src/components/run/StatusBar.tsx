@@ -20,6 +20,7 @@ import type { RunStatus } from "../../api/types";
 import type { FailedTurnInfo } from "../../state/feed";
 import type { AgentNamer } from "../../state/statusText";
 import { actingAgentLabel, nextStepText, secondsSince, stateSentence, stateWord } from "../../state/statusText";
+import { AskButton } from "../assistant/AskButton";
 
 export interface StatusBarProps {
   status: RunStatus;
@@ -106,6 +107,7 @@ export function StatusBar(props: StatusBarProps) {
             <button type="button" className="btn btn-danger" disabled={!props.recoverEnabled} onClick={props.onRecover}>
               Recover (pause)
             </button>
+            <AskButton question="Why did the run stop?" />
             <span className="hint">
               Discards the failed attempt and reloads the last saved turn <code>{status.current_turn_id}</code>; the next Run turn or Play re-runs{" "}
               {failedTurn ? <code>{failedTurn.turnId}</code> : "the same turn"}.
@@ -114,7 +116,7 @@ export function StatusBar(props: StatusBarProps) {
         </div>
       ) : status.last_error ? (
         <div className="status-recovered">
-          <strong>Previous error (recovered; clears at the next saved turn):</strong> {status.last_error}
+          <strong>Previous error (recovered; clears at the next saved turn):</strong> {status.last_error} <AskButton question="Why did the run stop?" label="Ask the assistant" />
           {failedTurn ? (
             <>
               {" "}

@@ -306,6 +306,9 @@ class Brief(LooseModel):
     warnings: list[str] = Field(default_factory=list)
     action: Any = None  # typed BriefAction (normalised) as a dict; None when invalid
     action_raw: dict[str, Any] = Field(default_factory=dict)  # the model's envelope as emitted
+    action_type: Optional[str] = None  # the envelope's type even when args failed validation
+    target_run_id: Optional[str] = None  # the run the action acts on (None for create_run)
+    merged_request: Optional[dict[str, Any]] = None  # create_run: the merged RunCreateRequest ("Open in setup form")
     validation: BriefValidation = Field(default_factory=BriefValidation)
     effect: Optional[BriefEffect] = None
     error: Optional[str] = None
@@ -812,6 +815,8 @@ class StoryRejectRequest(StrictModel):
 
 class StoryContinueRequest(StrictModel):
     to_turn_id: Optional[str] = None  # None = last committed
+    generate_all: bool = False  # "Generate all": every remaining chapter; the end turn stays unless to_turn_id is given
+    job_budget_usd: Optional[float] = Field(default=None, ge=0)  # raise the story budget (resumes a paused story)
 
 
 class StoryChapterRequest(StrictModel):

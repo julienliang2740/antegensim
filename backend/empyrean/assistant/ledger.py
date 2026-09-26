@@ -76,8 +76,18 @@ class Ledger:
             self._cache.pop(line.scope, None)
             return self._aggregate_locked(line.scope, path)
 
+    def _path(self, scope: str) -> Optional[Path]:
+        """The scope's file, or None when the scope cannot be resolved (unknown run): reads
+        then aggregate to zero; only ``append`` raises for it."""
+        try:
+            return self._path_for(scope)
+        except Exception:  # noqa: BLE001 - storage.StorageError for an unknown run
+            return None
+
     def aggregate(self, scope: str) -> LedgerAggregate:
-        path = self._path_for(scope)
+        path = self._path(scope)
+        if path is None:
+            return LedgerAggregate()
         with self._lock(scope):
             return self._aggregate_locked(scope, path)
 
@@ -105,8 +115,10 @@ class Ledger:
 
     def lines(self, scope: str, limit: Optional[int] = None) -> list[LedgerLine]:
         """The scope's lines in order (last ``limit`` when given)."""
-        path = self._path_for(scope)
+        path = self._path(scope)
         out: list[LedgerLine] = []
+        if path is None:
+            return out
         try:
             with path.open("r", encoding="utf-8") as fh:
                 for raw in fh:

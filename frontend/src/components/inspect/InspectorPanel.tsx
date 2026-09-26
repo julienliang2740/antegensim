@@ -39,6 +39,16 @@ export function InspectorPanel(props: InspectorPanelProps) {
           <span className="insp-muted"> at {fmtPoint(entity.position)}</span>
           {dead ? <span className="insp-badge insp-badge-bad">dead</span> : null}
         </div>
+        {props.onAsk ? (
+          <button
+            type="button"
+            className="btn btn-small assistant-ask-btn"
+            title="Open the assistant with this question prefilled"
+            onClick={() => props.onAsk?.(`What is ${entity.kind === "agent" ? `${entity.name} (${entity.id})` : entity.id} up to?`)}
+          >
+            Ask: What is {entity.kind === "agent" ? entity.name : entity.id} up to?
+          </button>
+        ) : null}
         <label className={`insp-toggle${props.agentView ? " insp-toggle-on" : ""}`} title="Show only what the agent knows">
           <input type="checkbox" checked={props.agentView} onChange={props.onToggleAgentView} /> Agent view {props.agentView ? "ON" : "off"}
         </label>

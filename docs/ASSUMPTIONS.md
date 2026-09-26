@@ -1,7 +1,8 @@
 # Configurable assumptions
 
 Every gameplay rule the design document leaves open (or marks as a suggestion) that the
-implementation must nevertheless settle. Each has a config key, the chosen default, and a
+implementation must nevertheless settle, plus the settled defaults of the built-in assistant
+(A-AST-*). Each has a config key, the chosen default, and a
 citation. The registry of record is `config.ASSUMPTIONS` in `backend/empyrean/config.py`; it is
 written once per run to `assumptions.json` and served read-only by `GET /api/assumptions`
 (defaults) and `GET /api/runs/{run_id}/assumptions` (as recorded). It is NOT part of
@@ -9,6 +10,10 @@ written once per run to `assumptions.json` and served read-only by `GET /api/ass
 key in god mode), not the code.
 
 Citations: **D** = `llm_world_running_design.md` v0.7, **S** = `llm_world_technical_spec.md` v0.5.
+
+The ids in the tables below equal the keys of `config.ASSUMPTIONS` (checked by
+`scripts/check_docs.py`); add or remove both in the same commit. The values are shipped
+defaults; a run's own values are on its Rules tab.
 
 ## Death and residue
 
@@ -132,6 +137,25 @@ Citations: **D** = `llm_world_running_design.md` v0.7, **S** = `llm_world_techni
 | ID | Rule | Config key | Default | Citation |
 | --- | --- | --- | --- | --- |
 | A-GOD-1 | Staged edits are applied at the boundary in staging order, each as a delta onto the state at that moment. A `working/` reload is staged as the field diff of the files against the committed turn and applied AS THAT DIFF (never a wholesale replacement), so UI edits staged before or after it (voice, placements, stat changes, settings) all survive; a field changed by both keeps the value of the edit staged later; a file change whose parent no longer exists (its entity was removed by an earlier staged edit) or a result failing validation (schema, cross-file references, `validate_world`, effective context settings) rejects the whole file edit (`ok=false` with the paths and reasons, nothing of it applied; the other edits still apply); the record's before values are the values found at apply time | runner rule (`storage.apply_working_changes`) | as stated | S "God mode and direct file editing" (both paths "record before/after values, origin and effective boundary"; invalid files "leave the last valid state available"); fix-pass finding (a reload staged after UI edits silently undid them) |
+
+## Assistant (rev 4)
+
+The assistant's defaults are not world rules (they never change a run's `rules.json`), but they
+are settled choices with a rationale, so they are registered like the rest. Budgets and models are
+environment-overridable (README "Backend options"); `docs/ASSISTANT.md` explains each in context.
+
+| ID | Rule | Config key | Default | Citation |
+| --- | --- | --- | --- | --- |
+| A-AST-1 | Storybook automatic narration: a new run's `storybook_auto` is ON unless the narrator is a paid key AND every agent model in the run is fake; runs without `assistant/settings.json` (created before the assistant) are OFF; auto covers only turns committed after `auto_since_turn_id` plus the opening entry; history catch-up only on request ("Write missing"); auto pauses with a notice at the run's storybook budget | `config.STORYBOOK_AUTO` (`EMPYREAN_STORYBOOK_AUTO` on/off/auto), `<run>/assistant/settings.json` | `auto` (the rule) | User requirement 5; measured Haiku CLI cost USD 0.0081 and 7.3 s per call |
+| A-AST-2 | Separate assistant budgets and ledger: chat per scope, storybook per run, story per job, per message, global; each call checks spent + USD 0.05 against every applicable limit and settles the reported cost (or a list-price estimate); `usage.jsonl` per scope; never written to `Manifest.real_usage` | `config.ASSISTANT_CHAT_BUDGET_USD` / `ASSISTANT_STORYBOOK_BUDGET_USD` / `ASSISTANT_STORY_BUDGET_USD` / `ASSISTANT_MESSAGE_BUDGET_USD` / `ASSISTANT_GLOBAL_BUDGET_USD`, `ASSISTANT_CALL_COST_ESTIMATE_USD` | 5.0 / 2.0 / 5.0 / 0.75 / 20.0 USD; estimate 0.05 | D "Compute metering" (agents' economy separate) |
+| A-AST-3 | Storybook batching: one coalescing job per run; a backlog > 2 turns is narrated up to 12 turns (one round) per call with one `## <turn_id>` section per turn (missing sections re-queued singly); ≤ 2 singly; background profiles share one slot while a CLI run plays and pause 60 s after a rate limit; a file lock stops a second process | `config.STORYBOOK_BATCH_MAX`, `STORYBOOK_BATCH_THRESHOLD`, `ASSISTANT_BACKGROUND_PAUSE_SECONDS` | 12 / 2 / 60 s | Measured ~3k-token fixed prefix per narrator call |
+| A-AST-4 | Structured output only where code consumes it (chat step, interview, story brief); every schema < 16 KB; brief `action` = `{type, args}` with `args` validated server-side; deterministic salvage, then at most one repair step; assistant refs run with `max_turns` 2, `max_model_requests` 3 | `config.ASSISTANT_SCHEMA_MAX_BYTES`, registry `options` | 16 KB; 2 / 3 | Measured 13.5% malformed live Haiku schema calls; typed action schema 35,634 chars |
+| A-AST-5 | Text-mode profiles: narrator entries, chapters and both summaries use `ModelRequest.response_format = "text"`; chat steps, interview and the story brief stay JSON | `ModelRequest.response_format` | as stated | Design D2 as amended |
+| A-AST-6 | Dictate: local faster-whisper `large-v3-turbo`, int8 on the CPU with min(8, cores) threads, one speech worker with a bounded queue, preloaded by the served backend only; 60 s recording cap (65 s server side), 10 MB body cap, language `en`; initial prompt from run/agent names, glossary and control labels | `config.WHISPER_MODEL` (`EMPYREAN_WHISPER_MODEL`), `WHISPER_PRELOAD` (`EMPYREAN_WHISPER_PRELOAD`), `WHISPER_MAX_SECONDS`, `WHISPER_MAX_AUDIO_BYTES`, `WHISPER_CPU_THREADS`, `WHISPER_LANGUAGE_DEFAULT` | `large-v3-turbo`, preload on, 65 s, 10,000,000 bytes, en | User requirement 9; measured 7.2 s (large-v3-turbo) vs 5.5-6 s (medium) for an 11 s clip |
+| A-AST-7 | Chat step loop: at most 4 model calls per message, step 1 prefetched with deterministic context, up to 3 read tools per step, the last step restricted to answer/ask, 90 s wall clock per message, byte-stable system prompt < 96 KiB | `config.ASSISTANT_MAX_STEPS`, `ASSISTANT_TOOLS_PER_STEP`, `ASSISTANT_MESSAGE_TIMEOUT_SECONDS`, `ASSISTANT_SYSTEM_PROMPT_MAX_BYTES` | 4 / 3 / 90 s / 96 KiB | Live records: cache reads dominate after step 1; CLI steps take 7-20 s |
+| A-AST-8 | Assistant-only model refs (`options.assistant_only`) are hidden from `GET /api/models` unless `?include_assistant=1` and rejected by `ModelRegistry.validate_agent_key` in setup, card model keys, `place_entity` and model assignment | `models.example.json` `options.assistant_only` | `claude-cli-sonnet-assistant` (cap USD 0.25), `claude-cli-haiku-assistant` (USD 0.08), `fake-assistant` | Setup and interventions previously checked `validate_key` only |
+| A-AST-9 | Execution briefs: typed actions validated before they are shown (no run is opened), approve with CAS pending → executing, revalidation and one stored, idempotent effect; staged edits get origin `assistant` and note `assistant: <summary>`; `apply_working_files` is never proposed; a play is never chained into a create-run | `assistant/briefs.py` rule | as stated | User requirement 2; S "God mode" (record origin) |
+| A-AST-10 | Conversations live under `<worlds>/_assistant/conversations/<conv_id>/` with a mutable `run_id` scope; after an approved create-run or open-run the conversation follows the new run; interrupted work is marked on restart; no memory across conversations | `config.ASSISTANT_GLOBAL_DIR_NAME`, `config.MEMORY_TOKEN_BUDGET` | `_assistant`; memory 3,000 tokens | User requirement 4 |
 
 ## Deliberately not implemented (design says deferred)
 

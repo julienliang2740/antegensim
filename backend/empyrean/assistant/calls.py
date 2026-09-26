@@ -3,8 +3,8 @@ The assistant's single way to call a model (rev 4): ``call_profile`` builds the 
 for a profile (model key, output cap, timeout/retries, response_format), checks the budgets
 (R1), calls ``model.call_model(request, registry, cancel=cancel)``, prices the call, appends the
 ledger line and returns a ``ProfileCallResult``.  Deterministic salvage of malformed JSON and
-the one repair step (A-AST-4) belong to the engine and land with WP2 (``salvage`` below is the
-hook).  OWNER: WP2.
+the one repair step (A-AST-4): ``salvage`` here is the deterministic part, the engine re-calls
+the model once with the validation error.  OWNER: WP2.
 """
 # DOCS: every assistant model call goes through call_profile -> model.call_model; costs settle to
 # provider_cost_usd or a list-price estimate; the system prompt must stay byte-stable and under
@@ -68,12 +68,70 @@ class ProfileCallResult:
         return self.result.error_code
 
 
+_MISSING = object()
+_WRAPPER_KEYS = ("output", "result", "response", "step", "data", "json", "reply", "answer_step")
+
+
+def _decode_json_string(value: Any) -> Any:
+    """A str that decodes to a JSON object/array -> the decoded value; else ``_MISSING``."""
+    if not isinstance(value, str):
+        return _MISSING
+    stripped = value.strip()
+    if not stripped or stripped[0] not in "{[":
+        return _MISSING
+    try:
+        decoded = json.loads(stripped)
+    except ValueError:
+        return _MISSING
+    return decoded if isinstance(decoded, (dict, list)) else _MISSING
+
+
+def _salvage_once(obj: dict[str, Any]) -> dict[str, Any]:
+    """One pass of the deterministic repairs; returns the same object when nothing applied."""
+    if len(obj) == 1:
+        (key, value), = obj.items()
+        decoded = _decode_json_string(value)
+        if isinstance(decoded, dict):  # {"output": "<json>"}
+            return decoded
+        if isinstance(value, dict) and "kind" not in obj and ("kind" in value or key in _WRAPPER_KEYS):
+            return dict(value)  # doubled nesting: {"step": {"kind": ...}}
+    out: dict[str, Any] = {}
+    changed = False
+    for key, value in obj.items():
+        decoded = _decode_json_string(value)
+        if decoded is not _MISSING:  # json-decode a stringified field ("brief": "{...}")
+            out[key] = decoded
+            changed = True
+        elif isinstance(value, dict) and value:
+            inner = _salvage_once(value)
+            out[key] = inner
+            changed = changed or inner is not value
+        else:
+            out[key] = value
+    return out if changed else obj
+
+
 def salvage(parsed: Optional[dict[str, Any]], text: Optional[str]) -> tuple[Optional[dict[str, Any]], bool]:
-    """Deterministic repair of common CLI envelope shapes BEFORE any re-call (A-AST-4): unwrap
-    single-key string wrappers such as ``{"output": "<json>"}``, json-decode stringified fields,
-    collapse doubled nesting.  Returns ``(object, changed)``.  WP2 fills the rules; this
-    placeholder returns the input unchanged."""
-    return parsed, False
+    """Deterministic repair of common CLI envelope shapes BEFORE any re-call (A-AST-4):
+    a JSON object recovered from prose, single-key string wrappers such as
+    ``{"output": "<json>"}``, doubled nesting (``{"step": {"kind": ...}}``) and stringified
+    fields (``"brief": "{...}"``, ``"calls": "[...]"``) at any depth.  Returns ``(object,
+    changed)``; ``object`` is None when nothing decodes to a dict.  Schema-agnostic: the
+    engine validates the result with the step adapters and repairs once more via the model."""
+    changed = False
+    obj: Any = parsed
+    if obj is None and text:
+        obj = model.extract_json_object(text)
+        changed = obj is not None
+    if not isinstance(obj, dict):
+        return None, changed
+    for _ in range(4):
+        repaired = _salvage_once(obj)
+        if repaired is obj:
+            break
+        obj = repaired
+        changed = True
+    return obj, changed
 
 
 def request_settings(profile: str) -> tuple[float, int]:
@@ -209,7 +267,7 @@ def call_profile(
         batch_size=batch_size,
     )
     service.ledger.append(line)
-    parsed, salvaged = (None, False) if text_mode else salvage(result.parsed, result.text)
+    parsed, salvaged = (None, False) if text_mode else salvage(result.parsed, result.text if result.status in ("ok", "malformed") else None)
     return ProfileCallResult(
         profile=profile,
         scope=scope,

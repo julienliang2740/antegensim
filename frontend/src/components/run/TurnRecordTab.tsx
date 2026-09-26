@@ -43,6 +43,7 @@ import {
   thinkingCost,
 } from "./turnStory";
 import type { StatRow } from "./turnStory";
+import { AskButton } from "../assistant/AskButton";
 
 export interface TurnRecordTabProps {
   view: TurnView;
@@ -69,6 +70,9 @@ export function TurnRecordTab(props: TurnRecordTabProps) {
   const t = view.turn;
   return (
     <div className="turn-tab turn-story">
+      <div className="turn-ask-row">
+        <AskButton question={`Summarize turn ${t.turn_id}`} label="Ask: Summarize this turn" />
+      </div>
       {t.kind === "agent_turn" ? <AgentTurnStory {...props} /> : t.kind === "round_end" ? <RoundEndStory {...props} /> : <InitStory {...props} />}
       <EditsSection view={view} />
       <EventsSection view={view} />

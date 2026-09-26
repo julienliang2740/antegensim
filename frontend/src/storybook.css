@@ -1,0 +1,199 @@
+/*
+ * Storybook tab styles (components/run/StorybookTab.tsx; OWNER WP6).  The tab
+ * fills the run page's side panel: a fixed header (label, status line, opening
+ * entry, following chip, tools) over a scrolling entry list, so "follow new
+ * entries only while scrolled to the bottom" works on the list itself.  Colours
+ * come from the index.css tokens; the few literal colours have dark overrides.
+ * Class prefix .storybook-* (the Turn record already owns .story-*).
+ */
+
+.storybook {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.storybook-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.storybook-titlebar {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.storybook-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-style: italic;
+}
+
+.storybook-story-link {
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.storybook-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-alt);
+  font-size: 12.5px;
+}
+
+.storybook-status-parts {
+  color: var(--muted);
+}
+
+.storybook-auto[aria-pressed="true"] {
+  border-color: var(--good);
+  background: var(--good-bg);
+  color: var(--good);
+  font-weight: 600;
+}
+
+.storybook-paused {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--warn-border);
+  border-radius: 6px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 12.5px;
+}
+
+.storybook-opening {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: 4px 10px 6px;
+}
+
+.storybook-opening > summary {
+  font-weight: 600;
+}
+
+.storybook-follow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--accent-bg);
+  font-size: 12.5px;
+}
+
+.storybook-tools {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------------ entries */
+
+.storybook-list {
+  flex: 1 1 0;
+  min-height: 160px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 2px 8px;
+}
+
+.storybook-entry {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: 6px 10px 6px;
+  cursor: pointer;
+}
+
+.storybook-entry:hover {
+  border-color: var(--border-strong);
+}
+
+.storybook-entry.is-viewed {
+  border-left-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.storybook-entry-round {
+  background: var(--panel-alt);
+  border-left-color: var(--history);
+}
+
+.storybook-entry-heading {
+  margin: 0 0 4px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.storybook-entry-heading .btn-link {
+  text-decoration: none;
+}
+
+.storybook-entry-heading .btn-link:hover {
+  text-decoration: underline;
+}
+
+.storybook-viewed-badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.storybook-text {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.storybook-text p {
+  margin: 0 0 6px;
+}
+
+.storybook-text p:last-child {
+  margin-bottom: 0;
+}
+
+.storybook-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.storybook-regen {
+  font-weight: 500;
+  font-size: 11.5px;
+}

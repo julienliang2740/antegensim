@@ -24,6 +24,7 @@ import { withReopen } from "../../state/runSessions";
 import { ErrorLine, JsonBlock } from "../common/Problems";
 import { targetKey, turnIdOfCallId } from "../../state/records";
 import type { RecordTarget } from "../../state/records";
+import { AskButton } from "../assistant/AskButton";
 
 type Loaded = { kind: "packet"; packet: DecisionPacketRecord } | { kind: "call"; call: ModelCallRecord } | { kind: "pending"; view: PendingModelCallView };
 
@@ -285,8 +286,14 @@ export function ModelCallView(props: { call: ModelCallRecord; onOpen(target: Rec
   const u = r?.usage;
   const pending = c.status === "pending";
   const waiting = "waiting for the reply";
+  const failed = c.status === "failed" || (r !== null && r !== undefined && r.status !== "ok");
   return (
     <div className="call-view">
+      {failed ? (
+        <div className="action-row">
+          <AskButton question={`Explain the failure of model call ${c.call_id} in turn ${c.turn_id}`} label="Ask: Explain this failure" />
+        </div>
+      ) : null}
       <Facts
         rows={[
           ["agent", <code key="agent">{c.agent_id}</code>],

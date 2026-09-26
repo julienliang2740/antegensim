@@ -2,23 +2,31 @@
 
 Empyrean is a local, turn-based artificial-life world in which each agent is a language model: on its turn an agent gets a bounded decision packet built only from what it knows, returns one JSON decision, and the world engine applies the rules, costs and effects. Every turn is saved as a readable JSON checkpoint, so a run can be paused, inspected turn by turn, edited ("god mode") and continued from any point in its history.
 
-The backend is Python 3.12 with FastAPI (`backend/empyrean`). The UI is Vite, React 19 and TypeScript (`frontend/`). Requirements are in `llm_world_technical_spec.md` and `llm_world_running_design.md`. The contract the code follows is `docs/INTERFACES.md`.
+A built-in **assistant** explains the world and the controls, reads a run's records to answer questions, proposes changes as execution briefs that run only after you approve them, writes a per-turn **Storybook**, and turns a run into a chaptered story in **Story Mode**. You can speak to it with **Dictate** (local Whisper).
 
-Documentation:
+The backend is Python 3.12 with FastAPI (`backend/empyrean`). The UI is Vite, React 19 and TypeScript (`frontend/`). Requirements are in `llm_world_technical_spec.md` and `llm_world_running_design.md`.
+
+Documentation (full list with audiences in [docs/INDEX.md](docs/INDEX.md)):
 
 | File | What it holds |
 | --- | --- |
-| [docs/INTERFACES.md](docs/INTERFACES.md) | The contract: ids and the run state machine (§3), storage layout (§5), decision JSON (§6), events (§7), turn procedure (§8), API (§9), interventions (§10), fake models (§12), testing (§13) |
+| [CLAUDE.md](CLAUDE.md) | Coding practice for people and coding agents: commands, the model boundary, secrets, commits, the docs rule |
+| [docs/SYSTEM.md](docs/SYSTEM.md) | How the simulation works end to end, and common misreadings |
+| [docs/CONTROLS.md](docs/CONTROLS.md) | Every control in the UI: label, effect, API call, allowed states |
+| [docs/ASSISTANT.md](docs/ASSISTANT.md) | The assistant: models, budgets, briefs, storybook, Story Mode, Dictate |
+| [docs/GLOSSARY.md](docs/GLOSSARY.md) | Every domain term |
+| [docs/CODE_MAP.md](docs/CODE_MAP.md) | Where each piece of code lives |
+| [docs/INTERFACES.md](docs/INTERFACES.md) | The detailed contract: ids and the run state machine (§3), storage layout (§5), decision JSON (§6), events (§7), turn procedure (§8), API (§9), interventions (§10), fake models (§12), testing (§13), change log (§14) |
 | [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md) | Every rule the design leaves open, with its config key and default |
-| [docs/TEST_EVIDENCE.md](docs/TEST_EVIDENCE.md) | What was tested, with fake models and with a live model, and the results |
 | [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | Known issues and limitations, each with a next step |
-| [docs/TEST_PLAN.md](docs/TEST_PLAN.md) | Which test covers each requirement |
+| [docs/TEST_PLAN.md](docs/TEST_PLAN.md) / [docs/TEST_EVIDENCE.md](docs/TEST_EVIDENCE.md) | Which test covers each requirement / what was tested and the results |
 
 ## Prerequisites
 
 - Linux or macOS with Python 3.12.
 - Node.js 20.19+ or 22.12+ (Vite 8 needs one of these; tested with Node 24.19) and npm.
-- Optional, for live runs through `claude-cli-*` models: the Claude Code CLI installed as `claude` on `PATH` and logged in.
+- Optional, for live runs through `claude-cli-*` models and for the assistant: the Claude Code CLI installed as `claude` on `PATH` and logged in. Without it the assistant answers from the docs only ("Docs search (AI offline)").
+- Optional, for Dictate: about 1.6 GB of disk for the Whisper model (downloaded to the Hugging Face cache on first load) and a few GB of RAM.
 - Optional, for the other providers: an API key or cloud credentials (see [Models and credentials](#models-and-credentials)).
 - Optional, for the browser check: Playwright's Chromium (installed by `npx playwright install chromium` if it is missing).
 
@@ -48,7 +56,7 @@ cd backend && ../.venv/bin/python -m empyrean.main
 cd frontend && npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 ```
 
-Open http://127.0.0.1:5173. The Vite dev server proxies `/api` to `http://127.0.0.1:8000`, so the browser only talks to port 5173. The UI is meant to be used through the dev server. `npm run build` type-checks and builds `frontend/dist`, but the backend does not serve it.
+Open http://127.0.0.1:5173 (use `localhost` or `127.0.0.1`: the browser only allows the microphone for Dictate in a secure context). The Vite dev server proxies `/api` to `http://127.0.0.1:8000`, so the browser only talks to port 5173. The UI is meant to be used through the dev server. `npm run build` type-checks and builds `frontend/dist`, but the backend does not serve it.
 
 Backend options (environment variables or `.env`):
 
@@ -59,8 +67,23 @@ Backend options (environment variables or `.env`):
 | `EMPYREAN_MODELS_FILE` | `backend/empyrean/models.example.json` | Model registry |
 | `EMPYREAN_LOG_LEVEL` | `INFO` | Backend log level |
 | `EMPYREAN_FSYNC` | `1` | `0` skips fsync of turn files: commits are about 2.5x faster and a process crash is still safe, but a power loss is not |
+| `EMPYREAN_FSYNC_WORKERS` | `8` | Threads that fsync turn files in parallel |
 | `EMPYREAN_CODE_REVISION` | `dev` | Label written into each manifest and turn record |
 | `EMPYREAN_API_PROXY` (frontend) | `http://127.0.0.1:8000` | Where the Vite dev server sends `/api` |
+| `EMPYREAN_ASSISTANT_MODEL_CHAT` | `claude-cli-sonnet-assistant` | Model key of the assistant drawer |
+| `EMPYREAN_ASSISTANT_MODEL_NARRATOR` | `claude-cli-haiku-assistant` | Model key that writes storybook entries |
+| `EMPYREAN_ASSISTANT_MODEL_AUTHOR` | `claude-cli-sonnet-assistant` | Model key of Story Mode (brief and chapters) |
+| `EMPYREAN_ASSISTANT_MODEL_SUMMARIZER` | `claude-cli-haiku-assistant` | Model key for conversation memory and story-so-far summaries |
+| `EMPYREAN_ASSISTANT_CHAT_BUDGET_USD` | `5.0` | Assistant chat spend limit per scope (a run, or the global pages) |
+| `EMPYREAN_ASSISTANT_STORYBOOK_BUDGET_USD` | `2.0` | Storybook spend limit per run |
+| `EMPYREAN_ASSISTANT_STORY_BUDGET_USD` | `5.0` | Spend limit per Story Mode job (the story brief may set its own) |
+| `EMPYREAN_ASSISTANT_MESSAGE_BUDGET_USD` | `0.75` | Spend limit per assistant message (all its steps) |
+| `EMPYREAN_ASSISTANT_GLOBAL_BUDGET_USD` | `20.0` | Assistant spend limit across everything in this backend |
+| `EMPYREAN_STORYBOOK_AUTO` | `auto` | `on` / `off` / `auto`: automatic narration of new runs (`auto`: on unless a paid narrator would narrate an all-fake-agent run) |
+| `EMPYREAN_WHISPER_MODEL` | `large-v3-turbo` | Whisper model for Dictate (`medium` and `small` are faster, less accurate; `off` disables Dictate) |
+| `EMPYREAN_WHISPER_PRELOAD` | `1` | Load the Whisper model when the backend starts (about 16 s, in the background) |
+
+Assistant budgets are list-price estimates in USD and are metered separately from the agents' `real_usage`; per-run limits can also be raised in the UI. See [docs/ASSISTANT.md](docs/ASSISTANT.md).
 
 To run a second, separate instance (for example for tests), give it its own port and worlds folder:
 
@@ -76,7 +99,7 @@ Only one backend process may have a given run open at a time. A second process g
 ### Create a run
 
 1. On the entry page choose **New session**.
-2. The form starts with 8 prefilled agent cards. You can have 6 to 11 (**Add agent card**, **Remove this card**). Each card has an id, a name, a start point, all stats and a model. The form also holds the world settings (seed, plants, fruit), the context and memory settings, the play delay and an optional real-money budget (`real_budget_usd`).
+2. The form starts with 8 prefilled agent cards. You can have 6 to 12 (**Add agent**; **Remove** in the table or **Remove this agent** in the card dialog). Each card has an id, a name, a start point, all stats and a model. The form also holds the world settings (seed, plants, fruit), the context and memory settings, the play delay and an optional real-money budget (`real_budget_usd`).
 3. **Validate setup** lists every problem by its path, for example `agents[2].stats.compute: must be a finite number >= 0`. Nothing is created until the problems are fixed.
 4. **Create and open** creates the run. It always opens **Paused** at `r00000_init`.
 
@@ -98,15 +121,26 @@ The status bar shows the run state, the acting agent, a pending model call with 
 
 - Click a map point to list every occupant; select one to open the inspector. For an agent you see stats, skills, knowledge, notebook, the decision packet it was given and the model call record (raw output, parsed JSON, usage, cost). For a plant you see the instance values and the species rules.
 - Previous/next round, previous/next turn and the turn list move through history. An orange HISTORY band names the turn you are viewing. **Return to live** goes back.
-- **Create continuation from turn …** starts a new run from the viewed turn. The original run and its later turns are left untouched.
+- **Create continuation from turn** (in God mode) starts a new run from the viewed turn. The original run and its later turns are left untouched.
+- The **Turn record** tab tells what happened in the viewed turn from the recorded facts; the **Rules** tab shows the rules and settings in force.
 
 ### God mode
 
-The **God mode** tab can set a stat, place or remove an entity, send a voice to one agent, to selected agents or to everyone, change species rules, change context settings, and change model assignments. Edits are staged. They apply at the start of the next turn and are recorded in that turn as interventions with before/after values.
+The **God mode** tab can set a stat, place or remove an entity, send a voice to one agent, to selected agents or to everyone, change species rules, prices, context settings, model assignments and run settings. Edits are staged. They apply at the start of the next turn and are recorded in that turn as interventions with before/after values. Edits staged by the assistant carry the origin `assistant`.
+
+### The assistant
+
+Open it with **Assistant** in the run page's left rail, the button at the bottom right of other pages, or Alt+A. Ask in plain language: how something works, what a control does, what is happening, why the run stopped, what an agent is up to. Answers link to turns, entities and docs sections. When you ask it to do something ("set up a fight arena with 10 agents", "step 3 rounds", "give a01 50 compute") it shows an execution brief with what will happen and any problems; nothing happens until you press **Approve**. Spend is shown in the drawer; the default models are Sonnet (chat, Story Mode) and Haiku (storybook, summaries) through the Claude Code CLI. **Dictate** (the microphone) transcribes speech into the text box. Details: [docs/ASSISTANT.md](docs/ASSISTANT.md).
+
+### Storybook and Story Mode
+
+The **Storybook** tab on the run page is an AI-written narrative with one entry per turn. New runs are narrated automatically (unless a paid narrator would narrate a run of free fake agents); for older runs, **Write missing** narrates the history on request and shows the estimated cost first. The **Turn record** stays the source of truth.
+
+**Story Mode** on the entry page turns any run into a chaptered story: pick a run, choose genre, tone, vividness and point of view, review the story brief with its cost estimate, accept it, and read the chapters as they are written. The story exports to Markdown.
 
 ### Resume a run
 
-On the entry page choose **Resume session**. The list shows each run's name, last saved round and turn, and save time. Opening a run resumes it **Paused** at its last saved turn. **Back to sessions** closes the run you are in; if a turn is running it is finished and saved first.
+On the entry page choose **Resume session**. The list shows each run's name, last saved round and turn, and save time. Opening a run resumes it paused at its last saved turn; **Story** on a row opens Story Mode for that run. **Back to sessions** closes the run you are in; if a turn is running it is finished and saved first.
 
 ## Literal god mode: edit files, then reload
 
@@ -136,6 +170,12 @@ worlds/world_<YYYYmmdd_HHMMSS>_<hex>/runs/run_<YYYYmmdd_HHMMSS>_<hex>/
     r00001_t01_a03/        round 1, turn 1, agent a03
     ...
     r00001_end/            round-end step (plants, fruit, upkeep, deaths)
+  assistant/               the assistant's data for this run (never inside turns/)
+    settings.json          storybook auto flag and budgets
+    usage.jsonl            the run's assistant spend ledger
+    storybook/entries/     one JSON file per narrated turn (opening.json for the opening)
+    stories/<story_id>/    Story Mode sessions and chapters
+worlds/_assistant/         every assistant conversation (conversations/<id>/) and the global assistant ledger
 ```
 
 Each turn folder is a complete, readable checkpoint:
@@ -165,14 +205,16 @@ Models are defined in `backend/empyrean/models.example.json`. Agent cards and ru
 | Key | Provider | Needs |
 | --- | --- | --- |
 | `fake-heuristic`, `fake-scripted`, `fake-malformed` | `fake` | Nothing. Deterministic stand-ins used by the tests |
+| `fake-assistant` | `fake` | Nothing. Deterministic assistant stand-in (tests, demos); assistant only |
 | `claude-cli-haiku`, `claude-cli-haiku-prompted` | `claude_cli` | The `claude` CLI on `PATH`, logged in. No variable in `.env` |
+| `claude-cli-sonnet-assistant`, `claude-cli-haiku-assistant` | `claude_cli` | The `claude` CLI, logged in. Assistant only (per-call caps USD 0.25 / 0.08) |
 | `anthropic-haiku` | `anthropic` | `ANTHROPIC_API_KEY` |
 | `openai-mini` | `openai` | `OPENAI_API_KEY` |
 | `fireworks-llama` | `fireworks` | `FIREWORKS_API_KEY` |
 | `bedrock-haiku` | `bedrock` | The boto3 default credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`, profiles or roles); `AWS_REGION` overrides the entry's region |
 | `foundry-gpt` | `foundry` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` |
 
-`GET /api/models` reports, for each key, whether it is available and which variables are missing. The New session form shows the same information.
+`GET /api/models` reports, for each key, whether it is available and which variables are missing. The New session form shows the same information. Keys marked assistant only (`options.assistant_only` in the registry) are hidden from that list unless `?include_assistant=1` and are rejected on agent cards and in god mode.
 
 How secrets are handled:
 
@@ -191,9 +233,12 @@ Only the `fake` and `claude_cli` adapters have been run on this machine. The oth
 # fake model: free, about 3 seconds for 8 agents x 3 rounds
 .venv/bin/python scripts/run_sim.py --model fake-heuristic --agents 8 --rounds 3 --seed 1 \
     --worlds-dir /tmp/empyrean-worlds --name "fake 8x3"
+
+# a scenario: a partial run request deep-merged onto the defaults
+.venv/bin/python scripts/run_sim.py --request scripts/scenarios/arena_fight.json --rounds 5
 ```
 
-Options: `--model KEY` (default `fake-heuristic`), `--agents N` (6 to 11, default 8), `--rounds R` (default 3), `--seed S` (default 1), `--worlds-dir PATH` (default `EMPYREAN_WORLDS_DIR` or `worlds/`), `--name NAME`, `--live-check`, `--timeout SECONDS` (default 900).
+Options: `--model KEY` (default `fake-heuristic`), `--agents N` (6 to 12, default 8), `--rounds R` (default 3), `--seed S` (default 1), `--worlds-dir PATH` (default `EMPYREAN_WORLDS_DIR` or `worlds/`), `--name NAME`, `--request FILE` (a JSON overlay: `world`, `rules` and `context` are deep-merged, other keys such as `agents` replace the default; see `scripts/scenarios/`), `--assistant` (run the assistant service in-process so the storybook is written; a paid narrator writes only with `EMPYREAN_ALLOW_LIVE=1`), `--live-check`, `--timeout SECONDS` (default 900).
 
 **Live models cost real money.** The script refuses any model whose provider is not `fake` unless `EMPYREAN_ALLOW_LIVE=1` is set:
 
@@ -224,15 +269,21 @@ Run these from the repository root:
 # live provider tests: skipped unless EMPYREAN_LIVE_TESTS=1; they make real, paid calls
 (cd backend && EMPYREAN_LIVE_TESTS=1 EMPYREAN_LIVE_MODELS=claude-cli-haiku ../.venv/bin/pytest -q -m live)
 
-# frontend: unit tests of the pure state modules, type-check + build, lint
-(cd frontend && node src/state/state.test.mjs && npm run build && npm run lint)
+# Whisper tests (marked `whisper`): run only when the model is already in the local cache
+(cd backend && ../.venv/bin/pytest -q -m whisper)
+
+# docs consistency (also part of the backend suite)
+.venv/bin/python scripts/check_docs.py
+
+# frontend: unit tests of the pure state modules, type-check, lint, build
+(cd frontend && node src/state/state.test.mjs && npx tsc -p tsconfig.app.json --noEmit && npm run lint && npm run build)
 ```
 
-`EMPYREAN_LIVE_MODELS` takes a comma-separated list of registry keys that have credentials configured.
+`EMPYREAN_LIVE_MODELS` takes a comma-separated list of registry keys that have credentials configured. The Whisper tests read a sample clip from `EMPYREAN_WHISPER_TEST_AUDIO` / `EMPYREAN_WHISPER_SAMPLE` or the default fixture path and skip when it is missing; `EMPYREAN_TEST_ENDPOINT` and `EMPYREAN_TEST_DEPLOYMENT` are placeholders the adapter unit tests use for the Azure registry entry. No test ever calls a paid model unless `EMPYREAN_LIVE_TESTS=1`.
 
 ## Browser check
 
-`qa/browser_check.mjs` drives the real UI in headless Chromium through 17 steps: entry page, cards, validation, run controls, timeline, crowded map point, inspectors, plant rules, god mode, resume and error recovery. It saves a screenshot per step and a `log.json` to `qa/out/<timestamp>/`. Start the backend and the dev server first, then:
+`qa/browser_check.mjs` drives the real UI in headless Chromium: entry page, cards, validation, run controls, timeline, crowded map point, inspectors, plant rules, god mode, resume and error recovery, plus the assistant drawer, a brief, the Storybook tab and Story Mode with fake models. It saves a screenshot per step and a `log.json` to `qa/out/<timestamp>/`. Start the backend and the dev server first, then:
 
 ```bash
 cd qa && node browser_check.mjs                  # uses BASE_URL=http://127.0.0.1:5173, API_URL=http://127.0.0.1:8000
@@ -242,4 +293,4 @@ It creates runs (named `qa browser …`) in the backend's worlds folder. To keep
 
 ## Scope
 
-This is a local, single-operator prototype. The backend listens on `127.0.0.1` and has no authentication. Do not expose it on a network. See [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for what is not done yet.
+This is a local, single-operator prototype. The backend listens on `127.0.0.1` and has no authentication. Do not expose it on a network: anyone who can reach it can spend your model budget through the assistant. See [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for what is not done yet.

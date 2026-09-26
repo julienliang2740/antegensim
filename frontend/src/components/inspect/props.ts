@@ -109,6 +109,8 @@ export interface InspectorPanelProps {
   onOpenPacket(packetId: string): void;
   agentView: boolean;
   onToggleAgentView(): void;
+  /** Optional (rev 4): "Ask" button in the entity header; called with the prefilled question ("What is <name> up to?"). */
+  onAsk?(question: string): void;
 }
 
 /**

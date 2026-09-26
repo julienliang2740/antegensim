@@ -1,6 +1,6 @@
 # Limitations and known issues
 
-State of the prototype on 2026-09-25, after the final fix pass (reload ordering, agent view and the UI display fixes) and its final verification. Each item ends with a suggested next step. Severity follows the QA reports: **major** means an operator can get a wrong result without being told; **minor** means it is inconvenient or incomplete, not wrong.
+State of the prototype on 2026-09-25, after the final fix pass (reload ordering, agent view and the UI display fixes) and its final verification, plus the assistant release of 2026-09-26 (section "The assistant", whose measurements are refreshed by the assistant verification pass). Each item ends with a suggested next step. Severity follows the QA reports: **major** means an operator can get a wrong result without being told; **minor** means it is inconvenient or incomplete, not wrong.
 
 Evidence for the items below is in [TEST_EVIDENCE.md](TEST_EVIDENCE.md) and in `docs/evidence/`.
 
@@ -33,7 +33,7 @@ From the browser re-test of the final code (`docs/evidence/browser_qa.md` §4, p
   - *Next step:* record field-level changes for species edits, as `diff_working` does for file edits.
 - **Runs saved before the final fix pass lack the new cost fields.** Their turn-record call buttons and failed-call log lines show no reasoning tokens, USD cost or "provider billed" note. The full model call record still shows both.
   - *Next step:* fall back to the model call record when a stored event or index lacks the fields, or accept this for old runs.
-- **Frontend lint has 4 warnings (0 errors).** One `react(only-export-components)` in `inspect/common.tsx:38`, two `react(refs)` in `MapView.tsx:490`, where the portal tooltip reads `svgRect.current` during render (placement is correct because each hover change re-renders the tooltip, but a layout change without a hover change could leave it stale until the next mouse move), and one `react(set-state-in-effect)` in `RunPage.tsx:137`. The two `react(jsx-key)` warnings were fixed by the lead.
+- **Frontend lint had 4 warnings (0 errors) before the assistant release; the count is refreshed in `docs/TEST_EVIDENCE.md` after it.** One `react(only-export-components)` in `inspect/common.tsx:38`, two `react(refs)` in `MapView.tsx:490`, where the portal tooltip reads `svgRect.current` during render (placement is correct because each hover change re-renders the tooltip, but a layout change without a hover change could leave it stale until the next mouse move), and one `react(set-state-in-effect)` in `RunPage.tsx:137`. The two `react(jsx-key)` warnings were fixed by the lead.
   - *Next step:* keep the SVG rect in state (set on hover, scroll and resize) and give the row fragments keys.
 
 Fixed in the final fix pass and confirmed by the browser pass (`browser_qa.md` §1): the next-round order is shown in full; agent view draws the map and occupant list only from the agent's sightings (see the caveat above); the map tooltip is rendered beside the hovered cell, fully inside the window; the occupant list grows to 600 px and shows "N occupants — scroll for more"; action data has a Show/Hide full JSON control; Set stat shows `199.796` with "stored exactly as …" and has a 220 px input. `qa/browser_check.mjs` passed 17 of 17 with no console or page errors on the final code (`qa/out/2026-09-25_20-43-52/`).
@@ -65,6 +65,34 @@ Related live-only gaps:
 - **The 3 live pytest tests have run only for `claude-cli-haiku`.** On the final source: 2 of 3, then 3 of 3 (see the flaky-test item above). No other provider has credentials here.
   - *Next step:* run them for each provider alongside the per-provider live checks.
 
+- **Retried calls now bill every attempt (rev 4).** `provider_cost_usd` of a model call is the sum over all attempts that reported a cost (before, only the last attempt counted). A retried or failed-then-retried CLI call therefore charges `Manifest.real_usage` and `real_budget_usd` for every billed attempt; old runs keep their under-reported totals.
+  - *Next step:* none; this is the correct accounting. Compare budgets of old and new runs with this in mind.
+
+## The assistant
+
+The built-in assistant (`docs/ASSISTANT.md`) is new; these are its known limits.
+
+- **It depends on the Claude Code CLI.** Every default assistant model runs through the `claude` CLI (Sonnet for chat and Story Mode, Haiku for the storybook and summaries). Without the CLI, or when it is not logged in, the drawer only answers from docs search ("Docs search (AI offline)") and briefs, storybook and Story Mode are unavailable. Other providers can be configured per profile (`EMPYREAN_ASSISTANT_MODEL_*`) but are untested for the assistant.
+  - *Next step:* run the assistant playtest against an API provider once credentials exist.
+- **Model tiers are initial choices until the playtest lands.** The defaults (Sonnet chat/author, Haiku narrator/summarizer) come from the design; the ground-truthed comparison of Haiku, Sonnet and Opus per capability is recorded in the "Model tier evidence" table of `docs/ASSISTANT.md` by the verification pass.
+  - *Next step:* read that table; change `EMPYREAN_ASSISTANT_MODEL_*` defaults if the evidence says so.
+- **Answers are model output.** The assistant reads the run's records through tools and stamps "as of turn <id>", but it can still misread them. Agent thoughts are beliefs; the Turn record, events and model-call records are the facts. Storybook entries and Story Mode chapters are narrative and may embellish (the story brief lists what stays faithful).
+  - *Next step:* check a surprising answer against the linked turn.
+- **Spend figures are list-price estimates.** The CLI reports a cost per call; when it does not, the ledger estimates from tokens with a price table (`config.ASSISTANT_PRICES`, keyed by the served model). Subscription or discounted pricing is not modelled. Assistant spend is never part of `real_usage` or `real_budget_usd`.
+  - *Next step:* none; limits are there to stop runaway use, not for billing.
+- **Latency.** Each model step is a CLI subprocess of several seconds (7-20 s measured for Haiku decisions); a question that needs tools can take up to 4 steps (90 s cap). The first Dictate after a start without preload waits for the Whisper model to load (about 16 s).
+  - *Next step:* the playtest records p50/p90 per capability; streaming answers are not implemented.
+- **Cancellation stops after the current step.** Stop kills a running CLI call (`cancelled`), but a call already answered is billed.
+- **Storybook catch-up is manual and serial.** History is narrated only on "Write missing"; one narration job runs per run and background narration yields to agents' CLI calls, so a long run's backlog takes minutes (about USD 0.008 per Haiku call before batching; up to 12 turns per batched call).
+  - *Next step:* none planned; the estimate is shown before it starts.
+- **Story Mode writes chapters sequentially.** Chapters are generated 3 ahead of the reader (or all with "Generate all"); one story job runs at a time and others queue. A 285-turn run is about 285 chapters at one per turn; per-round chapters are one click away.
+- **Dictate needs a secure context and CPU time.** The browser gives microphone access only on `localhost` or HTTPS, so opening the UI by the machine's IP address disables Dictate. Transcription uses the CPU (about 7 s for an 11 s clip with `large-v3-turbo`); one transcription runs at a time and at most 60 s of audio is accepted. The model needs about 1.6 GB of disk.
+  - *Next step:* `EMPYREAN_WHISPER_MODEL=small` on slow machines.
+- **Prompt injection is mitigated, not impossible.** Agent-written text reaches the assistant only inside nonce-fenced data blocks and the model can never execute anything itself (every change is an approved, server-validated brief), but a misleading agent message could still colour an answer.
+- **Conversations are local and unshared.** They live under `worlds/_assistant/`; there is no memory across conversations and no multi-user access. Continuations do not copy a run's `assistant/` folder, so a continuation starts with an empty storybook (its opening cites the parent).
+- **The docs are its knowledge.** A stale doc produces a stale answer. `scripts/check_docs.py` catches structural drift (paths, symbols, routes, variables, labels, assumption ids, test ids) but not a wrong sentence.
+  - *Next step:* follow the docs rule in `CLAUDE.md`.
+
 ## Calibration questions still open
 
 The design's "Open decisions and next experiments" are not settled. The defaults are in `docs/ASSUMPTIONS.md` and can all be changed through configuration.
@@ -93,7 +121,7 @@ As listed in `docs/ASSUMPTIONS.md`: construction, persistent networks, fields, a
 
 ## Browser support
 
-The UI was tested only in Chromium (Playwright, headless) at 1440x900 and 1100x750. Firefox, Safari, Edge, small screens and touch input have not been tried. The layout assumes a desktop window; the wide inspector turns on at 1360 px and above. The frontend has 25 unit tests for its state modules and no component tests. Clarity (U14) was judged by people from screenshots, not by assertions.
+The UI was tested only in Chromium (Playwright, headless) at 1440x900 and 1100x750. Firefox, Safari, Edge, small screens and touch input have not been tried. The layout assumes a desktop window; the wide inspector turns on at 1360 px and above. The frontend has node unit tests for its pure state modules (`src/state/state.test.mjs`) and no component tests. Clarity (U14) was judged by people from screenshots, not by assertions.
 
 - *Next step:* run `qa/browser_check.mjs` in Firefox and WebKit (Playwright supports both), and state a minimum window size in the UI.
 
@@ -101,9 +129,11 @@ The UI was tested only in Chromium (Playwright, headless) at 1440x900 and 1100x7
 
 This is a local, single-operator prototype, as the spec asks.
 
-- The backend binds to `127.0.0.1` and has no authentication or user accounts. Anyone who can reach the port can create, run, read and edit runs.
+- The backend binds to `127.0.0.1` and has no authentication or user accounts. Anyone who can reach the port can create, run, read and edit runs, and spend the assistant's budget.
 - One process can have a run open at a time (a file lock). There is no shared or multi-user editing.
 - CORS allows only the local Vite ports (5173, 5174).
 - Runs are plain files on the local disk. There is no database, no backup and no migration between schema versions.
+- The resilience harness (`qa/resilience/rlib.py`, `qa/resilience/run_all.sh`) hard-codes the checkout path `/home/ubuntu/antegensim`.
+  - *Next step:* derive the root from the script location.
 - After a crash, event sequence numbers after the last saved turn can be reused. This is by design: the saved history never repeats a number, and `feed_epoch` changes so the UI resets its feed.
 - *Next step:* before exposing the backend beyond localhost, add authentication and HTTPS, and decide how several operators would share a run.

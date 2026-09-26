@@ -745,6 +745,12 @@
   grid-template-rows: minmax(0, 1fr) var(--splitter) auto;
 }
 
+/* The docked assistant drawer (>= 1280 px, run page): the layout keeps room for it on the right. */
+.run-layout.run-assistant-docked {
+  --assistant-w: 0px;
+  padding-right: calc(10px + var(--assistant-w));
+}
+
 /* Drag handles between the panels (three-column layout only). */
 .splitter {
   position: relative;
@@ -883,6 +889,17 @@ body.is-resizing-y * {
   align-self: flex-start;
 }
 
+.rail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.rail-story-link {
+  font-size: 12px;
+}
+
 .run-center {
   grid-area: center;
   position: relative;
@@ -956,11 +973,19 @@ body.is-resizing-y * {
   border-bottom: 2px solid var(--border-strong);
 }
 
+/* One line, always: five tabs scroll sideways instead of wrapping to a second row (the width toggle sits in the panel header). */
 .tabs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
   gap: 3px;
   min-width: 0;
+  flex: 1 1 auto;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tab {
@@ -968,7 +993,8 @@ body.is-resizing-y * {
   border-bottom: none;
   border-radius: 6px 6px 0 0;
   background: var(--panel-alt);
-  padding: 5px 8px;
+  padding: 5px 6px;
+  flex: 0 0 auto;
   cursor: pointer;
   font-weight: 600;
   font-size: 13px;
@@ -985,10 +1011,45 @@ body.is-resizing-y * {
 
 .inspector-width-toggle {
   margin-left: auto;
-  margin-bottom: 3px;
   white-space: nowrap;
-  padding: 1px 6px;
-  font-size: 14px;
+  padding: 0 6px;
+  min-height: 20px;
+  font-size: 13px;
+}
+
+/* Under the tabs: the active tab's description and the width toggle (moved here so the tabs row stays one line). */
+.side-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px 2px 8px;
+  border: 1px solid var(--border);
+  border-top: none;
+  background: var(--panel-alt);
+  min-height: 24px;
+}
+
+.side-panel-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-label-short {
+  display: none;
+}
+
+@media (max-width: 419px) {
+  .tab-label-long {
+    display: none;
+  }
+  .tab-label-short {
+    display: inline;
+  }
 }
 
 [role="tabpanel"] {

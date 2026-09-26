@@ -9,7 +9,9 @@ what the fake models can and cannot prove.
 
 | What | Command | Needs |
 | --- | --- | --- |
-| All backend tests (unit + end-to-end, fake models) | `cd backend && ../.venv/bin/pytest -q` | nothing else; about 50 s |
+| All backend tests (unit + end-to-end + assistant + docs check, fake models) | `cd backend && ../.venv/bin/pytest -q` | nothing else; about 1 min |
+| Docs consistency only | `.venv/bin/python scripts/check_docs.py` | nothing else; a few seconds |
+| Whisper tests | `cd backend && ../.venv/bin/pytest -q -m whisper` | the Whisper model in the local cache and a sample clip |
 | End-to-end tests only | `cd backend && ../.venv/bin/pytest -q tests/test_e2e_*.py` | about 40 s |
 | Live provider tests | `cd backend && EMPYREAN_LIVE_TESTS=1 EMPYREAN_LIVE_MODELS=claude-cli-haiku ../.venv/bin/pytest -q -m live` | credentials or CLI login; costs money |
 | Headless run with a summary | `.venv/bin/python scripts/run_sim.py [--model KEY --agents N --rounds R --seed S --worlds-dir PATH --name NAME]` | nothing for fake models |
@@ -32,7 +34,7 @@ ends in `error`.
 | # | Criterion | Verified by |
 | --- | --- | --- |
 | 1 | An eight-agent run can pause, restart and continue without losing state or repeating a committed action | `test_e2e_run.py::test_close_reopen_and_restart_continue_without_repeating` (close + open, then a fresh RunManager; next turn id = the scheduled one; unique turn ids and seqs; every agent acts once per round). `::test_crash_recovery_discards_partial_turn_and_carries_interrupted_call` (a half-written `.partial_` dir never replaces the checkpoint; a leftover pending call becomes an interrupted, uncharged record; the re-run uses `_02`). `::test_run_turn_step_round_play_pause_and_layout`. Browser `play-pause`, `resume` |
-| 2 | New/resumed sessions open paused; cards have defaults; Run turn, Play, Pause behave as described | `test_e2e_run.py::test_create_run_from_defaults_opens_paused_with_init_checkpoint`, `::test_defaults_support_six_to_eleven_cards`, `::test_setup_validation_reports_every_problem_by_path`, `::test_run_turn_step_round_play_pause_and_layout` (one turn per Run turn; Step round ends at `r00001_end`; Play then Pause gives `pause_requested` then `paused`; overlapping commands get 409), `::test_pause_during_a_model_call_finishes_and_saves_that_turn`, `::test_max_rounds_finishes_and_update_run_settings_revives`. Browser `entry`, `new-session-cards`, `edit-card`, `invalid-value`, `create-run`, `run-turn`, `play-pause`, `step-round`, `resume` |
+| 2 | New/resumed sessions open paused; cards have defaults; Run turn, Play, Pause behave as described | `test_e2e_run.py::test_create_run_from_defaults_opens_paused_with_init_checkpoint`, `::test_defaults_support_six_to_twelve_cards`, `::test_setup_validation_reports_every_problem_by_path`, `::test_run_turn_step_round_play_pause_and_layout` (one turn per Run turn; Step round ends at `r00001_end`; Play then Pause gives `pause_requested` then `paused`; overlapping commands get 409), `::test_pause_during_a_model_call_finishes_and_saves_that_turn`, `::test_max_rounds_finishes_and_update_run_settings_revives`. Browser `entry`, `new-session-cards`, `edit-card`, `invalid-value`, `create-run`, `run-turn`, `play-pause`, `step-round`, `resume` |
 | 3 | Live terminal-style logs, clear run status, return from history to live | `test_e2e_run.py::test_live_feed_polling_returns_new_events_in_order` (the feed and turn history are the same events), `::test_pause_during_a_model_call_finishes_and_saves_that_turn` (pending call visible while waiting), `feed_epoch` change on reopen. Browser `run-turn` (a `[r1 t1]` feed line), `timeline` (return to live), `error-recovery` (error state and "Recover (pause)") |
 | 4 | A point and every occupant can be inspected across rounds; agent knowledge and plant rules are visible | Browser `crowded-coordinate`, `select-occupants`, `agent-inspector`, `plant-rules`, `timeline`. API: every test reads `TurnView` history per turn. `test_e2e_godmode.py::test_plant_rules_are_readable_and_editable_as_a_species_change` |
 | 5 | Direct and skill actions share rule enforcement; malformed output and invalid actions fail without crashing or applying forbidden effects | `test_e2e_rules.py` (all tests). Unit: `test_world.py`, `test_skills.py` |
@@ -56,7 +58,7 @@ ends in `error`.
 | U8 | Change stats, place/remove objects | `test_set_stat_place_and_remove_entity_without_charging_agents`, `test_unaffordable_agent_is_skipped_and_starves_at_round_end` (set_stat). Browser `god-mode` |
 | U9 | Edit files directly and in game, with an explicit apply | `test_working_file_edit_and_reload_records_before_after`, `test_invalid_working_json_is_reported_and_state_stays_intact`, plus the UI-path tests above |
 | U10 | Resume an old session / start a new one | Browser `entry`, `resume`. API: `test_close_reopen_and_restart…` (`GET /runs` lists the run, reopen) |
-| U11 | Agents as cards prefilled with defaults | `test_create_run_from_defaults…`, `test_defaults_support_six_to_eleven_cards`, `test_setup_validation_reports_every_problem_by_path`, `test_card_on_a_mountain_is_moved_to_land_with_a_warning`. Browser `new-session-cards`, `edit-card`, `invalid-value` |
+| U11 | Agents as cards prefilled with defaults | `test_create_run_from_defaults…`, `test_defaults_support_six_to_twelve_cards`, `test_setup_validation_reports_every_problem_by_path`, `test_card_on_a_mountain_is_moved_to_land_with_a_warning`. Browser `new-session-cards`, `edit-card`, `invalid-value` |
 | U12 | Run turn, play and pause | `test_run_turn_step_round_play_pause_and_layout`, `test_pause_during_a_model_call_finishes_and_saves_that_turn`. Browser `run-turn`, `play-pause`, `step-round` |
 | U13 | See things in real time | `test_live_feed_polling_returns_new_events_in_order`, `test_pause_during_a_model_call…` (the `model_call_pending` event and `GET /pending_model_call`). Browser `run-turn` feed line |
 | U14 | Clarity over aesthetics | Browser screenshots of every step for human review. Status line (`create-run`), occupant list (`crowded-coordinate`). Judged by a person, not asserted |
@@ -97,6 +99,36 @@ ends in `error`.
 | attack charges the nominal budget adjusted in a skill; absorption losses are not recoverable | Unit: `test_world.py::test_attack_budget_10_charges_10_or_8_and_deals_10_damage`, `::test_absorb_100_compute_at_20_percent_gains_20_destroys_80_costs_3` |
 | no skill gets multiple world actions in one turn | `test_design_example_1…` (exactly one `action` event per skill turn) |
 | unaffordable minimum packet → explicit resource result; starvation at round end | `test_e2e_rules.py::test_unaffordable_agent_is_skipped_and_starves_at_round_end` |
+
+## Assistant release (rev 4)
+
+Every assistant test uses fake model keys (`fake-assistant`, or `fake-scripted` with a script);
+no test reaches the Claude CLI. The app in `conftest.py` is built without an `AssistantService`
+(assistant routes answer 503), so tests that need the assistant build their own service with
+`auto_live_allowed=False`. Whisper tests carry the `whisper` marker and skip unless the model is
+already in the local Hugging Face cache and a sample clip exists (`EMPYREAN_WHISPER_TEST_AUDIO`,
+`EMPYREAN_WHISPER_SAMPLE`); they never download anything.
+
+| Requirement | Verified by |
+| --- | --- |
+| All model and speech calls go through `model.py` (recursive scan, no allowlist) | `test_e2e_boundaries.py::test_provider_sdks_are_imported_only_by_model_py`, `::test_speech_packages_are_referenced_only_by_model_py` |
+| Shared contracts: error codes, assistant-only refs, 503 without a service, commit listeners never break commits, `command_allowed` and `validate_intervention_on` parity | `test_assistant_contracts.py::test_new_api_error_codes_render`, `::test_api_models_hides_assistant_refs_unless_asked`, `::test_validate_agent_key_rejects_assistant_refs`, `::test_validate_setup_rejects_assistant_refs_for_agents`, `::test_assistant_routes_are_503_without_a_service`, `::test_commit_listeners_fan_out_and_never_break_commits`, `::test_command_allowed_parity_with_run_worker_submit`, `::test_validate_intervention_on_matches_worker_and_uses_agent_key_rule`, `::test_call_profile_records_a_ledger_line_with_a_fake_key`, `::test_assumptions_registry_has_god_and_assistant_entries` |
+| Text mode, fake-assistant, error codes, cancellation, cost summed over attempts | `test_model.py::test_text_mode_claude_cli`, `::test_text_mode_has_no_json_instruction_overhead`, `::test_fake_assistant_script_then_reply_then_invalid_config`, `::test_error_codes_for_timeout_missing_cli_and_sdk_errors`, `::test_cancel_kills_the_cli_process_group`, `::test_cancel_between_retries_stops_retrying`, `::test_kill_inflight_stops_running_calls`, `::test_provider_cost_is_summed_over_attempts`, `::test_structured_output_names_follow_the_purpose` |
+| Storybook: default auto rule, old runs off, no silent catch-up, batching, re-queue, budget pause, dedup, lock, continuation opening, read-only GET | `test_assistant_storybook.py::test_default_auto_rule_matrix`, `::test_existing_runs_without_settings_stay_off`, `::test_switching_auto_on_later_never_catches_up_history`, `::test_backlog_is_batched_per_round`, `::test_batch_with_missing_section_is_requeued_singly`, `::test_budget_pause_and_resume`, `::test_dedup_between_listener_and_manual_generate`, `::test_second_process_lock_blocks_writing`, `::test_continuation_opening_recalls_the_parent`, `::test_routes_get_is_read_only_and_generate_writes`, `::test_raising_and_slow_handlers_never_break_commits` |
+| Dictate: body caps (413), busy queue (409), unavailable (503), redacted errors, preload only in main, initial prompt | `test_speech.py::test_transcribe_413_when_declared_length_exceeds_cap`, `::test_transcribe_413_when_chunked_stream_exceeds_cap`, `::test_transcribe_409_when_speech_queue_full`, `::test_transcribe_503_while_speech_not_ready`, `::test_transcribe_error_result_is_200_and_redacted`, `::test_create_app_does_not_start_a_preload`, `::test_compose_initial_prompt_keeps_names_and_trims_glossary_first`, `::test_every_speech_error_code_is_an_api_error_code` |
+| Whisper transcribes a real clip (marker `whisper`) | `test_model.py::test_whisper_transcribes_the_jfk_sample`, `test_speech.py::test_real_whisper_transcribes_jfk_clip` |
+| Chat engine, briefs (validation without opening a run, CAS approve, idempotent effect, staged origin `assistant`), conversation store, ledger and budgets, knowledge loader, assistant API; digest and Story Mode | the WP2/WP3 test files `test_assistant_engine.py`, `test_assistant_briefs.py`, `test_assistant_store.py`, `test_assistant_ledger.py`, `test_assistant_knowledge.py`, `test_assistant_api.py`, `test_assistant_digest.py`, `test_assistant_story.py` (node ids added here when they land) |
+| Docs match the code (paths, symbols, routes, registry keys, env vars, assumption ids, these test ids, control labels, stale phrases, index) | `test_docs_consistency.py::test_docs_match_the_code` (runs `scripts/check_docs.py`) |
+| Frontend: assistant context store, answer formatting, brief rendering, Story Mode helpers, the `story` route | `node src/state/state.test.mjs` (in `frontend/`) |
+| Browser (fake models): drawer, brief approve creates a run, Storybook entries, Story Mode to the first chapter, Dictate disabled state, tabs row height < 34 px, docked drawer width, first-time user | `qa/browser_check.mjs` assistant steps (see `qa/README.md`) |
+| Model tiers per capability, format reliability, latency and cost (LIVE, budgeted) | `scripts/assistant_playtest.py`, `scripts/assistant_replay_malformed.py`; results in `docs/ASSISTANT.md` "Model tier evidence" |
+
+Browser steps for a manual check of the assistant (fake keys, as in `qa/README.md`):
+open a run, press **Assistant**, ask "What is going on right now?" (an answer with turn links);
+ask "Step 2 rounds" (a brief whose "What will happen" names step_round ×2; **Approve** and watch
+the run advance); open the **Storybook** tab (entries appear as turns commit); on the entry page
+choose **Story Mode**, pick the run, accept the brief and read chapter 1; hover **Dictate** when
+the page is opened by IP address (disabled, "open via localhost").
 
 ## Mocked vs live
 

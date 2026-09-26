@@ -88,7 +88,7 @@ was built without an AssistantService):
     POST   /api/runs/{run_id}/assistant/stories/{story_id}/approve StoryApproveRequest -> StoryView (202)
     POST   /api/runs/{run_id}/assistant/stories/{story_id}/reject StoryRejectRequest -> StoryView
     POST   /api/runs/{run_id}/assistant/stories/{story_id}/cancel -> StoryView
-    POST   /api/runs/{run_id}/assistant/stories/{story_id}/continue StoryContinueRequest -> StoryView (202)
+    POST   /api/runs/{run_id}/assistant/stories/{story_id}/continue StoryContinueRequest {to_turn_id?, generate_all?, job_budget_usd?} -> StoryView (202)
     GET    /api/runs/{run_id}/assistant/stories/{story_id}/chapters/{n}?mark_read=1 -> StoryChapter
     GET    /api/runs/{run_id}/assistant/stories/{story_id}/export -> StoryExport
     POST   /api/assistant/transcribe?language=en&run_id=&initial_prompt= (raw audio body, async, 10 MB cap) -> TranscriptionResult
@@ -251,6 +251,17 @@ def create_app(manager: RunManager, assistant: Optional["AssistantService"] = No
 
     app = FastAPI(title="Empyrean", version=SCHEMA_VERSION, lifespan=lifespan)
     app.state.manager = manager
+
+    def _notify_assistant_run_created(run_id: str, request_body: Optional[RunCreateRequest]) -> None:
+        """Lets the assistant's storybook write ``<run>/assistant/settings.json`` and the opening
+        entry for a run created through the API (a continuation passes ``None``).  Never fatal:
+        run creation succeeded already."""
+        if assistant is None:
+            return
+        try:
+            assistant.notify_run_created(run_id, request_body)
+        except Exception:  # noqa: BLE001 - the assistant must never break run creation
+            logging.getLogger("empyrean.api").exception("assistant run-created hook failed for %s", run_id)
     app.state.assistant = assistant
     registry = getattr(manager, "registry", None)
     # add_middleware prepends: the error middleware is added first so CORS wraps it.
@@ -326,7 +337,9 @@ def create_app(manager: RunManager, assistant: Optional["AssistantService"] = No
 
     @app.post("/api/runs", response_model=RunSummary, status_code=201)
     def create_run(body: RunCreateRequest) -> RunSummary:
-        return manager.create_run(body)
+        summary = manager.create_run(body)
+        _notify_assistant_run_created(summary.run_id, body)
+        return summary
 
     @app.post("/api/runs/validate", response_model=RunValidationResponse)
     def validate_run(body: RunCreateRequest) -> RunValidationResponse:
@@ -442,7 +455,9 @@ def create_app(manager: RunManager, assistant: Optional["AssistantService"] = No
 
     @app.post("/api/runs/{run_id}/continuations", response_model=RunSummary, status_code=201)
     def create_continuation(run_id: str, body: ContinuationRequest) -> RunSummary:
-        return manager.create_continuation(run_id, body)
+        summary = manager.create_continuation(run_id, body)
+        _notify_assistant_run_created(summary.run_id, None)
+        return summary
 
     # -- assistant (rev 4) -----------------------------------------------------------
 

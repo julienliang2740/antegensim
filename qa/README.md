@@ -94,3 +94,34 @@ when the script is interrupted.
 
 The script creates runs in the backend's worlds dir. Their names start with
 `qa browser`.
+
+## Assistant, Storybook and Story Mode steps (rev 4)
+
+The assistant release adds browser steps that use fake models only (no spend): start the
+backend with the assistant on fake keys so every profile is free and deterministic:
+
+```bash
+cd backend && EMPYREAN_API_PORT=8011 EMPYREAN_WORLDS_DIR=/tmp/qa-worlds \
+  EMPYREAN_ASSISTANT_MODEL_CHAT=fake-assistant EMPYREAN_ASSISTANT_MODEL_NARRATOR=fake-assistant \
+  EMPYREAN_ASSISTANT_MODEL_AUTHOR=fake-assistant EMPYREAN_ASSISTANT_MODEL_SUMMARIZER=fake-assistant \
+  EMPYREAN_WHISPER_PRELOAD=0 ../.venv/bin/python -m empyrean.main
+```
+
+What they cover (the step ids are in `browser_check.mjs` and its `log.json`): the drawer opens
+from the launcher (**Assistant**), a question gets an answer, a create-run brief is approved and
+the run opens, entries appear in the **Storybook** tab, a Story Mode flow from the entry page
+(**Story Mode**) through the brief to the first chapter, the **Dictate** button's disabled state
+and its reason, the run-page tabs row stays one line (height under 34 px at 1280, 1440 and 1920 px
+with "God mode (3)"), the docked drawer leaves the map at least its minimum width, and a
+first-time user script ("What is Empyrean and how do I start?" through a create-run brief).
+Labels the script looks for are the ones in `docs/CONTROLS.md`; change both together.
+
+## Resilience harness
+
+`qa/resilience/` holds crash, restart, one-writer, playback, invalid-input, skill, context,
+voice, working-files, storage and reload-order scenarios (`a_crash_resume.py` ..
+`l_reload_order.py`) driven over HTTP by `rlib.py`, which starts its own backend
+(`RES_PORT`, `RES_WORLDS`, `RES_OUT`, `RES_LOG`). `run_all.sh` runs them all and writes one log
+per scenario to `qa/resilience/out/`. The scripts assume the checkout is at
+`/home/ubuntu/antegensim` (see `docs/LIMITATIONS.md`). Results are recorded in
+`docs/evidence/resilience.md`.

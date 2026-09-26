@@ -9,6 +9,17 @@ Every section is labelled:
 
 Requirement-to-test mapping is in [TEST_PLAN.md](TEST_PLAN.md). Known gaps are in [LIMITATIONS.md](LIMITATIONS.md).
 
+> **To be refreshed by the assistant verification pass (WP8).** Everything below records the
+> state before the assistant release (2026-09-25). The assistant release (2026-09-26) adds backend
+> tests (`test_assistant_*.py`, `test_speech.py`, `test_docs_consistency.py`), frontend state tests,
+> browser steps and live playtests, so these sections must be re-measured and replaced: the
+> Summary table; "Backend tests" (counts per file, skipped live and `whisper` tests); "Frontend"
+> (state test count, lint warnings); "Browser QA" (`browser_check.mjs` with the assistant steps);
+> and a new "Assistant" section (fake-model QA, the replay of stored malformed envelopes, the
+> Sonnet smoke and the ground-truthed playtest with per-call cost, latency and cache reads,
+> linking `docs/evidence/assistant_playtest.md`). The docs check (`scripts/check_docs.py`) result
+> belongs in the Summary table too. Until then, treat the counts below as historical.
+
 ## Summary
 
 | Area | Label | Result |

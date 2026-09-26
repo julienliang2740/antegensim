@@ -19,8 +19,9 @@ from typing import Any, Callable, Optional
 
 from .. import config, model, storage
 from ..runner import RunManager
-from ..schemas import SCHEMA_VERSION, utc_now_iso
-from . import calls
+from ..schemas import SCHEMA_VERSION, RunCreateRequest, utc_now_iso
+from . import calls, logbuffer
+from .knowledge import KnowledgeBase
 from .ledger import Ledger, global_aggregate
 from .models import (
     GLOBAL_SCOPE,
@@ -59,8 +60,11 @@ class AssistantService:
     * ``jobs``: ``JobView`` by id (``new_job`` / ``get_job`` / ``update_job``); ``cancel_events``
       by job id (``cancel_event(job_id)``).
     * ``auto_live_allowed``: unrequested generation with a non-fake key runs only when True.
-    * ``storybook`` / ``story`` / ``speech`` / ``engine`` / ``knowledge``: sub-services attached
-      by WP2-WP4 (None until they land); ``add_commit_handler(cb)`` for commit fan-in.
+    * ``engine`` (ChatEngine), ``knowledge`` (KnowledgeBase), ``logbuffer`` (RingBufferHandler)
+      are attached here; ``storybook`` / ``story`` / ``speech`` attach when WP3/WP4's classes
+      construct (None while they raise NotImplementedError); ``add_commit_handler(cb)`` for
+      commit fan-in; ``notify_run_created(run_id, request)`` after a brief creates a run.
+    * ``fake_metadata``: per-profile metadata for the fake adapter (tests).
     * ``call_profile(...)``: ``calls.call_profile(self, ...)``."""
 
     def __init__(
@@ -83,6 +87,7 @@ class AssistantService:
             "story": ThreadPoolExecutor(max_workers=1, thread_name_prefix="assistant-story"),
             "storybook": ThreadPoolExecutor(max_workers=1, thread_name_prefix="assistant-storybook"),
             "speech": ThreadPoolExecutor(max_workers=1, thread_name_prefix="assistant-speech"),
+            "sequencer": ThreadPoolExecutor(max_workers=2, thread_name_prefix="assistant-sequencer"),
         }
         self.jobs: dict[str, JobView] = {}
         self.cancel_events: dict[str, threading.Event] = {}
@@ -91,14 +96,79 @@ class AssistantService:
         self._handlers_lock = threading.Lock()
         self._shutdown = False
         self.started_at = utc_now_iso()
-        # Sub-services (attached by their work packages; None keeps every route on its 503/NotImplemented path).
+        # Test hook (fake adapter only, never forwarded to a real provider): per-profile metadata merged
+        # into every call, e.g. {"chat": {"fake_script": [...]}, "summarizer": {"fake_reply": "..."}}.
+        self.fake_metadata: dict[str, dict[str, Any]] = {}
+        # Sub-services (None keeps a route on its 503 path when a package has not landed).
         self.engine: Any = None
         self.knowledge: Any = None
         self.storybook: Any = None
         self.story: Any = None
         self.speech: Any = None
         self.logbuffer: Any = None
+        self.recovered_records = 0
         manager.add_commit_listener(self.on_commit)
+        self._attach_core()
+        self._attach_subservices()
+
+    def _attach_core(self) -> None:
+        """Log buffer, knowledge base, chat engine and restart recovery (each failure is logged,
+        never fatal: the service still serves capabilities and 503s)."""
+        try:
+            self.logbuffer = logbuffer.install(self.registry)
+        except Exception:  # noqa: BLE001
+            log.exception("log ring buffer not installed")
+        try:
+            self.knowledge = KnowledgeBase()
+            self.knowledge.load()
+        except Exception:  # noqa: BLE001
+            log.exception("knowledge base failed to load")
+        try:
+            from .engine import ChatEngine
+
+            self.engine = ChatEngine(self)
+        except Exception:  # noqa: BLE001
+            log.exception("chat engine failed to start")
+        try:
+            self.recovered_records = self.store.recover_interrupted()
+            if self.recovered_records:
+                log.info("assistant: %d interrupted records recovered", self.recovered_records)
+        except Exception:  # noqa: BLE001
+            log.exception("conversation recovery failed")
+
+    def _attach_subservices(self) -> None:
+        """Storybook, story and speech services (WP3/WP4) attach themselves when their modules
+        are implemented; a NotImplementedError placeholder leaves the attribute None."""
+        for name, module_name, class_name in (("storybook", "storybook", "StorybookService"), ("story", "story", "StoryService"), ("speech", "speech", "SpeechService")):
+            try:
+                module = __import__(f"{__package__}.{module_name}", fromlist=[class_name])
+                setattr(self, name, getattr(module, class_name)(self))
+            except NotImplementedError:
+                setattr(self, name, None)
+            except Exception:  # noqa: BLE001
+                log.exception("assistant sub-service %s failed to start", name)
+                setattr(self, name, None)
+        story = self.story
+        if story is not None and hasattr(story, "resume_interrupted"):
+            try:
+                story.resume_interrupted()
+            except NotImplementedError:
+                pass
+            except Exception:  # noqa: BLE001
+                log.exception("story resume failed")
+
+    def notify_run_created(self, run_id: str, request: Optional[RunCreateRequest]) -> None:
+        """Called after ``manager.create_run`` by the brief executor (and by anyone else creating
+        runs through the assistant): lets the storybook write settings.json and the opening."""
+        storybook = self.storybook
+        if storybook is None or not hasattr(storybook, "on_run_created"):
+            return
+        try:
+            storybook.on_run_created(run_id, request)
+        except NotImplementedError:
+            pass
+        except Exception:  # noqa: BLE001
+            log.exception("storybook on_run_created failed for %s", run_id)
 
     # -- lifecycle -------------------------------------------------------------------
 
@@ -191,7 +261,15 @@ class AssistantService:
                 settings = None
             if settings is not None:
                 limit = settings.chat_budget_usd
-        return self.ledger.budget_view(scope_key(run_id), "chat", limit)
+        scope = scope_key(run_id)
+        # Only the chat profile (and the conversation summariser) draws on the chat budget; the
+        # storybook narrator and Story Mode author have their own limits (D12).
+        spent = sum(
+            line.cost_usd
+            for line in self.ledger.lines(scope)
+            if line.profile == "chat" or (line.profile == "summarizer" and line.story_id is None)
+        )
+        return self.ledger.budget_view(scope, "chat", limit, spent)
 
     def storybook_budget(self, run_id: str) -> BudgetView:
         try:
@@ -257,6 +335,19 @@ class AssistantService:
         """Set the job's cancel event ('stopping after the current step' until the kill lands)."""
         self.cancel_event(job_id).set()
         return self.update_job(job_id, cancel_requested=True)
+
+    def conversation_job(self, conv_id: str, active_job_id: Optional[str]) -> Optional[JobView]:
+        """The conversation's active job, else its most recent finished chat job."""
+        if active_job_id:
+            job = self.get_job(active_job_id)
+            if job is not None:
+                return job
+        with self._jobs_lock:
+            jobs = [j for j in self.jobs.values() if j.conversation_id == conv_id and j.kind == "chat"]
+        if not jobs:
+            return None
+        jobs.sort(key=lambda j: (j.finished_at or j.started_at or "", j.job_id))
+        return jobs[-1]
 
     # -- capabilities ----------------------------------------------------------------------------
 

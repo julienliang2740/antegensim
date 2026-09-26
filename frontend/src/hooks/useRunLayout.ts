@@ -3,6 +3,11 @@
  * set with the drag splitters, remembered in localStorage and clamped to the
  * window so the map always keeps at least MIN_MAP_W pixels.  Null = the
  * default size.  Used only by the three-column layout (window >= 1200 px).
+ *
+ * `reserveW` (rev 4): pixels the docked assistant drawer takes on the right
+ * (state/assistantContext.dockReserve); it is subtracted from the window width
+ * before the clamps so the map keeps MIN_MAP_W beside the drawer, and returned
+ * as `reservedW` for the page's --assistant-w padding.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -64,9 +69,11 @@ export interface RunLayout {
   /** Back to the default size of one panel (double-click on its splitter). */
   resetPart(part: "rail" | "side" | "log"): void;
   reset(): void;
+  /** Pixels reserved on the right for the docked assistant drawer (0 when floating or closed). */
+  reservedW: number;
 }
 
-export function useRunLayout(sideWide: boolean): RunLayout {
+export function useRunLayout(sideWide: boolean, reserveW = 0): RunLayout {
   const [sizes, setSizes] = useState<PanelSizes>(load);
   const [win, setWin] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
   useEffect(() => {
@@ -76,14 +83,17 @@ export function useRunLayout(sideWide: boolean): RunLayout {
   }, []);
   useEffect(() => save(sizes), [sizes]);
 
-  const large = win.w >= 1560;
+  // The docked drawer takes room from the window before anything is clamped.
+  const reservedW = Math.max(0, Math.min(Math.round(reserveW), win.w));
+  const pageW = win.w - reservedW;
+  const large = pageW >= 1560;
   const defaultRail = large ? 268 : 252;
   const defaultSide = large ? 440 : 390;
-  const defaultWide = Math.round(Math.min(620, win.w * 0.44));
+  const defaultWide = Math.round(Math.min(620, pageW * 0.44));
   const defaultLog = Math.round(win.h * 0.36);
 
   // Clamp: the map keeps MIN_MAP_W; the right column gives way first, then the rail.
-  const spare = win.w - CHROME_W - MIN_MAP_W;
+  const spare = pageW - CHROME_W - MIN_MAP_W;
   const railW = Math.max(MIN_RAIL_W, Math.min(MAX_RAIL_W, sizes.railW ?? defaultRail, spare - MIN_SIDE_W));
   const sideMax = Math.max(MIN_SIDE_W, spare - railW);
   const wanted = sideWide ? (sizes.sideWideW ?? Math.max(defaultWide, sizes.sideW ?? defaultSide)) : (sizes.sideW ?? defaultSide);
@@ -102,5 +112,5 @@ export function useRunLayout(sideWide: boolean): RunLayout {
     [sideWide],
   );
 
-  return { threeColumn: win.w >= THREE_COLUMN_MIN_W, railW, sideW, logH, railMax, sideMax, logMax, setRailW, setSideW, setLogH, resetPart, reset };
+  return { threeColumn: win.w >= THREE_COLUMN_MIN_W, railW, sideW, logH, railMax, sideMax, logMax, setRailW, setSideW, setLogH, resetPart, reset, reservedW };
 }

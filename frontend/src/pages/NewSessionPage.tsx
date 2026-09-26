@@ -6,6 +6,12 @@
  * backend for every problem at once (POST /runs/validate) and shows each one
  * next to its field and in a summary; "Create and open" saves the initial
  * checkpoint (POST /runs) and opens the run paused.
+ *
+ * Rev 4: when the assistant hands over a create_run proposal ("Open in setup
+ * form instead"), sessionStorage "empyrean.assistant.setupDraft.v1" holds
+ * {agent_count, partial, source}; the page fetches the defaults for that
+ * agent count, merges the partial request (setupForm.mergeSetupDraft), removes
+ * the key and shows a banner until the user dismisses it.
  */
 
 import { useEffect, useState } from "react";
@@ -23,11 +29,14 @@ import { ModelSelect, UnavailableModels } from "../components/setup/ModelSelect"
 import { WorldSettings } from "../components/setup/WorldSettings";
 import { useFetched } from "../hooks/useFetched";
 import { navigate } from "../hooks/useHashRoute";
+import { publishContext } from "../state/assistantContext";
 import { errorText } from "../state/runSessions";
 import {
   MAX_AGENTS,
   MIN_AGENTS,
+  SETUP_DRAFT_KEY,
   applyOtherRules,
+  mergeSetupDraft,
   newCard,
   otherRulesText,
   previewAgent,
@@ -37,9 +46,25 @@ import {
   speciesList,
   withSpecies,
 } from "../state/setupForm";
+import type { SetupDraft } from "../state/setupForm";
 import "../setup.css";
 
 type Validation = "never" | "valid" | "invalid" | "stale";
+
+/** Read and remove the assistant's setup draft (null when absent or unreadable). */
+function takeSetupDraft(): SetupDraft | null {
+  try {
+    const raw = window.sessionStorage.getItem(SETUP_DRAFT_KEY);
+    if (!raw) return null;
+    window.sessionStorage.removeItem(SETUP_DRAFT_KEY);
+    const parsed = JSON.parse(raw) as Partial<SetupDraft>;
+    if (!parsed.partial || typeof parsed.partial !== "object") return null;
+    const count = typeof parsed.agent_count === "number" ? Math.min(MAX_AGENTS, Math.max(MIN_AGENTS, Math.round(parsed.agent_count))) : 8;
+    return { agent_count: count, partial: parsed.partial, source: typeof parsed.source === "string" ? parsed.source : "the assistant" };
+  } catch {
+    return null;
+  }
+}
 
 export function NewSessionPage() {
   const [request, setRequest] = useState<RunCreateRequest | null>(null);
@@ -55,19 +80,24 @@ export function NewSessionPage() {
   const [rulesText, setRulesText] = useState("");
   const [rulesTextError, setRulesTextError] = useState<string | null>(null);
   const [openCard, setOpenCard] = useState<number | null>(null);
+  const [draftBanner, setDraftBanner] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = "New session · Empyrean";
+    publishContext({ page: "new" });
     let cancelled = false;
+    const draft = takeSetupDraft();
     // The MAX_AGENTS request only supplies templates for "Add agent"; if it
     // fails (e.g. an older backend that caps agent_count lower) new rows copy
     // the last card instead (setupForm.newCard).
-    Promise.all([getDefaults(8), getDefaults(MAX_AGENTS).catch(() => null)])
+    Promise.all([getDefaults(draft?.agent_count ?? 8), getDefaults(MAX_AGENTS).catch(() => null)])
       .then(([defaults, full]) => {
         if (cancelled) return;
-        setRequest(defaults);
+        const initial = draft ? mergeSetupDraft(defaults, draft.partial) : defaults;
+        setRequest(initial);
         setTemplates(full?.agents ?? defaults.agents);
-        setRulesText(otherRulesText(defaults));
+        setRulesText(otherRulesText(initial));
+        if (draft) setDraftBanner(draft.source);
       })
       .catch((e) => {
         if (!cancelled) setLoadError(errorText(e));
@@ -175,6 +205,17 @@ export function NewSessionPage() {
   return (
     <div className="page setup-page">
       <PageHeader title="New session" subtitle="Set up the world and the agents, validate, then create the run. It opens paused at its initial checkpoint." />
+      {draftBanner ? (
+        <div className="banner setup-draft-banner" role="status">
+          <span>
+            <strong>Prefilled by the assistant</strong> from its proposal "{draftBanner}": review the values below, then Validate setup and Create. Nothing was
+            created yet.
+          </span>
+          <button type="button" className="btn btn-small" onClick={() => setDraftBanner(null)}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
 
       <div className="setup-actions" role="region" aria-label="Setup actions">
         <button type="button" className="btn" disabled={busy !== null} onClick={() => void validate()}>

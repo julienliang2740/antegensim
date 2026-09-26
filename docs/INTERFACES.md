@@ -1,15 +1,17 @@
-# Empyrean prototype — interface contract (revision 3)
+# Empyrean prototype — interface contract (revision 4)
 
-This is the contract that four teams (engine/storage, models/context/skills,
-frontend, QA) code against without talking to each other. When this document
-and the code disagree, this document wins until the lead changes it. Shared
-files (`schemas.py`, `config.py`, `types.ts`, `client.ts`) are **frozen**:
-if you need a change, put a `TODO(schema)` line in your report; do not edit
-them.
+This is the contract the backend, the frontend and the tests code against: ids, the run state
+machine, module contracts, the storage layout, the decision JSON, events, the API, interventions,
+continuations, fake models and the testing contract. It was written for the original four-team
+build (engine/storage, models/context/skills, frontend, QA) and is kept current: every change to
+a contract updates this file in the same commit (CLAUDE.md "Docs rule" and "Change control"),
+and `scripts/check_docs.py` checks the API table (section 9) against the served routes.
 
-Revision 3 is the integration pass: it applies the builders' `TODO(schema)`
-requests (marked "rev 3" below) and pins the behaviours the builders had to
-decide. The mirrors in `types.ts` were updated in the same pass.
+Revision 3 was the integration pass of the first build (marked "rev 3"). Revision 4 adds the
+built-in assistant (marked "rev 4"): the `backend/empyrean/assistant/` package, its routes, its
+storage beside each run and in `<worlds>/_assistant/`, text-mode and speech calls in `model.py`,
+and the change-control rules that replaced the frozen-file process (section 14). How the pieces
+work together is in `docs/SYSTEM.md`; where they live is in `docs/CODE_MAP.md`.
 
 Authoritative requirements: `llm_world_technical_spec.md` (spec) and
 `llm_world_running_design.md` (design). Configurable open rules are listed in
@@ -20,8 +22,8 @@ refer to it).
 
 | Path | Owner | Notes |
 | --- | --- | --- |
-| `backend/empyrean/schemas.py` | architect (frozen) | all shared Pydantic models |
-| `backend/empyrean/config.py` | architect (frozen) | defaults, `.env` loading, `estimate_tokens`, ASSUMPTIONS registry |
+| `backend/empyrean/schemas.py` | change-controlled (CLAUDE.md) | all shared Pydantic models |
+| `backend/empyrean/config.py` | change-controlled (CLAUDE.md) | defaults, `.env` loading, `estimate_tokens`, ASSUMPTIONS registry |
 | `backend/empyrean/world.py` | engine/storage | world truth and rules |
 | `backend/empyrean/storage.py` | engine/storage | files, checkpoints, recovery, continuations |
 | `backend/empyrean/runner.py` | engine/storage | worker thread, status machine, orchestration |
@@ -34,9 +36,10 @@ refer to it).
 | `backend/empyrean/assistant/` (package) | assistant (rev 4): WP2 engine/briefs/store/routes, WP3 digest/storybook/story, WP4 speech | all assistant models live in `assistant/models.py`, never in `schemas.py`; every model call goes through `assistant/calls.py` -> `model.call_model` |
 | `backend/tests/conftest.py` | architect (QA may add fixtures) | |
 | `backend/tests/test_*.py` | QA (each team adds its own unit tests too) | |
-| `frontend/src/api/types.ts`, `client.ts`, `frontend/vite.config.ts` | architect (frozen) | rev 4: `types.ts` gained the assistant `ApiErrorCode`s, `ModelInfo.assistant_only`, `InterventionOrigin 'assistant'`, `TranscriptionResult`; `client.ts` exports `request`/`API_BASE` and `listModels(includeAssistant)`; assistant/story types live in `api/assistantTypes.ts` / `api/storyTypes.ts` |
+| `frontend/src/api/types.ts`, `client.ts`, `frontend/vite.config.ts` | change-controlled (CLAUDE.md) | rev 4: `types.ts` gained the assistant `ApiErrorCode`s, `ModelInfo.assistant_only`, `InterventionOrigin 'assistant'`, `TranscriptionResult`; `client.ts` exports `request`/`API_BASE` and `listModels(includeAssistant)`; assistant/story types live in `api/assistantTypes.ts` / `api/storyTypes.ts` |
 | `frontend/src/**` (everything else) | frontend | |
-| `docs/*.md` | architect / lead | |
+| `docs/*.md`, `README.md`, `CLAUDE.md` | whoever changes the behaviour, in the same commit | `docs/INDEX.md` lists every doc; `scripts/check_docs.py` checks them against the code |
+| `scripts/check_docs.py`, `backend/tests/test_docs_consistency.py` | docs regime | the docs consistency checker and its pytest wrapper |
 
 Team-level unit tests live next to the team's module name: `tests/test_world.py`,
 `tests/test_storage.py`, `tests/test_runner.py`, `tests/test_skills.py`,
@@ -47,17 +50,22 @@ Team-level unit tests live next to the team's module name: `tests/test_world.py`
 
 ```
 antegensim/
+  CLAUDE.md            coding practice for people and agents (commands, rules, docs rule)
   backend/
-    empyrean/          package (see ownership)
+    empyrean/          package (see ownership); assistant/ is the rev-4 subpackage
     tests/             pytest (cd backend && ../.venv/bin/pytest -q)
     requirements.txt
   frontend/            Vite + React 19 + TypeScript 6 (npm run dev / build)
     vite.config.ts     dev server proxies /api -> http://127.0.0.1:8000
     src/api/types.ts   mirror of schemas.py
-    src/api/client.ts  typed fetch wrappers
-  worlds/              run data (gitignored)
-  docs/INTERFACES.md   this file
-  docs/ASSUMPTIONS.md
+    src/api/client.ts  typed fetch wrappers (core routes) and the shared request() helper
+    src/api/assistant.ts, story.ts, assistantSpeech.ts   assistant route wrappers (rev 4)
+  scripts/             run_sim.py (headless driver), check_docs.py (docs checker), scenarios/
+  qa/                  browser_check.mjs (Playwright), resilience/ (crash and restart scenarios)
+  worlds/              run data (gitignored); worlds/_assistant/ holds global assistant data
+  docs/                INDEX.md lists every document (this file, SYSTEM, GLOSSARY, CONTROLS,
+                       ASSISTANT, ASSUMPTIONS, CODE_MAP, TEST_PLAN, TEST_EVIDENCE, LIMITATIONS),
+                       evidence/, sample_run/
   .env                 local credentials (gitignored; loaded by empyrean.config)   .env.example placeholders
 ```
 
@@ -74,7 +82,7 @@ Frontend toolchain facts: `verbatimModuleSyntax` (use `import type`),
 | Item | Rule |
 | --- | --- |
 | Turn ids | `r00000_init`; agent turns `r{round:05d}_t{turn:02d}_{agent_id}` (turn index is 1-based within the round); round end `r{round:05d}_end`. Use `schemas.TurnId`. |
-| Entity ids | agents `a01..a11` (or card-provided, `^[A-Za-z0-9]{1,16}$`, never a `RESERVED_AGENT_IDS` word), plants `p0001`, fruit `f0001`, seeds `s0001`, residue `res0001`; `world.new_entity_id` allocates and never reuses an id (including `world.removed`). |
+| Entity ids | agents `a01..a12` (or card-provided, `^[A-Za-z0-9]{1,16}$`, never a `RESERVED_AGENT_IDS` word), plants `p0001`, fruit `f0001`, seeds `s0001`, residue `res0001`; `world.new_entity_id` allocates and never reuses an id (including `world.removed`). |
 | Run / world ids | `run_{YYYYmmdd_HHMMSS}_{4hex}`, `world_{YYYYmmdd_HHMMSS}_{4hex}`; run ids are globally unique so routes take `run_id` only. |
 | Knowledge record ids | `{agent_id}-k{seq:06d}` |
 | Packet ids | `pk_{turn_id}` (one packet per turn at most) |
@@ -706,6 +714,73 @@ tokens and avoids the malformed case.
 Logging: provider, model id, status, latency, token counts only. Never message contents or
 keys. Every stored error string passes through `redact`.
 
+#### rev 4 additions (assistant)
+
+```python
+call_model(request, registry=None, *, cancel: threading.Event | None = None) -> ModelResult
+kill_inflight() -> int                     # kill every live CLI process group (lifespan + atexit)
+inflight_count() -> int
+transcribe(audio: bytes, *, language=None, initial_prompt=None) -> TranscriptionResult   # never raises
+whisper_status() -> WhisperStatus ; preload_whisper() -> None ; whisper_model_cached(name=None) -> bool
+structured_output_names(purpose) -> (tool, description, schema_name)
+ModelRegistry.is_assistant_only(key) ; ModelRegistry.validate_agent_key(key) -> str | None
+```
+
+* **Text response mode.** `ModelRequest.response_format="text"`: no adapter sends a JSON-only
+  instruction, native schema, forced tool or `json_object` mode, even when `response_schema` is
+  set. The claude_cli fallback system prompt is `CLI_TEXT_SYSTEM_PROMPT` instead of the JSON one.
+  Replies are classified by `_text_status`: refusal / truncated as before (text kept), empty or
+  whitespace-only → `malformed`, anything else → `ok` with `parsed=None`; `ok` = status ok and
+  non-empty text. `request_overhead_tokens(key, registry, response_format="text")` counts only the
+  route's fixed overhead. JSON mode is unchanged.
+* **fake-assistant** (a default fake ref with `options.assistant_only`) is schema-agnostic: it
+  returns `metadata["fake_script"][metadata["fake_script_index"]]` when that index exists, else
+  `metadata["fake_reply"]`, else `invalid_config`. In JSON mode a dict is `ok` with `parsed`; a
+  string is classified like a real reply (prose → `malformed` + `schema_mismatch`, a JSON object
+  string → `ok`). In text mode a string is the text and a dict its JSON text. Every fake mode
+  shares the text-mode behaviour; `fake_options.sleep_ms` waits on the cancel event;
+  `fake_options.fail.error_code` is copied onto the scheduled failure; `fake_options.cost_usd` is
+  reported as `provider_cost_usd` on each attempt.
+* **`ModelResult.error_code`** (None when ok or unclassified): `budget_exceeded` (CLI subtype
+  `error_max_budget_usd`), `rate_limited` (HTTP 429/529), `schema_mismatch` (a JSON-mode
+  `malformed` reply, including the CLI validator's `error_max_turns`), `cancelled`, `timeout`,
+  `not_logged_in` (claude_cli 401 or "not logged in" / "please run /login" / "invalid api key" /
+  "oauth token expired" / "authentication_error" in the result or stderr), `cli_missing` (no
+  `claude` on PATH, in the pre-flight with `attempts` 0 and in the adapter).
+* **Cancellation.** The event is checked before every attempt; set before the first attempt the
+  result is `error` / `cancelled` with `attempts` 0; set during a retry backoff the retry is
+  abandoned. The claude_cli adapter polls `communicate()` in `CLI_CANCEL_POLL_SECONDS` (0.5 s)
+  slices when an event is passed and on cancel SIGKILLs the process group: status `error` /
+  `cancelled`, never retried, cost unknown (callers price their reservation). Without an event the
+  adapter behaves as before.
+* **In-flight registry.** Every live CLI subprocess is registered; `kill_inflight()` kills their
+  process groups, returns the count and never raises. An interrupted call returns `error` /
+  `cancelled` ("... killed at shutdown") and is not retried.
+* **`provider_cost_usd` is summed** over the attempts that reported a cost (None when none did);
+  it used to be the final attempt only. This also changes the agents' ledger: a retried CLI call
+  now charges every billed attempt to `Manifest.real_usage` and `real_budget_usd`.
+* **argv cap.** The claude_cli adapter refuses any argv string over `config.CLI_ARGV_MAX_BYTES`
+  (100,000 bytes, UTF-8; covers the system prompt and `--json-schema`) as `invalid_config` before
+  any process starts.
+* **Purpose-named structured output.** Only purpose `decision` uses `submit_decision` / schema
+  name `decision`; other purposes use the forced tool `submit_response` and an OpenAI
+  `json_schema` name of `summary` / `assistant_reply` / `narrative` / `response`.
+* **Local speech (Whisper).** `transcribe` decodes the raw container bytes (webm/opus, wav, flac,
+  ...) with `faster_whisper.decode_audio` (PyAV, no ffmpeg binary) at 16 kHz and runs
+  `WhisperModel(config.WHISPER_MODEL, device="cpu", compute_type="int8",
+  cpu_threads=config.WHISPER_CPU_THREADS)`: one model per process, loaded on first use or by
+  `preload_whisper()` (main only), inference serialised, `vad_filter=True`, `beam_size=5`,
+  `language` normalised ("en-US" → "en"; None/""/"auto" → detect), `initial_prompt` stripped.
+  Statuses: `ok` (text may be "" when no speech was heard; `language` and `duration_s` filled),
+  `error` (empty or non-bytes input, over `WHISPER_MAX_AUDIO_BYTES`, undecodable, no samples, over
+  `WHISPER_MAX_SECONDS`, an inference exception), `unavailable` (switched off, package missing,
+  load failed). `whisper_status()` reports `ready` / `loading` / `unavailable` (with a reason) /
+  `disabled` (`EMPYREAN_WHISPER_MODEL` off/none/"" or nothing loaded yet and no load started).
+  Logs record model, status, audio seconds and latency, never the transcript. `faster_whisper`
+  (and through it `ctranslate2` and `av`) is imported only inside `model.py`, lazily;
+  `test_e2e_boundaries.py` enforces it with a recursive scan and a positive assertion.
+
+
 ### 4.5 `storage.py` (engine/storage)
 
 ```python
@@ -900,6 +975,34 @@ that can no longer be applied or would leave the state invalid fails the whole f
 with the new checkpoint, so edit while paused; `rules.json` does not contain the assumptions
 table (edit the rule keys instead).
 
+Assistant data (rev 4). Nothing of the assistant lives inside `turns/`: checkpoints stay
+immutable, history browsing stays model-free, crash recovery never touches `assistant/`, and a
+continuation does not copy it. Every file is written with `storage.atomic_write_json` (JSON) or
+appended line by line under a lock (`*.jsonl`).
+
+```
+worlds/
+  _assistant/                                   # config.ASSISTANT_GLOBAL_DIR_NAME
+    usage.jsonl                                 # LedgerLine per call of the global scope
+    conversations/<conv_id>/                    # conv_id = uuid4 hex
+      meta.json                                 # ConversationMeta (run_id: null = global scope; mutable)
+      messages.jsonl                            # Message lines (steps, refs, sources, errors)
+      briefs.json                               # [Brief] with validation and effect
+  world_.../runs/run_.../assistant/
+    settings.json                               # AssistantRunSettings {storybook_auto, auto_since_turn_id,
+                                                #   storybook_budget_usd, chat_budget_usd, updated_at}
+    usage.jsonl                                 # LedgerLine per call of this run's scope
+    .storybook.lock                             # non-blocking flock of the storybook job
+    storybook/entries/opening.json              # StorybookEntry kind "opening"
+    storybook/entries/r00001_t01_a03.json       # StorybookEntry kind "turn" (r00001_end.json: "round_end")
+    stories/<story_id>/story.json               # StorySession (brief, picks, cast sheet, story so far)
+    stories/<story_id>/chapters/0001.json       # StoryChapter
+```
+
+A run without `assistant/settings.json` (every run created before rev 4) has storybook auto off.
+The entry files are the sole source of truth of the storybook (no index file); the ledger's
+aggregates are computed from `usage.jsonl` on read.
+
 ## 6. Decision JSON (exactly as the LLM sees it)
 
 The system prompt includes this description verbatim (values are examples; the notebook
@@ -974,7 +1077,8 @@ result — no latency numbers (QA compares summaries between runs); the live fee
 | residue_created | world | `{residue_id, source_id, compute, essence, position}` |
 | plant_growth | world | `{plant_id, stage, size, energy, essence}` or `{count, total_energy_inflow, total_essence_inflow, skipped_non_land: [ids]}` |
 | fruit_spawned / fruit_removed / seed_spawned / germination | world | `{plant_id, entity_id, position, ...}` (`fruit_removed`: `lost_compute`, `reason`) |
-| upkeep | world | `{agent_id, paid, owed}` ; starvation `{agent_id, health_loss, health_after}` |
+| upkeep | world | `{agent_id, paid, owed}` |
+| starvation | world | `{agent_id, health_loss, health_after}`: its own kind (rev 4 doc correction; the code always emitted it separately), emitted after the `upkeep` event of an agent that could not pay in full; a resulting death follows as `death` with cause `starvation` |
 | round_ended | world | `{round, living_agents, deaths}` |
 | intervention | operator | `{intervention: Intervention, ok, error, changes: [FieldChange], origin, effective_turn_id}` |
 | operator_voice | operator | `{recipients, text}` (the text is also in each recipient's knowledge) |
@@ -1086,17 +1190,25 @@ between the failure and the commit, or a later crash and reopen, cannot count it
 
 ## 9. API
 
-Base `/api`. All bodies JSON. Errors return `ApiError {error: ApiErrorCode, detail, problems}`
-(section "Rules" in `api.py`): 404 `not_found`; 409 `run_not_open` / `illegal_command`; 422
-`invalid_setup` / `invalid_intervention` / `validation_error` / `unknown_model` with
-`problems[{path, message}]` (paths like `agents[2].position`); 500 `internal_error` (with CORS
-headers). The UI reopens the run once on `run_not_open`.
+Base `/api`. All bodies JSON (except the raw audio body of `POST /assistant/transcribe`).
+Errors return `ApiError {error: ApiErrorCode, detail, problems}` (section "Rules" in `api.py`):
+404 `not_found`; 409 `run_not_open` / `illegal_command`; 422 `invalid_setup` /
+`invalid_intervention` / `validation_error` / `unknown_model` with `problems[{path, message}]`
+(paths like `agents[2].position`); 413 `payload_too_large`; 500 `internal_error` (with CORS
+headers). Assistant routes (rev 4) add 503 `assistant_unavailable` (no `AssistantService` in this
+process, or no usable model), 409 `assistant_busy` (a bounded queue is full),
+409 `brief_not_pending`, 409 `assistant_budget_exhausted`, 409 `conversation_busy`. The UI
+reopens the run once on `run_not_open`.
+
+This table, the route table in the `api.py` docstring and the request calls in
+`frontend/src/api/*.ts` must list exactly the routes the app serves; `scripts/check_docs.py`
+compares all four (path parameters are compared by position, query strings are ignored).
 
 | Method | Path | Body | Response |
 | --- | --- | --- | --- |
 | GET | `/health` | | `{ok, version}` |
-| GET | `/defaults?agent_count=8` | | `RunCreateRequest` (6–11 prefilled cards) |
-| GET | `/models` | | `ModelInfo[]` |
+| GET | `/defaults?agent_count=8` | | `RunCreateRequest` (6–12 prefilled cards) |
+| GET | `/models?include_assistant=0` | | `ModelInfo[]` (assistant-only refs hidden unless `include_assistant=1`) |
 | GET | `/assumptions` | | `AssumptionsView` |
 | POST | `/world/preview` | `WorldPreviewRequest` | `MapState` |
 | GET | `/runs` | | `RunSummary[]` |
@@ -1126,6 +1238,49 @@ headers). The UI reopens the run once on `run_not_open`.
 | POST | `/runs/{run_id}/working/reload` | | `ReloadResponse` |
 | POST | `/runs/{run_id}/continuations` | `ContinuationRequest` | `RunSummary` (201) |
 
+Assistant routes (rev 4; `backend/empyrean/assistant/routes*.py`, request and response models in
+`backend/empyrean/assistant/models.py`, mirrored in `frontend/src/api/assistantTypes.ts` and
+`storyTypes.ts`). An app built without an `AssistantService` (tests, `scripts/run_sim.py`)
+answers every one of them 503 `assistant_unavailable`. None of them opens a run except an
+approved brief that executes a run action.
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| GET | `/assistant/capabilities?run_id=` | | `AssistantCapabilities` |
+| GET | `/assistant/conversations?run_id=&all=0` | | `ConversationMeta[]` |
+| POST | `/assistant/conversations` | `ConversationCreateRequest` | `ConversationMeta` (201) |
+| GET | `/assistant/conversations/{conv_id}` | | `ConversationView` |
+| PATCH | `/assistant/conversations/{conv_id}` | `ConversationPatchRequest` | `ConversationMeta` |
+| DELETE | `/assistant/conversations/{conv_id}` | | `{}` (409 `conversation_busy` while a job runs) |
+| POST | `/assistant/conversations/{conv_id}/messages` | `MessageCreateRequest` | `MessageAccepted` (202, `{job_id}`) |
+| POST | `/assistant/conversations/{conv_id}/jobs/{job_id}/cancel` | | `JobView` |
+| POST | `/assistant/conversations/{conv_id}/briefs/{brief_id}/approve` | `BriefApproveRequest` `{validated_against_turn_id}` | `BriefResponse` (409 `brief_not_pending`) |
+| POST | `/assistant/conversations/{conv_id}/briefs/{brief_id}/reject` | `BriefRejectRequest` | `BriefResponse` |
+| GET | `/runs/{run_id}/assistant/settings` | | `AssistantRunSettingsView` |
+| PUT | `/runs/{run_id}/assistant/settings` | `AssistantRunSettingsUpdate` | `AssistantRunSettingsView` |
+| GET | `/runs/{run_id}/assistant/storybook?last_n=` | | `StorybookView` (read-only; never generates) |
+| POST | `/runs/{run_id}/assistant/storybook/generate` | `StorybookGenerateRequest` | `StorybookGenerateResponse` (202) |
+| POST | `/runs/{run_id}/assistant/storybook/entries/{turn_id}/regenerate` | | `StorybookGenerateResponse` (202) |
+| GET | `/runs/{run_id}/assistant/stories` | | `StorySessionSummary[]` |
+| POST | `/runs/{run_id}/assistant/stories` | `StoryCreateRequest` | `StoryView` (201; deterministic run card, no model call) |
+| GET | `/runs/{run_id}/assistant/stories/{story_id}` | | `StoryView` |
+| POST | `/runs/{run_id}/assistant/stories/{story_id}/messages` | `StoryMessageRequest` | `StoryView` (202; the author writes or revises the brief) |
+| POST | `/runs/{run_id}/assistant/stories/{story_id}/approve` | `StoryApproveRequest` | `StoryView` (202; starts the chapter job) |
+| POST | `/runs/{run_id}/assistant/stories/{story_id}/reject` | `StoryRejectRequest` | `StoryView` |
+| POST | `/runs/{run_id}/assistant/stories/{story_id}/cancel` | | `StoryView` |
+| POST | `/runs/{run_id}/assistant/stories/{story_id}/continue` | `StoryContinueRequest` `{to_turn_id?, generate_all?, job_budget_usd?}` | `StoryView` (202; `{to_turn_id: null}` extends to the last committed turn, `generate_all: true` writes every remaining chapter instead of 3 ahead of the reader, `job_budget_usd` raises the story budget and resumes a paused story) |
+| GET | `/runs/{run_id}/assistant/stories/{story_id}/chapters/{n}?mark_read=1` | | `StoryChapter` (moves the reader position) |
+| GET | `/runs/{run_id}/assistant/stories/{story_id}/export` | | `StoryExport` (Markdown) |
+| POST | `/assistant/transcribe?language=en&run_id=&initial_prompt=` | raw audio (`audio/webm`, `audio/ogg`, `audio/wav`, `audio/mp4`; 10 MB cap) | `TranscriptionResult` (413 `payload_too_large`, 409 `assistant_busy`, 503 while speech is not ready) |
+
+Assistant route semantics: chat and story messages answer 202 and run on the assistant's
+executors (chat 2 workers, story 1, storybook 1, speech 1); the drawer polls
+`GET /assistant/conversations/{conv_id}` every 700 ms while a job runs. Approve runs under the
+conversation lock: CAS `pending` → `executing`, revalidation against the current committed
+turn, server-side execution, and the stored `BriefEffect` is returned again on a retried
+approve. Brief validation never opens a run (the open worker's committed checkpoint, else
+`storage.load_checkpoint` read-only). Details: `docs/ASSISTANT.md`.
+
 Routes that need the runner (`status`, `commands`, `events`, `state`, `pending_model_call`,
 live knowledge, settings, rules, interventions, reload, close) return 409 `run_not_open` unless
 `POST .../open` was called (the frontend calls open when entering a run and close when
@@ -1137,7 +1292,7 @@ turn-scoped GETs reads the open runner's committed checkpoint. A continuation's 
 resolves its "previous" arrow through `TurnView.parent`.
 
 Setup validation (`RunManager.validate_setup`, used by `POST /runs` and `/runs/validate`; every
-problem reported at once): 6–11 cards; unique ids matching `^[A-Za-z0-9]{1,16}$` and not
+problem reported at once): 6–12 cards; unique ids matching `^[A-Za-z0-9]{1,16}$` and not
 reserved; unique names; position inside the region (mountains are corrected, A-WORLD-6); stats
 ≥ 0, health ≤ max_health, essence ≤ essence_capacity; model exists and is available (default
 and per card); `context.validate_settings` for the run defaults and every card's effective
@@ -1284,19 +1439,29 @@ ecology (absorption, deaths, residue) is not exercised by the fakes alone.
 * Storage growth (fix pass): a turn dir's `entities/knowledge/` holds only the changed stores
   and `world.json.knowledge_files` covers every agent; `read_knowledge` of an unchanged agent at
   any turn equals the file the map points at.
+* Assistant (rev 4): every assistant test uses the `fake-assistant` key (or other fakes) and an
+  `AssistantService` built with `auto_live_allowed=False`; a guard makes any real CLI attempt fail
+  the test. Tests that run local Whisper are marked `whisper` and skip unless the model is in the
+  local cache and a sample clip exists (`EMPYREAN_WHISPER_TEST_AUDIO` or
+  `backend/tests/data/jfk.flac`, not committed). The provider boundary test scans
+  `backend/empyrean/` recursively.
+* Docs (rev 4): `backend/tests/test_docs_consistency.py` runs `scripts/check_docs.py`, so
+  `pytest -q` fails on drift between the docs and the code (routes, env vars, assumptions, test
+  ids, control labels, paths and symbols, stale phrases, the docs index).
 
 ## 14. Change control
 
-Shared files are frozen. Needed changes go into the team report as
-`TODO(schema): <file> <what> <why>`; the lead applies them in one integration pass. Do not work
-around a missing field by stuffing data into `details` dictionaries that another team must parse.
+The rules are in `CLAUDE.md` ("Change control for shared contracts" and "Docs rule"); they
+replace the original frozen-file process of revisions 1-3. In short: `schemas.py`, `config.py`,
+`api.py`, `types.ts` and `client.ts` (plus `assistant/models.py` and its TypeScript mirrors) are
+change-controlled. A change edits the Python model and its TypeScript mirror together, updates
+this document and the other owning docs in the same commit, and must pass
+`scripts/check_docs.py`. When several people or agents work in parallel, one owner edits a
+shared file at a time and the others hand over the exact change they need (in rev 4: the work
+packages' handoff notes, applied by the lead). Do not work around a missing field by stuffing
+data into `details` dictionaries that another part must parse.
 
-Rev 4 (assistant) refines this: `schemas.py`, `config.py`, `api.py`, `runner.py`, `model.py`,
-`storage.py`, `models.example.json`, `types.ts`, `client.ts`, `useHashRoute.ts` and `App.tsx` are
-**change-controlled**, not frozen: they are edited only by the shared-contracts work package
-(WP0), in the same commit as the docs that describe them (CLAUDE.md "update docs in the same
-commit"), and every other package builds against the signatures recorded below. A package that
-needs another change writes it into its handoff note; the lead integrates.
+The lists below record what each revision changed.
 
 Applied in rev 3 (schemas.py / config.py / types.ts): `SkillRules.max_string_chars`;
 `WorldState.observation_page_size` and `.warnings`; `BelievedSelf.position`;

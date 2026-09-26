@@ -36,5 +36,20 @@ Each turn folder holds:
 | `decision_packets/pk_<turn>.json` | exactly what the model was given, with selected and omitted memory ids |
 | `model_calls/mc_<turn>_NN.json` | request, raw output, parsed decision, usage, cost, latency; never credentials |
 
+A run used with the built-in assistant also has an `assistant/` folder beside `turns/`
+(not included in this sample, which predates the assistant):
+
+```
+  assistant/
+    settings.json            storybook auto flag, auto_since_turn_id, storybook and chat budgets
+    usage.jsonl              one line per assistant model call for this run (cost, tokens, latency)
+    storybook/entries/       <turn_id>.json per narrated turn, opening.json for the opening
+    stories/<story_id>/      story.json and chapters/<NNNN>.json of Story Mode
+```
+
+It is never inside `turns/` (checkpoints stay immutable and history browsing never calls a
+model), crash recovery does not touch it, and continuations do not copy it. Conversations are
+stored once for all runs under `worlds/_assistant/conversations/`. See `docs/ASSISTANT.md`.
+
 The full format is specified in `docs/INTERFACES.md` §5. Nothing here contains
 secrets: model call records hold prompts and replies only.

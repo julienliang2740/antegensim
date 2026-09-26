@@ -26,7 +26,7 @@ export function problemsOutside(problems: readonly ApiProblem[], prefixes: reado
 }
 
 /**
- * A new card for "Add agent card": the first template (from GET /defaults
+ * A new card for "Add agent": the first template (from GET /defaults
  * with 11 cards) whose id and name are unused, else a copy of the last card
  * with the lowest unused aNN id.
  */
@@ -130,4 +130,54 @@ export function applyOtherRules(request: RunCreateRequest, text: string): { requ
 /** Local file-name-safe check of the run name (the backend accepts any string). */
 export function trimmedName(name: string): string {
   return name.trim() || "New run";
+}
+
+// ---------------------------------------------------------------------------
+// Assistant setup draft (sessionStorage "empyrean.assistant.setupDraft.v1")
+// ---------------------------------------------------------------------------
+
+/** What the drawer stores when a create_run brief is opened in the setup form instead of executed. */
+export interface SetupDraft {
+  /** Number of agent cards the defaults are fetched with (6..12). */
+  agent_count: number;
+  /** Partial RunCreateRequest (the brief's overlay plus its name). */
+  partial: Record<string, unknown>;
+  /** Where the draft came from, shown in the banner ("the assistant's proposal 'Fight arena'"). */
+  source: string;
+}
+
+export const SETUP_DRAFT_KEY = "empyrean.assistant.setupDraft.v1";
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function deepMerge(base: unknown, overlay: unknown): unknown {
+  if (isPlainObject(base) && isPlainObject(overlay)) {
+    const out: Record<string, unknown> = { ...base };
+    for (const [key, value] of Object.entries(overlay)) out[key] = key in base ? deepMerge(base[key], value) : value;
+    return out;
+  }
+  return overlay === undefined ? base : overlay;
+}
+
+/**
+ * Merge a partial request onto full defaults the same way the backend merges
+ * a create_run overlay: dicts merge recursively, everything else replaces;
+ * agent cards merge by index (a partial card keeps the default's other
+ * fields), cards beyond the defaults' count are dropped, and `agents` given
+ * as anything but an array is ignored.  The result is a complete request.
+ */
+export function mergeSetupDraft(defaults: RunCreateRequest, partial: Record<string, unknown>): RunCreateRequest {
+  const { agents: partialAgents, ...rest } = partial;
+  const merged = deepMerge(defaults, rest) as RunCreateRequest;
+  if (Array.isArray(partialAgents)) {
+    merged.agents = defaults.agents.map((card, index) => {
+      const over = partialAgents[index];
+      return isPlainObject(over) ? (deepMerge(card, over) as AgentCard) : card;
+    });
+  } else {
+    merged.agents = defaults.agents;
+  }
+  return merged;
 }

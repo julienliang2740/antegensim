@@ -1,0 +1,524 @@
+/*
+ * Story Mode styles (pages/StoryPage.tsx and components/story/*; OWNER WP6):
+ * the run picker, the story list, the step-0 run card with its quick-pick
+ * chips and composer, the interview transcript, the story brief card with its
+ * side-by-side estimates, and the reader (chapter list beside the chapter
+ * text).  Colours come from the index.css tokens; literal colours have dark
+ * overrides.  Class prefix .storymode-* (the Turn record owns .story-*).
+ */
+
+.storymode-page {
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.storymode-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.storymode-toolbar .btn-link {
+  font-weight: 500;
+}
+
+.storymode-badge {
+  display: inline-block;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-alt);
+  padding: 1px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.storymode-badge.is-live {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.storymode-badge.is-done {
+  border-color: var(--good);
+  background: var(--good-bg);
+  color: var(--good);
+}
+
+.storymode-badge.is-bad {
+  border-color: var(--bad);
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+
+.storymode-badge.is-wait {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+/* ------------------------------------------------------------------ cards */
+
+.storymode-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.storymode-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.storymode-card-head h2 {
+  margin: 0;
+}
+
+.storymode-kicker {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.storymode-summary {
+  font-size: 13.5px;
+}
+
+.storymode-cast {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.storymode-cast-member {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-alt);
+  padding: 4px 8px;
+  font-size: 12.5px;
+}
+
+.storymode-cast-member.is-dead {
+  opacity: 0.75;
+}
+
+.storymode-cast-member.is-dead .storymode-cast-name {
+  text-decoration: line-through;
+}
+
+.storymode-cast-name {
+  font-weight: 600;
+}
+
+.storymode-cast-persona {
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.storymode-highlights {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.storymode-highlights li {
+  margin: 1px 0;
+}
+
+/* ------------------------------------------------------------------ chips and range */
+
+.storymode-picks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.storymode-chip-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.storymode-chips-label {
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+.storymode-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.storymode-chip {
+  min-height: 24px;
+  padding: 2px 9px;
+}
+
+.storymode-chip-row > .hint {
+  grid-column: 2;
+}
+
+.storymode-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.storymode-range select {
+  max-width: 260px;
+}
+
+.storymode-estimate-line {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ composer */
+
+.storymode-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.storymode-composer textarea {
+  min-height: 72px;
+  font-size: 14px;
+}
+
+.storymode-composer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.storymode-composer-actions .hint {
+  margin-right: auto;
+}
+
+/* ------------------------------------------------------------------ interview */
+
+.storymode-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.storymode-msg {
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13.5px;
+  max-width: 85%;
+}
+
+.storymode-msg-user {
+  align-self: flex-end;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent);
+}
+
+.storymode-msg-assistant {
+  align-self: flex-start;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+}
+
+.storymode-msg-role {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.storymode-msg p {
+  margin: 0 0 4px;
+}
+
+.storymode-msg p:last-child {
+  margin-bottom: 0;
+}
+
+.storymode-msg-progress {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ------------------------------------------------------------------ brief */
+
+.storymode-brief-premise {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.storymode-brief-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.storymode-brief-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.storymode-brief-list-title {
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.storymode-estimates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.storymode-estimate {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-alt);
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.storymode-estimate:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.storymode-estimate.is-chosen {
+  border: 2px solid var(--accent);
+  background: var(--accent-bg);
+}
+
+.storymode-estimate-title {
+  font-weight: 600;
+}
+
+.storymode-estimate-big {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.storymode-brief-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.storymode-brief-actions .field {
+  margin-left: auto;
+}
+
+.storymode-brief-actions .field input {
+  width: 90px;
+}
+
+.storymode-cast-map {
+  font-size: 12.5px;
+}
+
+.storymode-plan {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ reader */
+
+.storymode-reader {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .storymode-reader {
+    grid-template-columns: 1fr;
+  }
+}
+
+.storymode-chapters {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 6px;
+  max-height: 70vh;
+  overflow-y: auto;
+  position: sticky;
+  top: 8px;
+}
+
+.storymode-chapters ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.storymode-chapter-item {
+  width: 100%;
+  border: 1px solid transparent;
+  background: none;
+  border-radius: 5px;
+  padding: 3px 8px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.storymode-chapter-item:hover {
+  background: var(--panel-alt);
+}
+
+.storymode-chapter-item.is-current {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  font-weight: 600;
+}
+
+.storymode-chapter-item.is-not-started {
+  color: var(--muted);
+}
+
+.storymode-chapter-item.is-error {
+  color: var(--bad);
+}
+
+.storymode-chapter-state {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.storymode-chapter {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 12px 22px 18px;
+  min-height: 240px;
+}
+
+.storymode-chapter h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 24px;
+  margin-bottom: 10px;
+}
+
+.storymode-chapter-text {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 16.5px;
+  line-height: 1.6;
+  max-width: 68ch;
+}
+
+.storymode-chapter-text p {
+  margin: 0 0 12px;
+}
+
+.storymode-chapter-turns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.storymode-chapter-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.storymode-chapter-wait {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.storymode-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.storymode-progress progress {
+  width: 160px;
+  height: 10px;
+}
+
+.storymode-reader-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.storymode-error-note {
+  color: var(--bad);
+  font-size: 12.5px;
+}
+
+.storymode-stories .storymode-open {
+  font-size: 15px;
+}
+
+.storymode-empty {
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: var(--muted);
+}

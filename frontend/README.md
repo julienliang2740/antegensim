@@ -1,32 +1,51 @@
-# React + TypeScript + Vite
+# Empyrean frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The operator console: Vite, React 19 and TypeScript (strict). It talks only to the backend's
+`/api` routes (the dev server proxies `/api` to `EMPYREAN_API_PROXY`, default
+`http://127.0.0.1:8000`). The backend does not serve the built files; use the dev server.
 
-Currently, two official plugins are available:
+## Commands
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev -- --host 127.0.0.1 --port 5173 --strictPort    # the UI on http://127.0.0.1:5173
+npx tsc -p tsconfig.app.json --noEmit                        # type check
+npm run lint                                                 # oxlint (.oxlintrc.json)
+node src/state/state.test.mjs                                # node:test over the pure state modules
+npm run build                                                # tsc -b && vite build -> dist/ (one build at a time)
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Open the UI via `localhost` or `127.0.0.1`: the browser allows the microphone for **Dictate**
+only in a secure context.
+
+## Layout
+
+| Path | What |
+| --- | --- |
+| `src/App.tsx` | the route switch (`hooks/useHashRoute.ts`: `#/`, `#/new`, `#/resume`, `#/run/<id>`, `#/instructions`, `#/story`) plus the assistant drawer on every page |
+| `src/pages/` | one component per route: entry, New session, Resume, the run page, How the world works, Story Mode |
+| `src/components/run/` | run page parts: controls, status bar, timeline, activity log, record viewer, Turn record, God mode, Rules and Storybook tabs |
+| `src/components/inspect/` | the map, inspectors, god-mode panel and forms, plant-rule and context editors |
+| `src/components/setup/` | New session form parts |
+| `src/components/assistant/` | the assistant drawer: launcher, conversations, answers, brief cards, composer, Dictate, spend popover, Ask buttons |
+| `src/components/story/` | Story Mode parts: run picker, run card, chips, interview, brief, reader |
+| `src/api/` | `types.ts` (mirror of `backend/empyrean/schemas.py`), `client.ts` (core routes and the shared `request` helper), `assistant.ts` / `assistantTypes.ts`, `story.ts` / `storyTypes.ts`, `assistantSpeech.ts` (raw-audio upload) |
+| `src/state/` | pure logic, no React: feed, status text, timeline, setup form, run sessions, assistant context store, answer formatting, brief rendering, Story Mode helpers |
+| `src/hooks/` | data and layout hooks (`useRunFeed`, `useRunData`, `useRunLayout`, `useFetched`) |
+| `src/dev/` | a dev-only inspect harness (`?harness=1`) with fixtures |
+
+The full per-file map is `docs/CODE_MAP.md`; every control and its label is in
+`docs/CONTROLS.md`.
+
+## Conventions
+
+* `verbatimModuleSyntax` (use `import type`), `erasableSyntaxOnly` (no `enum`, no parameter
+  properties), `noUnusedLocals`.
+* Every API call goes through `src/api/`; errors arrive as `ApiClientError` carrying the
+  backend's `ApiError` body.
+* Logic worth testing goes into `src/state/*.ts` (pure functions or an external store) and is
+  registered in `src/state/state.test.mjs`.
+* Colours come from the tokens in `src/index.css` (with dark-mode overrides).
+* A changed label or control updates `docs/CONTROLS.md` (and the browser check locators in
+  `qa/browser_check.mjs`) in the same commit; `scripts/check_docs.py` checks that every bold
+  label in `docs/CONTROLS.md` appears in `src/`. See `CLAUDE.md`.

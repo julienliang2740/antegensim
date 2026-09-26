@@ -15,6 +15,7 @@ Usage (from the repository root):
     .venv/bin/python scripts/run_sim.py                          # 8 fake-heuristic agents, 3 rounds, seed 1
     .venv/bin/python scripts/run_sim.py --model fake-malformed --rounds 5 --worlds-dir /tmp/worlds
     EMPYREAN_ALLOW_LIVE=1 .venv/bin/python scripts/run_sim.py --model claude-cli-haiku --live-check
+    .venv/bin/python scripts/run_sim.py --request scripts/scenarios/arena_fight.json --assistant
 
 Safety against accidental spend: any model whose provider is not ``fake``
 is refused unless the environment variable ``EMPYREAN_ALLOW_LIVE=1`` is set.
@@ -27,7 +28,17 @@ Exit status: 0 on success; 1 on any exception, a run that ends in the
 ``error`` state, or a failed live check; 2 when the model is refused or
 unknown.  The script never prints credential values and never reads .env
 itself (``empyrean.config`` loads it).
+
+``--assistant`` builds the in-process ``AssistantService`` and passes it to
+``create_app`` (as ``main.build_app`` does), so the run gets its storybook
+settings, opening entry and per-turn entries while it plays, and the summary
+prints the storybook status.  Automatic generation with a paid narrator model is
+allowed only when ``EMPYREAN_ALLOW_LIVE=1`` is also set (``auto_live_allowed``);
+otherwise only a fake narrator (``EMPYREAN_ASSISTANT_MODEL_NARRATOR=fake-assistant``)
+writes entries.  Without ``--assistant`` the assistant routes answer 503.
 """
+# DOCS: --agents accepts config.MIN_AGENTS..MAX_AGENTS (6-12); --request overlays use the shared
+# deep_merge of empyrean.assistant.briefs; --assistant never spends without EMPYREAN_ALLOW_LIVE=1.
 
 from __future__ import annotations
 
@@ -47,6 +58,10 @@ BACKEND_DIR = REPO_DIR / "backend"
 ALLOW_LIVE_ENV = "EMPYREAN_ALLOW_LIVE"
 LIVE_BILLING_RATIO_LIMIT = 1.5  # INTERFACES section 13: billed input <= 1.5 x packet estimate
 IDLE_STATES = ("paused", "error", "finished")
+# Mirrors config.MIN_AGENTS / MAX_AGENTS (config is imported only after --worlds-dir is applied;
+# a test keeps these equal).
+MIN_AGENTS = 6
+MAX_AGENTS = 12
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +72,7 @@ IDLE_STATES = ("paused", "error", "finished")
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run an Empyrean simulation headless and print a summary.")
     parser.add_argument("--model", default="fake-heuristic", help="registry model key for every agent (default fake-heuristic)")
-    parser.add_argument("--agents", type=int, default=8, help="number of agent cards, 6-12 (default 8)")
+    parser.add_argument("--agents", type=int, default=8, help=f"number of agent cards, {MIN_AGENTS}-{MAX_AGENTS} (default 8)")
     parser.add_argument("--rounds", type=int, default=3, help="rounds to run with step_round (default 3)")
     parser.add_argument("--seed", type=int, default=1, help="world seed (default 1)")
     parser.add_argument("--worlds-dir", default=None, help="where run folders are written (default: EMPYREAN_WORLDS_DIR or repo worlds/)")
@@ -65,14 +80,19 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--request", help="JSON file overlaid on GET /defaults: world/rules/context are deep-merged, "
                         "other keys (agents, name, seed, ...) replace the default")
     parser.add_argument(
+        "--assistant",
+        action="store_true",
+        help="run the assistant service in-process (storybook while the run plays; paid narration only with EMPYREAN_ALLOW_LIVE=1)",
+    )
+    parser.add_argument(
         "--live-check",
         action="store_true",
         help="run exactly one agent turn and report its model call (usage, cost, billed/estimate ratio)",
     )
     parser.add_argument("--timeout", type=float, default=900.0, help="seconds to wait for one command to finish (default 900)")
     args = parser.parse_args(argv)
-    if not 6 <= args.agents <= 11:
-        parser.error("--agents must be between 6 and 11")
+    if not MIN_AGENTS <= args.agents <= MAX_AGENTS:
+        parser.error(f"--agents must be between {MIN_AGENTS} and {MAX_AGENTS}")
     if args.rounds < 1:
         parser.error("--rounds must be at least 1")
     return args
@@ -132,14 +152,13 @@ class Api:
 
 
 def deep_merge(base: dict, overlay: dict) -> dict:
-    """Recursively merge overlay into a copy of base (dicts merge, everything else replaces)."""
-    merged = dict(base)
-    for key, value in overlay.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
-            merged[key] = deep_merge(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
+    """Recursively merge overlay into a copy of base (dicts merge, everything else replaces).
+    Delegates to the shared helper the assistant's create-run briefs use."""
+    if str(BACKEND_DIR) not in sys.path:
+        sys.path.insert(0, str(BACKEND_DIR))
+    from empyrean.assistant.briefs import deep_merge as shared_deep_merge
+
+    return shared_deep_merge(base, overlay)
 
 
 def fmt(value: Optional[float], digits: int = 3) -> str:
@@ -338,8 +357,18 @@ def run(args: argparse.Namespace) -> int:
     print(f"worlds dir {config.WORLDS_DIR}")
 
     manager = RunManager(registry)
+    assistant = None
+    if args.assistant:
+        from empyrean.assistant import AssistantService
+
+        allow_live = os.environ.get(ALLOW_LIVE_ENV) == "1"
+        assistant = AssistantService(manager, registry, auto_live_allowed=allow_live)
+        narrator = assistant.profile_model_key("narrator")
+        print(f"assistant: in-process, narrator {narrator}"
+              + ("" if allow_live or assistant.profile_is_fake("narrator") else
+                 f" (paid: automatic narration stays off without {ALLOW_LIVE_ENV}=1)"))
     try:
-        with TestClient(create_app(manager)) as client:
+        with TestClient(create_app(manager, assistant)) as client:
             api = Api(client)
             request = api.get("/defaults", agent_count=args.agents)
             request.update(name=name, seed=args.seed, default_model_key=args.model, play_delay_seconds=0.0)
@@ -353,6 +382,10 @@ def run(args: argparse.Namespace) -> int:
                 print(f"scenario overlay {args.request}: {len(request['agents'])} agents")
             summary = api.post("/runs", request, expect=201)
             run_id = summary["run_id"]
+            if assistant is not None:
+                from empyrean.schemas import RunCreateRequest
+
+                assistant.notify_run_created(run_id, RunCreateRequest.model_validate(request))
             api.post(f"/runs/{run_id}/open")
             print(f"created {run_id} in {summary['world_id']}")
 
@@ -370,6 +403,8 @@ def run(args: argparse.Namespace) -> int:
 
             run_dir = storage.find_run_dir(run_id)
             print_summary(api, run_id, run_dir, status)
+            if assistant is not None:
+                print_storybook(client, run_id)
             exit_code = 0
             if status["state"] == "error":
                 print(f"\nRUN ERROR: {status.get('last_error')}", file=sys.stderr)
@@ -380,6 +415,26 @@ def run(args: argparse.Namespace) -> int:
             return exit_code
     finally:
         manager.shutdown()
+
+
+def print_storybook(client: Any, run_id: str, wait_seconds: float = 30.0) -> None:
+    """Wait briefly for queued narration, then print the storybook status (``--assistant``)."""
+    deadline = time.monotonic() + wait_seconds
+    while True:
+        response = client.get(f"/api/runs/{run_id}/assistant/storybook")
+        if response.status_code != 200:
+            print(f"\nstorybook: unavailable ({response.status_code}: {response.text[:200]})")
+            return
+        view = response.json()
+        status = view.get("status", {})
+        if not status.get("in_flight") and not status.get("pending_count") or time.monotonic() > deadline:
+            break
+        time.sleep(0.5)
+    print(f"\nstorybook: auto {status.get('auto_state')}, {status.get('entry_count')} entries, "
+          f"opening {'yes' if status.get('has_opening') else 'no'}, missing {status.get('missing_count')}, "
+          f"spent ${(status.get('spend') or {}).get('spent_usd', 0):.4f}")
+    if status.get("notice") or status.get("last_error"):
+        print(f"  {status.get('notice') or ''} {status.get('last_error') or ''}".rstrip())
 
 
 def main(argv: Optional[list[str]] = None) -> int:

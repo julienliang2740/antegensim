@@ -193,7 +193,8 @@ function StagedList(props: { staged: GodModePanelProps["staged"]; disabled: bool
             <li key={id ?? i} className="insp-staged-item">
               <div className="insp-staged-line">
                 <code>{id ?? "(no id)"}</code> <span className="insp-badge">{iv.type}</span>
-                <span className="insp-badge">{iv.origin === "file" ? "file edit" : "UI"}</span> {describeIntervention(iv)}
+                <span className={`insp-badge${iv.origin === "assistant" ? " insp-badge-info" : ""}`}>{iv.origin === "file" ? "file edit" : iv.origin === "assistant" ? "assistant" : "UI"}</span>{" "}
+                {describeIntervention(iv)}
               </div>
               {iv.note ? <div className="insp-hint">note: {iv.note}</div> : null}
               {iv.type === "apply_working_files" && iv.changes.length > 0 ? <ChangeList changes={iv.changes} /> : null}

@@ -16,6 +16,13 @@
  * Snapshot identity is stable: publishContext only replaces the snapshot (and
  * notifies) when a field actually changed, so publishing from a RunPage effect
  * on every render is cheap and useSyncExternalStore never loops.
+ *
+ * Two more channels live here so pages and the drawer never import each other:
+ * - the DRAWER STATE (open, docked, width, model status) with its own
+ *   subscribe/getDrawerState pair, read by the run page to reserve room for a
+ *   docked drawer (dockReserve) and to draw the launcher's status dot;
+ * - ASK REQUESTS: askAssistant(question) from an "Ask" button anywhere opens
+ *   the drawer with that question prefilled (subscribeAsk).
  */
 
 import type { EntityKind, Point, RunState, RunStatus } from "../api/types";
@@ -189,9 +196,124 @@ export function contextChipText(ctx: AssistantContext): string {
   return names[ctx.page];
 }
 
-/** Test hook: forget the context, listeners and handlers. */
+// ---------------------------------------------------------------------------
+// Drawer state (open / docked / width / status), shared with the run page
+// ---------------------------------------------------------------------------
+
+/** What the launcher's status dot shows: from GET /api/assistant/capabilities. */
+export type AssistantStatus = "unknown" | "ready" | "fake" | "offline" | "unavailable";
+
+export interface DrawerState {
+  open: boolean;
+  /** Dock on the run page (reserve room) instead of floating over it. */
+  docked: boolean;
+  /** The user's chosen width in px (DRAWER_MIN_W..DRAWER_MAX_W). */
+  width: number;
+  status: AssistantStatus;
+}
+
+export const DRAWER_MIN_W = 360;
+export const DRAWER_MAX_W = 720;
+export const DRAWER_DEFAULT_W = 400;
+/** The drawer docks (reserves room) on the run page only from this window width. */
+export const DOCK_MIN_WINDOW_W = 1280;
+/** Room the run page keeps for itself when docked: rail 200 + side 300 + map 360 + chrome 36, rounded up. */
+export const DOCK_PAGE_MIN_W = 920;
+
+const DRAWER_EMPTY: DrawerState = { open: false, docked: true, width: DRAWER_DEFAULT_W, status: "unknown" };
+let drawerState: DrawerState = DRAWER_EMPTY;
+const drawerListeners = new Set<() => void>();
+
+/** Clamp a requested drawer width to the allowed range (and the window). */
+export function clampDrawerWidth(width: number, innerWidth?: number): number {
+  const max = innerWidth === undefined ? DRAWER_MAX_W : Math.min(DRAWER_MAX_W, Math.max(DRAWER_MIN_W, innerWidth));
+  if (!Number.isFinite(width)) return Math.min(DRAWER_DEFAULT_W, max);
+  return Math.max(DRAWER_MIN_W, Math.min(max, Math.round(width)));
+}
+
+/**
+ * Pixels the run page must reserve on its right for the drawer: 0 unless the
+ * drawer is open and docked on a window of at least DOCK_MIN_WINDOW_W, else the
+ * drawer width capped so the page keeps DOCK_PAGE_MIN_W (the drawer shrinks to
+ * the same number, so nothing is covered).
+ */
+export function dockReserve(state: DrawerState, innerWidth: number, page: AssistantPage): number {
+  if (!state.open || !state.docked || page !== "run") return 0;
+  if (innerWidth < DOCK_MIN_WINDOW_W) return 0;
+  return Math.max(0, Math.min(state.width, innerWidth - DOCK_PAGE_MIN_W));
+}
+
+export function getDrawerState(): DrawerState {
+  return drawerState;
+}
+
+export function subscribeDrawer(listener: () => void): () => void {
+  drawerListeners.add(listener);
+  return () => {
+    drawerListeners.delete(listener);
+  };
+}
+
+/** Change part of the drawer state; notifies only when something changed. */
+export function setDrawerState(patch: Partial<DrawerState>): DrawerState {
+  const next: DrawerState = { ...drawerState, ...patch };
+  next.width = clampDrawerWidth(next.width);
+  if (next.open === drawerState.open && next.docked === drawerState.docked && next.width === drawerState.width && next.status === drawerState.status) {
+    return drawerState;
+  }
+  drawerState = next;
+  for (const listener of [...drawerListeners]) listener();
+  return drawerState;
+}
+
+// ---------------------------------------------------------------------------
+// "Ask" requests from entry points (StatusBar error, inspector header, ...)
+// ---------------------------------------------------------------------------
+
+export interface AskRequest {
+  /** Monotonic id so the same question can be asked twice. */
+  id: number;
+  text: string;
+  /** Send at once instead of leaving the question in the composer (default: false, the user reviews it). */
+  autoSend: boolean;
+}
+
+let askCounter = 0;
+let lastAsk: AskRequest | null = null;
+const askListeners = new Set<(request: AskRequest) => void>();
+
+/** Open the drawer with `text` prefilled (an "Ask" entry point).  Also opens the drawer. */
+export function askAssistant(text: string, options: { autoSend?: boolean } = {}): AskRequest {
+  askCounter += 1;
+  const request: AskRequest = { id: askCounter, text, autoSend: options.autoSend ?? false };
+  lastAsk = request;
+  setDrawerState({ open: true });
+  for (const listener of [...askListeners]) listener(request);
+  return request;
+}
+
+/** The most recent ask request (so a drawer that mounts after the click still sees it), or null. */
+export function takeLastAsk(): AskRequest | null {
+  const request = lastAsk;
+  lastAsk = null;
+  return request;
+}
+
+export function subscribeAsk(listener: (request: AskRequest) => void): () => void {
+  askListeners.add(listener);
+  return () => {
+    askListeners.delete(listener);
+  };
+}
+
+/** Test hook: forget the context, listeners, handlers, drawer state and ask requests. */
 export function resetAssistantContextForTests(): void {
   snapshot = EMPTY;
   listeners.clear();
   handlers.clear();
+  drawerState = DRAWER_EMPTY;
+  drawerListeners.clear();
+  askListeners.clear();
+  lastAsk = null;
+  askCounter = 0;
 }

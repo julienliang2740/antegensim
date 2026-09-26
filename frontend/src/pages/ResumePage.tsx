@@ -1,7 +1,9 @@
 /**
  * Resume session (spec "Sessions and run controls": list saved sessions with
  * identifying names, last saved round/turn and save time; the selected run
- * opens paused at its latest complete checkpoint).
+ * opens paused at its latest complete checkpoint).  Each row also has a
+ * "Story" action that opens Story Mode for the run (#/story/<run>) without
+ * opening it.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -66,6 +68,7 @@ export function ResumePage() {
               <th>Agents (living / total)</th>
               <th>Status when listed</th>
               <th>Default model</th>
+              <th>Story Mode</th>
               <th>Ids</th>
             </tr>
           </thead>
@@ -95,6 +98,11 @@ export function ResumePage() {
                 <td>{stateWord(run.status)}</td>
                 <td>
                   <code>{run.default_model_key}</code>
+                </td>
+                <td>
+                  <button type="button" className="btn btn-small" title="Turn this run into a story (never opens the run)" onClick={() => navigate({ name: "story", runId: run.run_id, storyId: null })}>
+                    Story
+                  </button>
                 </td>
                 <td className="ids">
                   <div>

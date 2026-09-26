@@ -10,6 +10,42 @@
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
+/* Four choices: two by two on ordinary screens, one row on wide ones, one column on phones. */
+.entry-choices-four {
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+}
+
+@media (min-width: 1200px) {
+  .entry-choices-four {
+    grid-template-columns: repeat(4, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .entry-choices-four {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.entry-ask {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+
+.entry-ask .btn-link {
+  font-weight: 600;
+}
+
+/* Prefilled-by-the-assistant banner on the New session page. */
+.setup-draft-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent-bg);
+  border-color: var(--accent);
+}
+
 .choice-secondary {
   border-color: var(--border-strong);
   border-style: dashed;

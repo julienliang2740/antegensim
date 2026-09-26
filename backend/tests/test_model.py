@@ -1480,3 +1480,669 @@ def test_claude_cli_stream_success_uses_the_result_event(fake_cli, registry):
     fake_cli.stdout_text = "\n".join(json.dumps(e) for e in events)
     result = call_model(make_request("claude-cli-haiku"), registry)
     assert result.status == "ok" and result.parsed == VALID_DECISION and result.error is None
+
+
+# ---------------------------------------------------------------------------
+# rev 4 (assistant): text response mode, fake-assistant, error codes, cancellation,
+# cost summing, argv cap, purpose-named structured output, local Whisper
+# ---------------------------------------------------------------------------
+
+import re  # noqa: E402
+import threading  # noqa: E402
+import time  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+TEXT_SYSTEM = "You narrate a simulation. Write two sentences."
+PROSE = 'Aster crossed the ridge at dawn. She found fruit {"not": "a decision"} and ate.'
+
+
+def text_request(
+    model_key: str,
+    *,
+    system: Optional[str] = TEXT_SYSTEM,
+    user: str = "Narrate turn r00001_t01_a01.",
+    metadata: Optional[dict[str, Any]] = None,
+    purpose: str = "narrative",
+    response_format: str = "text",
+    schema: Optional[dict[str, Any]] = None,
+    max_retries: int = 0,
+    timeout: float = 5.0,
+    request_id: str = "as_narrator_test_01",
+) -> ModelRequest:
+    messages = ([ModelMessage(role="system", content=system)] if system is not None else []) + [
+        ModelMessage(role="user", content=user)
+    ]
+    return ModelRequest(
+        request_id=request_id,
+        model_key=model_key,
+        messages=messages,
+        response_schema=schema,
+        response_format=response_format,  # type: ignore[arg-type]
+        max_output_tokens=600,
+        timeout_seconds=timeout,
+        max_retries=max_retries,
+        purpose=purpose,  # type: ignore[arg-type]
+        metadata=metadata or {},
+    )
+
+
+ANSWER_SCHEMA = {
+    "type": "object",
+    "properties": {"kind": {"type": "string", "enum": ["answer"]}, "text": {"type": "string"}},
+    "required": ["kind", "text"],
+    "additionalProperties": False,
+}
+
+
+def anthropic_tool_message(tool_name: str, tool_input: dict[str, Any]):
+    from anthropic.types import Message
+
+    return Message.model_validate(
+        {
+            "id": "msg_02",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-sonnet-4-6",
+            "content": [{"type": "tool_use", "id": "toolu_02", "name": tool_name, "input": tool_input}],
+            "stop_reason": "tool_use",
+            "stop_sequence": None,
+            "usage": {"input_tokens": 10, "output_tokens": 5},
+        }
+    )
+
+
+# --- text response mode, per adapter ---------------------------------------------------------
+
+
+def test_text_mode_anthropic_sends_no_tool_or_json_instruction(clean_env, monkeypatch, registry):
+    clean_env.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key-000000000000")
+    client = Recorder(anthropic_message(None, stop="end_turn", text=PROSE))
+    install_client(monkeypatch, "anthropic", client)
+    result = call_model(text_request("anthropic-haiku"), registry)
+    assert result.status == "ok" and result.ok and result.parsed is None and result.text == PROSE
+    assert result.error_code is None
+    kwargs = client.calls[0]
+    assert "tools" not in kwargs and "tool_choice" not in kwargs
+    assert kwargs["system"] == TEXT_SYSTEM and JSON_ONLY_INSTRUCTION not in repr(kwargs)
+    # a schema passed by mistake is ignored in text mode (no forced tool, prose stays prose)
+    call_model(text_request("anthropic-haiku", schema=ANSWER_SCHEMA), registry)
+    assert "tools" not in client.calls[-1]
+    install_client(monkeypatch, "anthropic", Recorder(anthropic_message(None, stop="end_turn", text="   ")))
+    empty = call_model(text_request("anthropic-haiku"), registry)
+    assert empty.status == "malformed" and not empty.ok and empty.error_code is None
+    install_client(monkeypatch, "anthropic", Recorder(anthropic_message(None, stop="max_tokens", text="Aster crossed the")))
+    cut = call_model(text_request("anthropic-haiku"), registry)
+    assert cut.status == "truncated" and not cut.ok and cut.text == "Aster crossed the"
+
+
+def test_text_mode_openai_family_sends_no_response_format(clean_env, monkeypatch, registry):
+    clean_env.setenv("OPENAI_API_KEY", "sk-proj-test-0000000000000")
+    jsonmode = registry_with(
+        {"key": "jsonmode", "provider": "openai", "model_id": "o", "credential_env": ["OPENAI_API_KEY"], "capabilities": caps(schema=False)}
+    )
+    for reg, key in ((registry, "openai-mini"), (jsonmode, "jsonmode")):
+        client = Recorder(openai_completion(PROSE))
+        install_client(monkeypatch, "openai", client)
+        result = call_model(text_request(key), reg)
+        assert result.status == "ok" and result.ok and result.parsed is None and result.text == PROSE, key
+        kwargs = client.calls[0]
+        assert "response_format" not in kwargs, key
+        assert kwargs["messages"][0] == {"role": "system", "content": TEXT_SYSTEM}
+
+
+def test_text_mode_bedrock_sends_no_json_instruction(clean_env, monkeypatch, registry):
+    client = Recorder(bedrock_response(PROSE))
+    install_client(monkeypatch, "bedrock", client)
+    result = call_model(text_request("bedrock-haiku"), registry)
+    assert result.status == "ok" and result.ok and result.parsed is None and result.text == PROSE
+    assert client.calls[0]["system"] == [{"text": TEXT_SYSTEM}]
+
+
+def test_text_mode_claude_cli(fake_cli, registry):
+    fake_cli.stdout_text = json.dumps(cli_envelope(structured_output=None, num_turns=1, result=PROSE, stop_reason="end_turn"))
+    result = call_model(text_request("claude-cli-haiku"), registry)
+    assert result.status == "ok" and result.ok and result.parsed is None and result.text == PROSE
+    assert result.provider_cost_usd == pytest.approx(0.001666) and result.usage.source == "provider"
+    argv = fake_cli.instances[-1].argv
+    assert "--json-schema" not in argv
+    assert argv[argv.index("--system-prompt") + 1] == TEXT_SYSTEM
+    assert fake_cli.instances[-1].stdin_text == "Narrate turn r00001_t01_a01."
+    # no system message: the neutral text fallback, never the JSON one
+    call_model(text_request("claude-cli-haiku", system=None), registry)
+    argv = fake_cli.instances[-1].argv
+    assert argv[argv.index("--system-prompt") + 1] == model.CLI_TEXT_SYSTEM_PROMPT
+    assert "JSON" not in model.CLI_TEXT_SYSTEM_PROMPT
+    # JSON requests without a system message still get the JSON-only instruction (unchanged)
+    call_model(text_request("claude-cli-haiku", system=None, response_format="json"), registry)
+    argv = fake_cli.instances[-1].argv
+    assert argv[argv.index("--system-prompt") + 1] == JSON_ONLY_INSTRUCTION
+    fake_cli.stdout_text = json.dumps(cli_envelope(structured_output=None, num_turns=1, result=""))
+    empty = call_model(text_request("claude-cli-haiku"), registry)
+    assert empty.status == "malformed" and not empty.ok and empty.error_code is None
+    # text mode sends no schema, so every turn is a model request (3 > the default 2)
+    fake_cli.stdout_text = json.dumps(cli_envelope(structured_output=None, num_turns=3, result=PROSE))
+    assert call_model(text_request("claude-cli-haiku"), registry).status == "error"
+
+
+def test_text_mode_has_no_json_instruction_overhead(registry):
+    for key, provider in (("claude-cli-haiku", "claude_cli"), ("anthropic-haiku", "anthropic"), ("openai-mini", "openai")):
+        assert request_overhead_tokens(key, registry, response_format="text") == model.FIXED_OVERHEAD_TOKENS[provider]
+        assert request_overhead_tokens(key, registry) > request_overhead_tokens(key, registry, response_format="text")
+    assert request_overhead_tokens("bedrock-haiku", registry, response_format="text") == model.FIXED_OVERHEAD_TOKENS.get("bedrock", 0)
+    assert request_overhead_tokens("fake-assistant", registry, response_format="text") == 0
+
+
+def test_fake_modes_in_text_mode(registry):
+    scripted = call_model(text_request("fake-scripted", metadata={"fake_script": [PROSE], "fake_script_index": 0}), registry)
+    assert scripted.status == "ok" and scripted.ok and scripted.text == PROSE and scripted.parsed is None
+    # the same string in JSON mode is still classified like a real reply
+    as_json = call_model(text_request("fake-scripted", response_format="json", metadata={"fake_script": ["no json"], "fake_script_index": 0}), registry)
+    assert as_json.status == "malformed" and as_json.error_code == "schema_mismatch"
+    heuristic = call_model(text_request("fake-heuristic"), registry)
+    assert heuristic.ok and heuristic.parsed is None and json.loads(heuristic.text)["action"]
+
+
+# --- fake-assistant ----------------------------------------------------------------------------
+
+
+def test_fake_assistant_script_then_reply_then_invalid_config(registry):
+    assert registry.info("fake-assistant").assistant_only and registry.info("fake-assistant").available
+    step1 = {"kind": "tool", "calls": [{"name": "search_docs", "args": {"query": "budget"}}]}
+    step2 = {"kind": "answer", "text": "The budget is 5 USD.", "refs": []}
+    script = [step1, step2]
+    first = call_model(text_request("fake-assistant", response_format="json", purpose="assistant", metadata={"fake_script": script, "fake_script_index": 0}), registry)
+    assert first.status == "ok" and first.ok and first.parsed == step1 and first.error_code is None
+    second = call_model(text_request("fake-assistant", response_format="json", purpose="assistant", metadata={"fake_script": script, "fake_script_index": 1}), registry)
+    assert second.parsed == step2
+    # index past the script: the per-profile default reply
+    fallback = call_model(
+        text_request("fake-assistant", response_format="json", metadata={"fake_script": script, "fake_script_index": 2, "fake_reply": {"kind": "answer", "text": "default"}}),
+        registry,
+    )
+    assert fallback.ok and fallback.parsed == {"kind": "answer", "text": "default"}
+    nothing = call_model(text_request("fake-assistant", metadata={}), registry)
+    assert nothing.status == "invalid_config" and not nothing.ok and nothing.attempts == 1
+    assert "fake_reply" in (nothing.error or "")
+    # strings: ok in text mode; in JSON mode prose is malformed and a JSON string decodes
+    story = call_model(text_request("fake-assistant", metadata={"fake_reply": "## r00001_t01_a01\nAster ate."}), registry)
+    assert story.status == "ok" and story.ok and story.text.startswith("## r00001_t01_a01") and story.parsed is None
+    prose = call_model(text_request("fake-assistant", response_format="json", metadata={"fake_reply": "Sure! Here you go."}), registry)
+    assert prose.status == "malformed" and not prose.ok and prose.error_code == "schema_mismatch"
+    wrapped = call_model(text_request("fake-assistant", response_format="json", metadata={"fake_reply": json.dumps(step2)}), registry)
+    assert wrapped.ok and wrapped.parsed == step2
+    # a dict reply in text mode comes back as its JSON text
+    as_text = call_model(text_request("fake-assistant", metadata={"fake_reply": step2}), registry)
+    assert as_text.ok and json.loads(as_text.text) == step2 and as_text.parsed is None
+    empty = call_model(text_request("fake-assistant", metadata={"fake_reply": ""}), registry)
+    assert empty.status == "malformed" and not empty.ok
+
+
+def test_fake_options_error_code_and_cost(registry, delays):
+    failing = call_model(
+        text_request("fake-assistant", max_retries=2, metadata={"fake_reply": "x", "fake_options": {"fail": {"status": "error", "http_status": 400, "error_code": "budget_exceeded"}, "cost_usd": 0.02}}),
+        registry,
+    )
+    assert failing.status == "error" and failing.error_code == "budget_exceeded" and failing.attempts == 1
+    assert failing.provider_cost_usd == pytest.approx(0.02)
+    rate = call_model(text_request("fake-assistant", metadata={"fake_reply": "x", "fake_options": {"fail": {"status": "error", "http_status": 429}}}), registry)
+    assert rate.error_code == "rate_limited"
+    ignored = call_model(text_request("fake-assistant", metadata={"fake_reply": "x", "fake_options": {"fail": {"status": "timeout", "error_code": "bogus"}}}), registry)
+    assert ignored.status == "timeout" and ignored.error_code == "timeout"
+    ok = call_model(text_request("fake-assistant", metadata={"fake_reply": "x", "fake_options": {"cost_usd": 0.5}}), registry)
+    assert ok.ok and ok.provider_cost_usd == pytest.approx(0.5) and ok.error_code is None
+
+
+# --- error codes -------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "overrides, status, code",
+    [
+        ({"is_error": True, "subtype": "error_max_budget_usd", "result": ""}, "error", "budget_exceeded"),
+        ({"is_error": True, "subtype": "error_during_execution", "api_error_status": 429}, "error", "rate_limited"),
+        ({"is_error": True, "subtype": "error_during_execution", "api_error_status": 529}, "error", "rate_limited"),
+        ({"is_error": True, "subtype": "error_max_turns", "result": None, "structured_output": None}, "malformed", "schema_mismatch"),
+        ({"structured_output": None, "result": "I refuse to use JSON."}, "malformed", "schema_mismatch"),
+        ({"is_error": True, "subtype": "success", "result": "Invalid API key · Please run /login"}, "error", "not_logged_in"),
+        ({"is_error": True, "subtype": "error_during_execution", "api_error_status": 401, "result": "OAuth token has expired"}, "invalid_config", "not_logged_in"),
+        ({"is_error": True, "subtype": "error_during_execution", "api_error_status": 500}, "error", None),
+        ({}, "ok", None),
+    ],
+)
+def test_claude_cli_error_codes(fake_cli, registry, overrides, status, code):
+    fake_cli.stdout_text = json.dumps(cli_envelope(**overrides))
+    result = call_model(make_request("claude-cli-haiku", max_retries=0), registry)
+    assert (result.status, result.error_code) == (status, code)
+
+
+def test_error_codes_for_timeout_missing_cli_and_sdk_errors(fake_cli, clean_env, monkeypatch, registry, delays):
+    fake_cli.raise_timeout = True
+    monkeypatch.setattr(model.os, "killpg", lambda pid, sig: None)
+    timed_out = call_model(make_request("claude-cli-haiku", max_retries=0), registry)
+    assert timed_out.status == "timeout" and timed_out.error_code == "timeout"
+    fake_cli.raise_timeout = False
+    # no executable: pre-flight (no attempt) and adapter level both say cli_missing
+    monkeypatch.setattr(model.shutil, "which", lambda name: None)
+    missing = call_model(make_request("claude-cli-haiku"), registry)
+    assert missing.status == "invalid_config" and missing.attempts == 0 and missing.error_code == "cli_missing"
+    direct = model.ClaudeCliAdapter().attempt(registry.resolved("claude-cli-haiku"), make_request("claude-cli-haiku"), 1)
+    assert direct.result.status == "invalid_config" and direct.result.error_code == "cli_missing"
+    # other unavailable routes carry no code
+    clean_env.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert call_model(make_request("anthropic-haiku"), registry).error_code is None
+    # SDK adapters: 429 -> rate_limited, a transport timeout -> timeout
+    clean_env.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key-000000000000")
+    install_client(monkeypatch, "anthropic", Recorder(http_error("anthropic", "RateLimitError", 429)))
+    limited = call_model(make_request("anthropic-haiku", max_retries=0), registry)
+    assert limited.status == "error" and limited.error_code == "rate_limited"
+    import httpx2
+    import openai
+
+    clean_env.setenv("OPENAI_API_KEY", "sk-proj-test-0000000000000")
+    install_client(monkeypatch, "openai", Recorder(openai.APITimeoutError(request=httpx2.Request("POST", "https://provider.invalid"))))
+    slow = call_model(make_request("openai-mini", max_retries=0), registry)
+    assert slow.status == "timeout" and slow.error_code == "timeout"
+
+
+def test_derive_error_code_table():
+    assert model.derive_error_code("ok", 429) is None
+    assert model.derive_error_code("timeout", None) == "timeout"
+    assert model.derive_error_code("error", 429) == "rate_limited"
+    assert model.derive_error_code("error", 529) == "rate_limited"
+    assert model.derive_error_code("error", 500) is None
+    assert model.derive_error_code("malformed", None) == "schema_mismatch"
+    assert model.derive_error_code("malformed", None, text_mode=True) is None
+    assert model.MODEL_ERROR_CODES == {
+        "budget_exceeded", "rate_limited", "schema_mismatch", "cancelled", "timeout", "not_logged_in", "cli_missing"
+    }
+
+
+# --- cancellation and the in-flight registry --------------------------------------------------
+
+
+@pytest.fixture()
+def slow_cli(tmp_path, monkeypatch):
+    """A real, slow stand-in for the claude executable (a shell script that sleeps), so the
+    cancel path kills a genuine process group.  Records every Popen instance."""
+    script = tmp_path / "claude"
+    script.write_text("#!/bin/sh\nexec sleep 30\n")
+    script.chmod(0o755)
+    monkeypatch.setattr(model.shutil, "which", lambda name: str(script))
+    started: list[subprocess.Popen] = []
+    real_popen = subprocess.Popen
+
+    class RecordingPopen(real_popen):  # type: ignore[misc, valid-type]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            started.append(self)
+
+    monkeypatch.setattr(subprocess, "Popen", RecordingPopen)
+    return started
+
+
+def _run_in_thread(fn) -> tuple[threading.Thread, dict[str, Any]]:
+    box: dict[str, Any] = {}
+
+    def target() -> None:
+        box["result"] = fn()
+
+    thread = threading.Thread(target=target, daemon=True)
+    thread.start()
+    return thread, box
+
+
+def _wait_for(predicate, timeout: float = 10.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def test_cancel_kills_the_cli_process_group(slow_cli, registry, delays):
+    cancel = threading.Event()
+    request = text_request("claude-cli-haiku", max_retries=2, timeout=60.0)
+    thread, box = _run_in_thread(lambda: call_model(request, registry, cancel=cancel))
+    assert _wait_for(lambda: model.inflight_count() == 1 and slow_cli)
+    proc = slow_cli[0]
+    assert proc.poll() is None  # really running
+    stop = time.monotonic()
+    cancel.set()
+    thread.join(timeout=10)
+    assert not thread.is_alive()
+    elapsed = time.monotonic() - stop
+    result = box["result"]
+    assert result.status == "error" and result.error_code == "cancelled" and not result.ok
+    assert result.attempts == 1 and delays == []  # never retried
+    assert result.provider_cost_usd is None
+    assert elapsed < 3.0  # one poll slice plus the kill, not the 60 s timeout
+    assert proc.returncode == -signal.SIGKILL
+    assert model.inflight_count() == 0
+    with pytest.raises(ProcessLookupError):
+        os.killpg(proc.pid, 0)  # the whole group is gone
+
+
+def test_kill_inflight_stops_running_calls(slow_cli, registry, delays):
+    request = text_request("claude-cli-haiku", max_retries=2, timeout=60.0)
+    thread, box = _run_in_thread(lambda: call_model(request, registry))  # no cancel event at all
+    assert _wait_for(lambda: model.inflight_count() == 1)
+    assert model.kill_inflight() == 1
+    thread.join(timeout=10)
+    assert not thread.is_alive()
+    result = box["result"]
+    assert result.status == "error" and result.error_code == "cancelled" and "shutdown" in (result.error or "")
+    assert result.attempts == 1 and delays == []
+    assert model.inflight_count() == 0 and model.kill_inflight() == 0
+
+
+def test_cancel_set_before_the_call_starts_nothing(fake_cli, registry):
+    cancel = threading.Event()
+    cancel.set()
+    result = call_model(make_request("claude-cli-haiku"), registry, cancel=cancel)
+    assert result.status == "error" and result.error_code == "cancelled" and result.attempts == 0
+    assert fake_cli.instances == []
+
+
+def test_cancel_between_retries_stops_retrying(registry, monkeypatch):
+    cancel = threading.Event()
+    monkeypatch.setattr(model, "_sleep", lambda seconds: cancel.set())  # cancelled during the backoff
+    request = text_request("fake-assistant", max_retries=2, metadata={"fake_reply": "x", "fake_options": {"fail": {"status": "error", "http_status": 500}}})
+    result = call_model(request, registry, cancel=cancel)
+    assert result.status == "error" and result.error_code == "cancelled" and result.attempts == 1
+    assert "before retry 2" in (result.error or "")
+
+
+def test_fake_sleep_is_interrupted_by_cancel(registry):
+    cancel = threading.Event()
+    request = text_request("fake-assistant", timeout=30.0, metadata={"fake_reply": "late", "fake_options": {"sleep_ms": 20000}})
+    thread, box = _run_in_thread(lambda: call_model(request, registry, cancel=cancel))
+    time.sleep(0.1)
+    started = time.monotonic()
+    cancel.set()
+    thread.join(timeout=5)
+    assert not thread.is_alive() and time.monotonic() - started < 2.0
+    assert box["result"].error_code == "cancelled" and box["result"].status == "error"
+    # without an event the fake still just sleeps and answers
+    quick = call_model(text_request("fake-assistant", metadata={"fake_reply": "on time", "fake_options": {"sleep_ms": 10}}), registry)
+    assert quick.ok and quick.text == "on time"
+
+
+# --- cost summed over attempts ------------------------------------------------------------------
+
+
+def test_provider_cost_is_summed_over_attempts(fake_cli, registry, delays):
+    fake_cli.stdout_text = json.dumps(cli_envelope(is_error=True, subtype="error_during_execution", api_error_status=529, total_cost_usd=0.01))
+    result = call_model(make_request("claude-cli-haiku"), registry)
+    assert result.attempts == 3 and result.provider_cost_usd == pytest.approx(0.03)
+    assert model.sum_provider_cost([None, None]) is None
+    assert model.sum_provider_cost([]) is None
+    assert model.sum_provider_cost([None, 0.02, 0.0]) == pytest.approx(0.02)
+    # an attempt without a reported cost adds nothing; the answered one counts
+    mixed = call_model(
+        text_request("fake-assistant", max_retries=2, metadata={"fake_reply": "x", "fake_options": {"cost_usd": 0.02, "fail": {"status": "timeout", "failing_attempts": 1}}}),
+        registry,
+    )
+    assert mixed.ok and mixed.attempts == 2 and mixed.provider_cost_usd == pytest.approx(0.02)
+    none_reported = call_model(text_request("fake-assistant", metadata={"fake_reply": "x"}), registry)
+    assert none_reported.provider_cost_usd is None
+
+
+# --- argv byte cap ------------------------------------------------------------------------------
+
+
+def test_claude_cli_refuses_oversized_argv(fake_cli, registry):
+    at_cap = call_model(text_request("claude-cli-haiku", system="s" * config.CLI_ARGV_MAX_BYTES), registry)
+    assert at_cap.status == "ok" and len(fake_cli.instances) == 1
+    over = call_model(text_request("claude-cli-haiku", system="s" * (config.CLI_ARGV_MAX_BYTES + 1)), registry)
+    assert over.status == "invalid_config" and over.attempts == 1 and "CLI_ARGV_MAX_BYTES" in (over.error or "")
+    # bytes, not characters: 2-byte characters hit the cap at half the length
+    wide = call_model(text_request("claude-cli-haiku", system="é" * (config.CLI_ARGV_MAX_BYTES // 2 + 1)), registry)
+    assert wide.status == "invalid_config"
+    assert len(fake_cli.instances) == 1  # neither oversized call started a process
+
+
+# --- purpose-named structured output ------------------------------------------------------------
+
+
+def test_structured_output_names_follow_the_purpose():
+    assert model.structured_output_names("decision") == ("submit_decision", model.DECISION_TOOL_DESCRIPTION, "decision")
+    for purpose, schema_name in (("assistant", "assistant_reply"), ("narrative", "narrative"), ("summarize", "summary"), ("test", "response")):
+        tool, description, name = model.structured_output_names(purpose)
+        assert tool == "submit_response" and "decision" not in description and name == schema_name
+
+
+def test_anthropic_forced_tool_is_named_by_purpose(clean_env, monkeypatch, registry):
+    clean_env.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key-000000000000")
+    reply = {"kind": "answer", "text": "Hello."}
+    client = Recorder(anthropic_tool_message("submit_response", reply))
+    install_client(monkeypatch, "anthropic", client)
+    result = call_model(text_request("anthropic-haiku", response_format="json", purpose="assistant", schema=ANSWER_SCHEMA), registry)
+    assert result.ok and result.parsed == reply
+    kwargs = client.calls[0]
+    assert kwargs["tools"][0]["name"] == "submit_response" and kwargs["tool_choice"] == {"type": "tool", "name": "submit_response"}
+    assert "decision" not in kwargs["tools"][0]["description"]
+    # a tool call under the decision name is not this request's tool
+    install_client(monkeypatch, "anthropic", Recorder(anthropic_tool_message("submit_decision", reply)))
+    wrong = call_model(text_request("anthropic-haiku", response_format="json", purpose="assistant", schema=ANSWER_SCHEMA), registry)
+    assert wrong.status == "malformed" and wrong.error_code == "schema_mismatch"
+    auto = registry_with(
+        {"key": "auto", "provider": "anthropic", "model_id": "m", "credential_env": ["ANTHROPIC_API_KEY"], "capabilities": caps(), "options": {"tool_choice": "auto"}}
+    )
+    client = Recorder(anthropic_tool_message("submit_response", reply))
+    install_client(monkeypatch, "anthropic", client)
+    call_model(text_request("auto", response_format="json", purpose="assistant", schema=ANSWER_SCHEMA), auto)
+    assert client.calls[0]["system"].endswith("Submit your reply by calling the submit_response tool exactly once.")
+
+
+def test_openai_schema_name_follows_purpose(clean_env, monkeypatch, registry):
+    clean_env.setenv("OPENAI_API_KEY", "sk-proj-test-0000000000000")
+    client = Recorder(openai_completion(json.dumps({"kind": "answer", "text": "Hi."})))
+    install_client(monkeypatch, "openai", client)
+    for purpose, name in (("assistant", "assistant_reply"), ("narrative", "narrative"), ("decision", "decision")):
+        call_model(text_request("openai-mini", response_format="json", purpose=purpose, schema=ANSWER_SCHEMA), registry)
+        assert client.calls[-1]["response_format"]["json_schema"]["name"] == name
+
+
+# --- golden malformed CLI envelopes (the shapes the engine's salvage step must handle) ----------
+
+
+def test_claude_cli_golden_stringified_wrapper_is_malformed_with_payload(fake_cli, registry, delays):
+    """Haiku's recorded failure shape: the StructuredOutput input wraps the JSON as a string
+    under one key.  The boundary reports malformed + schema_mismatch and keeps the payload in
+    ``text`` so the engine can salvage it without a re-call."""
+    inner = {"kind": "answer", "text": "Round 3 had two deaths.", "refs": []}
+    rejected = {"input": json.dumps(inner)}
+    verdict = "Output does not match required schema: must have required property 'kind'"
+    events = [
+        {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "StructuredOutput", "input": rejected}]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "content": verdict}]}},
+        cli_envelope(is_error=True, subtype="error_max_turns", result=None, structured_output=None, num_turns=2),
+    ]
+    fake_cli.stdout_text = "\n".join(json.dumps(e) for e in events)
+    result = call_model(text_request("claude-cli-haiku", response_format="json", purpose="assistant", schema=ANSWER_SCHEMA), registry)
+    assert result.status == "malformed" and result.error_code == "schema_mismatch" and not result.ok
+    assert json.loads(json.loads(result.text)["input"]) == inner
+    assert result.error.startswith("structured output did not match the response schema: Output does not match")
+    assert result.provider_cost_usd == pytest.approx(0.001666) and delays == []
+
+
+def test_claude_cli_golden_output_wrapper_passes_through_unchanged(fake_cli, registry):
+    """A schema-valid envelope whose object is ``{"output": "<json>"}`` (a lenient schema let it
+    through) is ok at the boundary; unwrapping it is the engine's deterministic salvage."""
+    wrapped = {"output": json.dumps({"kind": "answer", "text": "Hi."})}
+    fake_cli.stdout_text = json.dumps(cli_envelope(structured_output=wrapped, result=json.dumps(wrapped)))
+    result = call_model(text_request("claude-cli-haiku", response_format="json", purpose="assistant", schema={"type": "object"}), registry)
+    assert result.ok and result.parsed == wrapped
+
+
+# --- local Whisper (fake faster_whisper module; the real model only under the marker) ---------
+
+
+class FakeSegment:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
+class FakeWhisperModel:
+    instances: list["FakeWhisperModel"] = []
+    fail_load: Optional[BaseException] = None
+    fail_transcribe: Optional[BaseException] = None
+
+    def __init__(self, name: str, **kwargs: Any) -> None:
+        if FakeWhisperModel.fail_load is not None:
+            raise FakeWhisperModel.fail_load
+        self.name = name
+        self.kwargs = kwargs
+        self.calls: list[tuple[Any, dict[str, Any]]] = []
+        FakeWhisperModel.instances.append(self)
+
+    def transcribe(self, audio: Any, **kwargs: Any):
+        if FakeWhisperModel.fail_transcribe is not None:
+            raise FakeWhisperModel.fail_transcribe
+        self.calls.append((audio, kwargs))
+        segments = (s for s in (FakeSegment(" Move Aster north. "), FakeSegment(""), FakeSegment("Then pause.")))
+        return segments, SimpleNamespace(language="en", duration=2.0)
+
+
+@pytest.fixture()
+def fake_whisper(monkeypatch):
+    """A fake faster_whisper package behind model._import_sdk, and a fresh model state."""
+    FakeWhisperModel.instances = []
+    FakeWhisperModel.fail_load = None
+    FakeWhisperModel.fail_transcribe = None
+    decoded: list[tuple[bytes, int]] = []
+
+    def decode_audio(fileobj: Any, sampling_rate: int = 16000) -> list[float]:
+        data = fileobj.read()
+        decoded.append((data, sampling_rate))
+        if data == b"garbage":
+            raise ValueError("Invalid data found when processing input")
+        seconds = 0 if data == b"silence" else 2
+        return [0.0] * (sampling_rate * seconds)
+
+    cached: dict[str, bool] = {"value": True}
+
+    def download_model(name: str, local_files_only: bool = False) -> str:
+        assert local_files_only
+        if not cached["value"]:
+            raise RuntimeError("not in cache")
+        return f"/cache/{name}"
+
+    fake_module = SimpleNamespace(WhisperModel=FakeWhisperModel, decode_audio=decode_audio)
+    fake_utils = SimpleNamespace(download_model=download_model)
+    real_import = model._import_sdk
+
+    def import_sdk(name: str) -> Any:
+        if name == "faster_whisper":
+            return fake_module
+        if name == "faster_whisper.utils":
+            return fake_utils
+        return real_import(name)
+
+    monkeypatch.setattr(model, "_import_sdk", import_sdk)
+    real_installed = model._sdk_installed
+    monkeypatch.setattr(model, "_sdk_installed", lambda name: True if name == "faster_whisper" else real_installed(name))
+    monkeypatch.setattr(model, "_WHISPER_STATE", model._WhisperState())
+    monkeypatch.setattr(config, "WHISPER_MODEL", "large-v3-turbo")
+    return SimpleNamespace(decoded=decoded, cached=cached, module=fake_module)
+
+
+def test_whisper_status_and_preload(fake_whisper):
+    status = model.whisper_status()
+    assert status.status == "disabled" and "not loaded" in (status.reason or "")
+    assert (status.model, status.device, status.compute_type) == ("large-v3-turbo", "cpu", "int8")
+    model.preload_whisper()
+    assert model.whisper_status().status == "ready" and model.whisper_status().reason is None
+    (loaded,) = FakeWhisperModel.instances
+    assert loaded.name == "large-v3-turbo"
+    assert loaded.kwargs == {"device": "cpu", "compute_type": "int8", "cpu_threads": config.WHISPER_CPU_THREADS}
+    model.preload_whisper()
+    assert len(FakeWhisperModel.instances) == 1  # loaded once per process
+    assert model.whisper_model_cached() is True
+    fake_whisper.cached["value"] = False
+    assert model.whisper_model_cached("medium") is False
+
+
+def test_transcribe_passes_language_prompt_vad_and_beam(fake_whisper, caplog):
+    caplog.set_level("INFO", logger="empyrean.model")
+    result = model.transcribe(b"webm-bytes", language="en-US", initial_prompt="  Aster, Borealis, step_round  ")
+    assert result.status == "ok" and result.text == "Move Aster north. Then pause."
+    assert result.language == "en" and result.duration_s == 2.0 and result.model == "large-v3-turbo" and result.error is None
+    assert fake_whisper.decoded == [(b"webm-bytes", 16000)]
+    (whisper_model,) = FakeWhisperModel.instances  # loaded lazily by the first call
+    audio, kwargs = whisper_model.calls[0]
+    assert len(audio) == 32000
+    assert kwargs == {"language": "en", "initial_prompt": "Aster, Borealis, step_round", "vad_filter": True, "beam_size": 5}
+    assert "Aster" not in caplog.text and "transcribe model=large-v3-turbo status=ok" in caplog.text
+    for language in (None, "", "auto"):
+        model.transcribe(b"webm-bytes", language=language, initial_prompt="")
+        assert whisper_model.calls[-1][1]["language"] is None and whisper_model.calls[-1][1]["initial_prompt"] is None
+
+
+def test_transcribe_rejections_never_raise(fake_whisper, monkeypatch):
+    assert model.transcribe(b"").status == "error"
+    assert model.transcribe("not bytes").status == "error"  # type: ignore[arg-type]
+    bad = model.transcribe(b"garbage")
+    assert bad.status == "error" and "could not decode the audio" in (bad.error or "")
+    assert model.transcribe(b"silence").status == "error"
+    monkeypatch.setattr(config, "WHISPER_MAX_SECONDS", 1)
+    too_long = model.transcribe(b"webm-bytes")
+    assert too_long.status == "error" and "limit is 1 s" in (too_long.error or "") and too_long.duration_s == 2.0
+    monkeypatch.setattr(config, "WHISPER_MAX_SECONDS", 65)
+    monkeypatch.setattr(config, "WHISPER_MAX_AUDIO_BYTES", 5)
+    assert model.transcribe(b"webm-bytes").status == "error"
+    monkeypatch.setattr(config, "WHISPER_MAX_AUDIO_BYTES", 10_000_000)
+    FakeWhisperModel.fail_transcribe = RuntimeError("ctranslate2 blew up")
+    crashed = model.transcribe(b"webm-bytes")
+    assert crashed.status == "error" and "RuntimeError" in (crashed.error or "")
+
+
+def test_whisper_load_failures_are_unavailable(fake_whisper, monkeypatch):
+    FakeWhisperModel.fail_load = RuntimeError("model download failed")
+    result = model.transcribe(b"webm-bytes", language="en")
+    assert result.status == "unavailable" and "model download failed" in (result.error or "")
+    status = model.whisper_status()
+    assert status.status == "unavailable" and "could not load" in (status.reason or "")
+    FakeWhisperModel.fail_load = None  # a failed load is retried on the next use
+    assert model.transcribe(b"webm-bytes").status == "ok" and model.whisper_status().status == "ready"
+    # package missing
+    monkeypatch.setattr(model, "_WHISPER_STATE", model._WhisperState())
+    monkeypatch.setattr(model, "_sdk_installed", lambda name: False)
+    assert model.whisper_status().status == "unavailable"
+
+    def no_package(name: str) -> Any:
+        raise ImportError(f"No module named {name!r}", name=name)
+
+    monkeypatch.setattr(model, "_import_sdk", no_package)
+    missing = model.transcribe(b"webm-bytes")
+    assert missing.status == "unavailable" and "not installed" in (missing.error or "")
+    assert model.whisper_model_cached() is False
+
+
+def test_whisper_can_be_switched_off(fake_whisper, monkeypatch):
+    monkeypatch.setattr(config, "WHISPER_MODEL", "off")
+    assert model.whisper_status().status == "disabled"
+    model.preload_whisper()
+    assert FakeWhisperModel.instances == []
+    assert model.transcribe(b"webm-bytes").status == "unavailable"
+
+
+WHISPER_TEST_AUDIO = Path(os.environ.get("EMPYREAN_WHISPER_TEST_AUDIO") or Path(__file__).parent / "data" / "jfk.flac")
+
+
+@pytest.mark.whisper
+def test_whisper_transcribes_the_jfk_sample(monkeypatch):
+    """Real faster-whisper on CPU (config.WHISPER_MODEL): runs only when the model is already in
+    the local cache and the sample exists (EMPYREAN_WHISPER_TEST_AUDIO or tests/data/jfk.flac,
+    the 11 s public-domain JFK clip); never downloads."""
+    if not WHISPER_TEST_AUDIO.is_file():
+        pytest.skip(f"no test audio at {WHISPER_TEST_AUDIO}")
+    if not model.whisper_model_cached():
+        pytest.skip(f"whisper model {config.WHISPER_MODEL!r} is not cached locally")
+    monkeypatch.setattr(model, "_WHISPER_STATE", model._WhisperState())  # load fresh, drop afterwards
+    result = model.transcribe(WHISPER_TEST_AUDIO.read_bytes(), language="en", initial_prompt="Empyrean, Aster")
+    assert result.status == "ok", result.error
+    words = re.sub(r"[^a-z ]", "", result.text.lower())
+    assert "ask not what your country can do for you" in words
+    assert result.language == "en" and result.duration_s is not None and 10.0 < result.duration_s < 12.5

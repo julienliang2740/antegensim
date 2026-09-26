@@ -11,9 +11,17 @@
  * - CENTRE: the map at the full height of the window, its toolbar above and
  *   the legend always visible below it.  Decision packets and model calls
  *   open over the map (Close / Escape returns to it).
- * - RIGHT: tabs (Inspector, Turn record, God mode, Rules & settings) and the
- *   live activity log docked at the bottom (collapsible).  God mode and the
- *   rules widen this column; "Wider panel" does it for any tab.
+ * - RIGHT: tabs (Inspector, Turn record, God mode, Rules & settings,
+ *   Storybook) and the live activity log docked at the bottom (collapsible).
+ *   God mode and the rules widen this column; "Wider panel" does it for any
+ *   tab (the toggle sits in the panel header under the one-line tabs row).
+ *
+ * Assistant (rev 4): the page publishes what the user is looking at to
+ * state/assistantContext.ts on every render and registers its handlers keyed
+ * by run id (select entity, find point, view turn, set tab, open record,
+ * in-flight guard, apply status, show error) so the drawer's links and
+ * approved run commands act through the page's own logic.  When the drawer
+ * is docked (>= 1280 px) the layout reserves its width on the right.
  * Below 1200 px the rail and the map share the top row and the tabs follow
  * below; below 900 px everything stacks with the map first.  On narrow
  * screens the log is a drawer at the bottom of the window.
@@ -24,7 +32,7 @@
  * historical checkpoints, knowledge, packets and model calls load on demand.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties } from "react";
 import {
   createContinuation,
@@ -48,6 +56,7 @@ import type { Agent, AgentKnowledgeView, ApiProblem, Entity, FieldChange, Interv
 import { findEntity, pointKey } from "../api/types";
 import { InspectorPanel, MapView, OccupantList, entitiesAtPoint, flattenEntities, removedList } from "../components/inspect";
 import type { AgentViewOverlay } from "../components/inspect";
+import { LauncherButton } from "../components/assistant/Launcher";
 import { ActivityLog } from "../components/run/ActivityLog";
 import { AgentShortcuts } from "../components/run/AgentShortcuts";
 import { AgentRoster, EntityIndex } from "../components/run/EntityLists";
@@ -61,6 +70,7 @@ import { RunControls } from "../components/run/RunControls";
 import { Splitter } from "../components/run/Splitter";
 import { SpeciesRulePanel } from "../components/run/SpeciesRulePanel";
 import { StatusBar } from "../components/run/StatusBar";
+import { StorybookTab } from "../components/run/StorybookTab";
 import { Timeline } from "../components/run/Timeline";
 import { TurnRecordTab } from "../components/run/TurnRecordTab";
 import { ErrorLine } from "../components/common/Problems";
@@ -71,10 +81,12 @@ import { useHistoryView, useTurnIndex } from "../hooks/useRunData";
 import { useRunFeed } from "../hooks/useRunFeed";
 import { MIN_LOG_H, MIN_RAIL_W, MIN_SIDE_W, useRunLayout } from "../hooks/useRunLayout";
 import { useThrottledKey } from "../hooks/useThrottledKey";
+import { askAssistant, clearContext, dockReserve, getDrawerState, publishContext, registerHandlers, subscribeDrawer } from "../state/assistantContext";
+import type { RunHandlers, RunTabId } from "../state/assistantContext";
 import { errorText, withReopen } from "../state/runSessions";
 import { allModelsFake, controlAvailability, isIdle } from "../state/statusText";
 
-type Tab = "inspect" | "turn" | "god" | "rules";
+type Tab = RunTabId;
 
 /** Minimum time between commit-driven reloads while the run is busy. */
 const COMMIT_REFRESH_MS = 1000;
@@ -125,12 +137,23 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   const [wideSide, setWideSide] = useState(false);
   const [logCollapsed, setLogCollapsed] = useState(false);
   const sideWideNow = wideSide || tab === "god" || tab === "rules";
+  // The docked assistant drawer takes room on the right (state/assistantContext.dockReserve).
+  const drawer = useSyncExternalStore(subscribeDrawer, getDrawerState, getDrawerState);
+  const [winW, setWinW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setWinW(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const reserveW = dockReserve(drawer, winW, "run");
   // Splitter sizes (three-column layout only), remembered in localStorage.
-  const layout = useRunLayout(sideWideNow);
+  const layout = useRunLayout(sideWideNow, reserveW);
   // Lines of a discarded attempt of a saved turn (INTERFACES section 8): known once the saved turn's event range arrives.
   const [discardedSeqs, setDiscardedSeqs] = useState<ReadonlySet<number>>(() => new Set());
   const [record, setRecord] = useState<RecordTarget | null>(null);
   const [inFlight, setInFlight] = useState<RunCommand | null>(null);
+  // True while the assistant drawer executes an approved run command for this run (same guard as inFlight).
+  const [assistantBusy, setAssistantBusy] = useState(false);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -234,9 +257,9 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   // Bring the inspector into view after a selection made by the operator (map, occupant row, roster, find).
   const inspectorRef = useRef<HTMLDivElement | null>(null);
   const [revealTick, setRevealTick] = useState(0);
-  // An operator selection shows the inspector (God mode keeps its tab: its forms use the selection).
+  // An operator selection shows the inspector (God mode keeps its tab: its forms use the selection; the Storybook follows the selection instead).
   const reveal = () => {
-    setTab((current) => (current === "god" ? current : "inspect"));
+    setTab((current) => (current === "god" || current === "storybook" ? current : "inspect"));
     setRevealTick((n) => n + 1);
   };
   useEffect(() => {
@@ -261,7 +284,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   /** A map click or "Select point": a selection that is not at the new point is cleared, so the column shows that point. */
   const selectPoint = (p: Point) => {
     setSelectedPoint(p);
-    setTab((current) => (current === "god" ? current : "inspect"));
+    setTab((current) => (current === "god" || current === "storybook" ? current : "inspect"));
     if (selectedEntity && (selectedEntity.position.x !== p.x || selectedEntity.position.y !== p.y)) setSelectedId(null);
   };
 
@@ -363,6 +386,44 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     });
   }, []);
 
+  // ------------------------------------------------------------------ assistant: context and handlers
+  // Handlers are registered once per run id and always call the latest closures.
+  // (State setters are stable and used directly; only the closures that change per render go through the ref.)
+  const latest = useRef({ findEntityById, findPoint, openRecord, applyStatus, liveTurnId });
+  useEffect(() => {
+    latest.current = { findEntityById, findPoint, openRecord, applyStatus, liveTurnId };
+  });
+  useEffect(() => {
+    const bundle: RunHandlers = {
+      selectEntity: (id) => latest.current.findEntityById(id),
+      findPoint: (p) => latest.current.findPoint(p),
+      viewTurn: (turnId) => setViewTurnId(turnId !== null && turnId === latest.current.liveTurnId ? null : turnId),
+      setTab: (next) => setTab(next),
+      openRecord: (target) => latest.current.openRecord(target),
+      setInFlight: (busy) => setAssistantBusy(busy),
+      applyStatus: (next) => latest.current.applyStatus(next),
+      showError: (message) => setCommandError(message),
+    };
+    return registerHandlers(runId, bundle);
+  }, [runId]);
+  // What the user is looking at (publishContext notifies only on change, so publishing every render is cheap).
+  useEffect(() => {
+    publishContext({
+      page: "run",
+      runId,
+      runName: summary.data?.name ?? null,
+      liveTurnId,
+      shownTurnId: viewed?.turn.turn_id ?? null,
+      tab,
+      selectedPoint,
+      selectedEntityId: selectedId,
+      selectedEntityKind: selectedEntity?.kind ?? null,
+      runState: status?.state ?? null,
+      lastError: commandError ?? status?.last_error ?? feed.openError ?? null,
+    });
+  }, [runId, summary.data?.name, liveTurnId, viewed?.turn.turn_id, tab, selectedPoint, selectedId, selectedEntity?.kind, status?.state, status?.last_error, commandError, feed.openError]);
+  useEffect(() => () => clearContext(runId), [runId]);
+
   // ------------------------------------------------------------------ render
   if (feed.openError) {
     return (
@@ -382,7 +443,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     );
   }
 
-  const allowed = controlAvailability(status, inFlight !== null);
+  const allowed = controlAvailability(status, inFlight !== null || assistantBusy);
   const highlightAgentId = viewTurnId === null && status.active_turn_id ? status.acting_agent_id : viewed.turn.acting_agent_id;
   const selectedTerrain = selectedPoint ? (viewed.map.cells[pointKey(selectedPoint)] ?? (inRegion(selectedPoint) ? "land" : null)) : null;
   const committedSeq = live.data && live.data.turn.turn_id === status.current_turn_id ? live.data.turn.event_seq_end : null;
@@ -398,13 +459,16 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     { id: "turn", label: "Turn record", title: `What happened in turn ${viewed.turn.turn_id}` },
     { id: "god", label: `God mode${stagedList.length ? ` (${stagedList.length})` : ""}`, title: `God mode${stagedList.length ? `: ${stagedList.length} staged edit(s)` : ""}` },
     { id: "rules", label: "Rules", title: "Rules & settings (read-only)" },
+    { id: "storybook", label: "Storybook", title: "The story so far, written by the assistant as turns are saved" },
   ];
-  const layoutClass = ["run-layout", sideWideNow ? "run-side-wide" : "", logCollapsed ? "run-log-collapsed" : "", viewTurnId !== null ? "run-history" : ""]
+  const activeTab = tabs.find((t) => t.id === tab) ?? tabs[0];
+  const docked = layout.threeColumn && layout.reservedW > 0;
+  const layoutClass = ["run-layout", sideWideNow ? "run-side-wide" : "", logCollapsed ? "run-log-collapsed" : "", viewTurnId !== null ? "run-history" : "", docked ? "run-assistant-docked" : ""]
     .filter(Boolean)
     .join(" ");
 
   const layoutStyle = layout.threeColumn
-    ? ({ "--rail-w": `${layout.railW}px`, "--side-w": `${layout.sideW}px`, "--log-h": `${layout.logH}px` } as CSSProperties)
+    ? ({ "--rail-w": `${layout.railW}px`, "--side-w": `${layout.sideW}px`, "--log-h": `${layout.logH}px`, "--assistant-w": `${layout.reservedW}px` } as CSSProperties)
     : undefined;
 
   return (
@@ -425,8 +489,14 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
               </>
             ) : null}
           </div>
-          <button type="button" className="btn btn-small rail-back" onClick={() => navigate({ name: "entry" })}>
-            Back to sessions
+          <div className="rail-actions">
+            <button type="button" className="btn btn-small rail-back" onClick={() => navigate({ name: "entry" })}>
+              Back to sessions
+            </button>
+            <LauncherButton />
+          </div>
+          <button type="button" className="btn-link rail-story-link" title="Story Mode: turn this run into a story" onClick={() => navigate({ name: "story", runId, storyId: null })}>
+            Make a story of this run
           </button>
         </header>
         <RunControls allowed={allowed} inFlight={inFlight} error={commandError} onCommand={(c) => void send(c)} onResetLayout={layout.reset} />
@@ -538,10 +608,22 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
                 className={`tab${tab === t.id ? " tab-active" : ""}`}
                 onClick={() => setTab(t.id)}
               >
-                {t.label}
+                {t.id === "storybook" ? (
+                  <>
+                    <span className="tab-label-long">Storybook</span>
+                    <span className="tab-label-short">Story</span>
+                  </>
+                ) : (
+                  t.label
+                )}
               </button>
             ))}
           </div>
+        </div>
+        <div className="side-panel-head">
+          <span className="side-panel-title" title={activeTab.title}>
+            {activeTab.title}
+          </span>
           <button
             type="button"
             className="btn btn-small inspector-width-toggle"
@@ -598,6 +680,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
               onOpenPacket={(packetId) => openRecord({ kind: "packet", turnId: viewed.turn.turn_id, packetId })}
               agentView={agentView}
               onToggleAgentView={() => setAgentView((v) => !v)}
+              onAsk={askAssistant}
             />
             {knowledge.error && selectedAgentId ? <ErrorLine text={knowledge.error} prefix="Knowledge:" /> : null}
             {selectedEntity?.kind === "plant" && live.data ? (
@@ -653,6 +736,25 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
               assumptions={assumptions.data?.entries ?? null}
               assumptionsError={assumptions.error}
               source={viewTurnId === null ? "live settings" : `as of turn ${viewTurnId}`}
+            />
+          ) : null}
+        </div>
+
+        <div role="tabpanel" id="panel-storybook" aria-labelledby="tab-storybook" hidden={tab !== "storybook"} className="side-panel">
+          {/* Mounted only while shown (it polls the storybook while open). */}
+          {tab === "storybook" ? (
+            <StorybookTab
+              runId={runId}
+              viewedTurnId={viewTurnId}
+              liveTurnId={status.current_turn_id}
+              selectedEntityId={selectedId}
+              name={name}
+              onViewTurn={(turnId) => setViewTurnId(turnId === status.current_turn_id ? null : turnId)}
+              onInspect={(entityId) => {
+                selectEntity(entityId);
+                setTab("inspect");
+              }}
+              onOpenStory={() => navigate({ name: "story", runId, storyId: null })}
             />
           ) : null}
         </div>
