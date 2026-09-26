@@ -331,6 +331,8 @@ export interface ModelInfo {
   capabilities: ModelCapabilities;
   mind_multiplier: number;
   description: string;
+  /** Reserved for the assistant (ref.options.assistant_only): hidden from GET /api/models unless ?include_assistant=1 and refused as an agent model. */
+  assistant_only: boolean;
 }
 
 export type ModelRole = "system" | "user" | "assistant";
@@ -928,7 +930,8 @@ export interface Event {
 // Interventions (god mode)
 // ---------------------------------------------------------------------------
 
-export type InterventionOrigin = "ui" | "file";
+/** Who staged an intervention: the god-mode UI, a working-file reload, or an approved assistant brief. */
+export type InterventionOrigin = "ui" | "file" | "assistant";
 
 interface InterventionBase {
   id?: string | null;
@@ -1326,12 +1329,34 @@ export type ApiErrorCode =
   | "validation_error"
   | "unknown_model"
   | "not_found"
-  | "internal_error";
+  | "internal_error"
+  /** 503: the assistant service is not configured in this backend (tests, headless runs). */
+  | "assistant_unavailable"
+  /** 409: the assistant cannot take this job now (a job of the same kind is already running). */
+  | "assistant_busy"
+  /** 409: the brief was already approved, rejected, superseded or is executing. */
+  | "brief_not_pending"
+  /** 409: an assistant budget (message, chat, storybook, story or global) would be exceeded. */
+  | "assistant_budget_exhausted"
+  /** 409: the conversation already has a pending job. */
+  | "conversation_busy"
+  /** 413: the request body is too large (for example dictated audio over the cap). */
+  | "payload_too_large";
 
 export interface ApiError {
   error: ApiErrorCode;
   detail: string | null;
   problems: ApiProblem[];
+}
+
+/** POST /api/assistant/transcribe result (schemas.TranscriptionResult; local Whisper through model.transcribe). */
+export interface TranscriptionResult {
+  status: "ok" | "error" | "unavailable";
+  text: string;
+  language: string | null;
+  duration_s: number | null;
+  model: string;
+  error: string | null;
 }
 
 export interface HealthResponse {

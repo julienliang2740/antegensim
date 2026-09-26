@@ -448,9 +448,9 @@ export const SETTINGS: RunSettings = {
 const CAPS_FAKE = { supports_json_schema: true, supports_json_mode: true, supports_system_prompt: true, context_window: 128000, max_output_tokens: 4096, reports_usage: true };
 
 export const MODELS: ModelInfo[] = [
-  { key: "fake-heuristic", provider: "fake", model_id: "fake-heuristic", available: true, missing_credentials: [], capabilities: CAPS_FAKE, mind_multiplier: 1, description: "Deterministic heuristic agent (no provider)." },
-  { key: "fake-scripted", provider: "fake", model_id: "fake-scripted", available: true, missing_credentials: [], capabilities: CAPS_FAKE, mind_multiplier: 1, description: "Replays AgentCard.fake_script." },
-  { key: "fake-malformed", provider: "fake", model_id: "fake-malformed", available: true, missing_credentials: [], capabilities: CAPS_FAKE, mind_multiplier: 1, description: "Cycles invalid JSON / unknown action / valid." },
+  { key: "fake-heuristic", provider: "fake", model_id: "fake-heuristic", available: true, missing_credentials: [], capabilities: CAPS_FAKE, mind_multiplier: 1, assistant_only: false, description: "Deterministic heuristic agent (no provider)." },
+  { key: "fake-scripted", provider: "fake", model_id: "fake-scripted", available: true, missing_credentials: [], capabilities: CAPS_FAKE, mind_multiplier: 1, assistant_only: false, description: "Replays AgentCard.fake_script." },
+  { key: "fake-malformed", provider: "fake", model_id: "fake-malformed", available: true, missing_credentials: [], capabilities: CAPS_FAKE, mind_multiplier: 1, assistant_only: false, description: "Cycles invalid JSON / unknown action / valid." },
   {
     key: "anthropic-haiku",
     provider: "anthropic",
@@ -459,6 +459,7 @@ export const MODELS: ModelInfo[] = [
     missing_credentials: ["ANTHROPIC_API_KEY"],
     capabilities: { ...CAPS_FAKE, context_window: 200000, max_output_tokens: 8192 },
     mind_multiplier: 1.5,
+    assistant_only: false,
     description: "",
   },
   {
@@ -469,6 +470,7 @@ export const MODELS: ModelInfo[] = [
     missing_credentials: [],
     capabilities: { ...CAPS_FAKE, context_window: 4096, max_output_tokens: 512 },
     mind_multiplier: 0.5,
+    assistant_only: false,
     description: "Small context window (shows validation).",
   },
 ];

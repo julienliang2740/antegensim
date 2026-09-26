@@ -555,6 +555,9 @@ class ModelInfo(StrictModel):
     capabilities: ModelCapabilities
     mind_multiplier: float = 1.0
     description: str = ""
+    # rev 4: ``ref.options["assistant_only"]``; such refs are hidden from GET /api/models unless
+    # ``?include_assistant=1`` and rejected for agents by ``ModelRegistry.validate_agent_key``.
+    assistant_only: bool = False
 
 
 ModelRole = Literal["system", "user", "assistant"]
@@ -574,8 +577,12 @@ class ModelRequest(StrictModel):
     temperature: Optional[float] = None  # overrides ref.options.temperature when set
     timeout_seconds: float = 60.0  # PER ATTEMPT; overall deadline = timeout x (max_retries + 1)
     max_retries: int = 2
-    purpose: Literal["decision", "summarize", "test"] = "decision"
-    # situation, fake_script, fake_script_index, fake_options, agent_id, turn_id, round.
+    purpose: Literal["decision", "summarize", "test", "assistant", "narrative"] = "decision"
+    # rev 4: "json" (default) keeps the JSON-only instruction / native schema and classifies a
+    # prose reply as "malformed"; "text" sends no JSON instruction and any non-empty reply is
+    # "ok" with ``parsed=None`` (assistant narrator / chapters / summaries).
+    response_format: Literal["json", "text"] = "json"
+    # situation, fake_script, fake_script_index, fake_options, fake_reply, agent_id, turn_id, round.
     # Read by the fake adapter only; NEVER forwarded to a provider.
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -612,6 +619,33 @@ class ModelUsage(StrictModel):
 ModelResultStatus = Literal["ok", "malformed", "refusal", "truncated", "timeout", "error", "invalid_config"]
 AGENT_OUTPUT_STATUSES: tuple[str, ...] = ("ok", "malformed", "refusal", "truncated")
 INFRA_STATUSES: tuple[str, ...] = ("timeout", "error", "invalid_config")
+# rev 4: ModelResult.error_code values (budget_exceeded = CLI error_max_budget_usd; rate_limited =
+# HTTP 429/529; schema_mismatch = structured output rejected; cancelled = the caller's cancel
+# Event was set; not_logged_in / cli_missing = CLI route unusable).
+ModelErrorCode = Literal["budget_exceeded", "rate_limited", "schema_mismatch", "cancelled", "timeout", "not_logged_in", "cli_missing"]
+
+
+class TranscriptionResult(StrictModel):
+    """``model.transcribe`` result (local Whisper behind the model boundary; rev 4).  Never
+    contains audio.  ``status``: ok | error (the audio was rejected or decoding failed) |
+    unavailable (no whisper backend loaded / disabled)."""
+
+    status: Literal["ok", "error", "unavailable"]
+    text: str = ""
+    language: Optional[str] = None
+    duration_s: Optional[float] = None
+    model: str = ""
+    error: Optional[str] = None  # redacted
+
+
+class WhisperStatus(StrictModel):
+    """``model.whisper_status()`` (rev 4): whether local speech recognition can serve."""
+
+    status: Literal["ready", "loading", "unavailable", "disabled"]
+    model: str = ""
+    device: str = "cpu"
+    compute_type: str = "int8"
+    reason: Optional[str] = None
 
 
 class ModelResult(StrictModel):
@@ -630,6 +664,10 @@ class ModelResult(StrictModel):
     attempt_errors: list[str] = Field(default_factory=list)  # redacted, <= 500 chars each
     error: Optional[str] = None  # redacted, <= 500 chars
     stop_reason: Optional[str] = None
+    # rev 4: machine-readable classification of a failure, filled by the adapters from the CLI
+    # result subtype / HTTP status so the assistant UI can map it to an action (None when ok or
+    # unclassified).
+    error_code: Optional[ModelErrorCode] = None
 
 
 class ModelCallRecord(LooseModel):
@@ -1542,7 +1580,7 @@ class Event(LooseModel):
 # Interventions (god mode)
 # ---------------------------------------------------------------------------
 
-InterventionOrigin = Literal["ui", "file"]
+InterventionOrigin = Literal["ui", "file", "assistant"]  # rev 4: "assistant" = staged by an approved brief
 
 
 class InterventionBase(StrictModel):
@@ -1877,7 +1915,7 @@ class TurnIndexEntry(StrictModel):
 
 class AgentCard(StrictModel):
     """Semantic setup checks (RunManager.create_run / validate_setup, reported as 422 problems
-    with paths like ``agents[2].position``): 6-11 cards; unique ids and names; position inside
+    with paths like ``agents[2].position``): 6-12 cards; unique ids and names; position inside
     the region (forced to land by generate_world, A-WORLD-6); stats >= 0; health <= max_health;
     essence <= essence_capacity; model exists and is available; effective context settings
     valid for the model; initial_skills compile; initial_plants species exist."""
@@ -2133,6 +2171,13 @@ ApiErrorCode = Literal[
     "unknown_model",  # 422: model key not in the registry / unavailable
     "not_found",  # 404
     "internal_error",  # 500: message only, traceback in the backend log
+    # rev 4 (assistant)
+    "assistant_unavailable",  # 503: no AssistantService in this process / no usable assistant model
+    "assistant_busy",  # 409: a bounded assistant queue is full (speech) or a job is already running
+    "brief_not_pending",  # 409: approve/reject on a brief that is not pending (CAS lost)
+    "assistant_budget_exhausted",  # 409: an assistant budget (message/scope/global) would be exceeded
+    "conversation_busy",  # 409: delete/rename while a job runs on the conversation
+    "payload_too_large",  # 413: raw body over the cap (transcribe: config.WHISPER_MAX_AUDIO_BYTES)
 ]
 
 

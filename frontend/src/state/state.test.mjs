@@ -26,6 +26,9 @@ const MODULES = [
   "state/records.ts",
   "state/changes.ts",
   "hooks/useHashRoute.ts",
+  "state/assistantContext.ts",
+  "state/assistantFormat.ts",
+  "state/storyMode.ts",
 ];
 
 function build() {
@@ -54,6 +57,9 @@ const points = await load("state/points.mjs");
 const router = await load("hooks/useHashRoute.mjs");
 const records = await load("state/records.mjs");
 const changes = await load("state/changes.mjs");
+const assistantContext = await load("state/assistantContext.mjs");
+const assistantFormat = await load("state/assistantFormat.mjs");
+const storyMode = await load("state/storyMode.mjs");
 
 // ---------------------------------------------------------------- fixtures
 
@@ -393,4 +399,201 @@ test("hash routes round-trip", () => {
   assert.deepEqual(router.parseHash("#/run/run_1?turn=r00001_end"), { name: "run", runId: "run_1", turnId: "r00001_end" });
   assert.equal(router.routeHash({ name: "run", runId: "run_1", turnId: null }), "#/run/run_1");
   assert.deepEqual(router.parseHash(router.routeHash({ name: "run", runId: "run 2", turnId: "r00000_init" })), { name: "run", runId: "run 2", turnId: "r00000_init" });
+});
+
+test("story and instructions hash routes round-trip", () => {
+  assert.deepEqual(router.parseHash("#/story"), { name: "story", runId: null, storyId: null });
+  assert.deepEqual(router.parseHash("#/story/run_1"), { name: "story", runId: "run_1", storyId: null });
+  assert.deepEqual(router.parseHash("#/story/run_1/st_2"), { name: "story", runId: "run_1", storyId: "st_2" });
+  assert.equal(router.routeHash({ name: "story", runId: null, storyId: null }), "#/story");
+  assert.equal(router.routeHash({ name: "story", runId: "run_1", storyId: null }), "#/story/run_1");
+  assert.equal(router.routeHash({ name: "story", runId: "run_1", storyId: "st_2" }), "#/story/run_1/st_2");
+  // a story id without a run is dropped, not misrouted
+  assert.equal(router.routeHash({ name: "story", runId: null, storyId: "st_2" }), "#/story");
+  for (const route of [
+    { name: "story", runId: null, storyId: null },
+    { name: "story", runId: "run 2", storyId: null },
+    { name: "story", runId: "run/3", storyId: "story ä" },
+    { name: "instructions", section: null },
+    { name: "instructions", section: "skills" },
+    { name: "instructions", section: "a b&c" },
+  ]) {
+    assert.deepEqual(router.parseHash(router.routeHash(route)), route);
+  }
+  assert.deepEqual(router.parseHash("#/instructions"), { name: "instructions", section: null });
+  assert.deepEqual(router.parseHash("#/instructions?section=economy"), { name: "instructions", section: "economy" });
+  assert.deepEqual(router.parseHash("#/instructions?section="), { name: "instructions", section: null });
+  assert.equal(router.routeHash({ name: "instructions", section: null }), "#/instructions");
+  assert.equal(router.routeHash({ name: "instructions", section: "skills" }), "#/instructions?section=skills");
+  // a malformed escape does not throw
+  assert.deepEqual(router.parseHash("#/story/%E0%A4%A"), { name: "story", runId: "%E0%A4%A", storyId: null });
+});
+
+// ---------------------------------------------------------------- assistant context store
+
+function handlerBundle(log, tag) {
+  return {
+    selectEntity: (id) => (log.push([tag, "selectEntity", id]), null),
+    findPoint: (p) => (log.push([tag, "findPoint", p]), null),
+    viewTurn: (t) => log.push([tag, "viewTurn", t]),
+    setTab: (t) => log.push([tag, "setTab", t]),
+    openRecord: (r) => log.push([tag, "openRecord", r]),
+    setInFlight: (b) => log.push([tag, "setInFlight", b]),
+    applyStatus: (s) => log.push([tag, "applyStatus", s]),
+    showError: (m) => log.push([tag, "showError", m]),
+  };
+}
+
+test("assistant context publishes with stable snapshots and notifies only on change", () => {
+  assistantContext.resetAssistantContextForTests();
+  const empty = assistantContext.getSnapshot();
+  assert.equal(empty.page, "entry");
+  assert.equal(empty.runId, null);
+  let calls = 0;
+  const unsubscribe = assistantContext.subscribe(() => calls++);
+  const input = { page: "run", runId: "run_1", runName: "Arena", liveTurnId: "r00002_end", shownTurnId: "r00001_t03_a04", tab: "inspect", selectedPoint: { x: 1, y: -2 }, selectedEntityId: "a04", selectedEntityKind: "agent", runState: "paused" };
+  assistantContext.publishContext(input);
+  assert.equal(calls, 1);
+  const first = assistantContext.getSnapshot();
+  assert.equal(first.selectedEntityId, "a04");
+  assert.equal(first.lastError, null);
+  assert.equal(first.storyId, null);
+  // equal content (a fresh point object) keeps the same snapshot and does not notify
+  assistantContext.publishContext({ ...input, selectedPoint: { x: 1, y: -2 } });
+  assert.equal(calls, 1);
+  assert.equal(assistantContext.getSnapshot(), first);
+  assert.equal(assistantContext.contextChipText(first), "Run Arena · turn r00001_t03_a04 (history) · a04 selected");
+  assistantContext.publishContext({ ...input, selectedPoint: { x: 2, y: -2 } });
+  assert.equal(calls, 2);
+  assert.notEqual(assistantContext.getSnapshot(), first);
+  // clearing on behalf of another run is a no-op; the owner clears
+  assistantContext.clearContext("run_other");
+  assert.equal(assistantContext.getSnapshot().runId, "run_1");
+  assistantContext.clearContext("run_1");
+  assert.equal(calls, 3);
+  assert.equal(assistantContext.getSnapshot().page, "entry");
+  assistantContext.clearContext();
+  assert.equal(calls, 3);
+  unsubscribe();
+  assistantContext.publishContext({ page: "story", runId: "run_1", storyId: "st_1" });
+  assert.equal(calls, 3);
+  assert.equal(assistantContext.contextChipText(assistantContext.getSnapshot()), "Story Mode · run_1 · story st_1");
+  assistantContext.resetAssistantContextForTests();
+});
+
+test("assistant run handlers are keyed by run id and a stale unregister is ignored", () => {
+  assistantContext.resetAssistantContextForTests();
+  const log = [];
+  const a = handlerBundle(log, "A");
+  const b = handlerBundle(log, "B");
+  const c = handlerBundle(log, "C");
+  assert.equal(assistantContext.getHandlers("run_1"), null);
+  assert.equal(assistantContext.getHandlers(null), null);
+  const offA = assistantContext.registerHandlers("run_1", a);
+  assistantContext.registerHandlers("run_2", c);
+  assistantContext.getHandlers("run_1").viewTurn("r00001_end");
+  assistantContext.getHandlers("run_2").setTab("god");
+  assert.deepEqual(log, [["A", "viewTurn", "r00001_end"], ["C", "setTab", "god"]]);
+  // a remount registers B before A's cleanup runs: A's unregister must not remove B
+  const offB = assistantContext.registerHandlers("run_1", b);
+  offA();
+  assert.equal(assistantContext.getHandlers("run_1"), b);
+  assistantContext.unregisterHandlers("run_1", a);
+  assert.equal(assistantContext.getHandlers("run_1"), b);
+  offB();
+  assert.equal(assistantContext.getHandlers("run_1"), null);
+  assert.equal(assistantContext.getHandlers("run_2"), c);
+  assistantContext.unregisterHandlers("run_2");
+  assert.equal(assistantContext.getHandlers("run_2"), null);
+  assistantContext.resetAssistantContextForTests();
+});
+
+// ---------------------------------------------------------------- assistant answer formatting
+
+test("linkify finds turn ids, call ids, agent ids and points", () => {
+  const parts = assistantFormat.linkify("In r00012_t03_a04, a04 ate at (3, -2); see mc_r00012_t03_a04_01 and r00012_end.");
+  assert.deepEqual(parts, [
+    { kind: "text", text: "In " },
+    { kind: "turn", text: "r00012_t03_a04", turnId: "r00012_t03_a04" },
+    { kind: "text", text: ", " },
+    { kind: "entity", text: "a04", entityId: "a04" },
+    { kind: "text", text: " ate at " },
+    { kind: "point", text: "(3, -2)", x: 3, y: -2 },
+    { kind: "text", text: "; see " },
+    { kind: "call", text: "mc_r00012_t03_a04_01", callId: "mc_r00012_t03_a04_01", turnId: "r00012_t03_a04" },
+    { kind: "text", text: " and " },
+    { kind: "turn", text: "r00012_end", turnId: "r00012_end" },
+    { kind: "text", text: "." },
+  ]);
+  assert.deepEqual(assistantFormat.linkify("a04"), [{ kind: "entity", text: "a04", entityId: "a04" }]);
+  assert.deepEqual(assistantFormat.linkify("r00000_init"), [{ kind: "turn", text: "r00000_init", turnId: "r00000_init" }]);
+  // not inside longer identifiers
+  assert.deepEqual(assistantFormat.linkify("xa04 a045 a04_x"), [{ kind: "text", text: "xa04 a045 a04_x" }]);
+  // known agent ids replace the aNN default, longest first
+  const known = assistantFormat.linkify("Eos met a12 and a1", { agentIds: ["Eos", "a1", "a12"] });
+  assert.deepEqual(
+    known.filter((s) => s.kind === "entity").map((s) => s.entityId),
+    ["Eos", "a12", "a1"],
+  );
+  assert.deepEqual(assistantFormat.linkify("a04 left", { agentIds: ["a01"] }), [{ kind: "text", text: "a04 left" }]);
+  assert.deepEqual(assistantFormat.linkify(""), []);
+});
+
+test("formatAnswer builds paragraphs, lists, code and headings", () => {
+  const blocks = assistantFormat.formatAnswer("## Summary\nFirst line\nsame paragraph with `a04`.\n\n- one **a04**\n  continued\n- two\n1. first\nAfter the list.\n```\nraw a04\n```");
+  assert.deepEqual(blocks.map((b) => b.kind), ["heading", "paragraph", "list", "list", "paragraph", "code"]);
+  assert.equal(blocks[0].level, 2);
+  assert.equal(assistantFormat.inlineText(blocks[1].inlines), "First line same paragraph with a04.");
+  assert.deepEqual(blocks[1].inlines.at(-2), { kind: "code", text: "a04" });
+  assert.equal(blocks[2].ordered, false);
+  assert.equal(blocks[2].items.length, 2);
+  assert.equal(assistantFormat.inlineText(blocks[2].items[0]), "one a04 continued");
+  assert.deepEqual(blocks[2].items[0][1], { kind: "strong", parts: [{ kind: "entity", text: "a04", entityId: "a04" }] });
+  assert.equal(blocks[3].ordered, true);
+  assert.equal(blocks[5].text, "raw a04");
+  assert.deepEqual(assistantFormat.formatAnswer("  \n\n"), []);
+});
+
+// ---------------------------------------------------------------- story mode helpers
+
+test("story mode turn ranges validate against committed turn ids", () => {
+  const ids = ["r00000_init", "r00001_t01_a01", "r00001_t02_a02", "r00001_end", "r00002_t01_a01", "r00002_t02_a02", "r00002_end"];
+  const all = storyMode.validateTurnRange({ from: null, to: null }, ids);
+  assert.equal(all.ok, true);
+  assert.deepEqual(all.counts, { agentTurns: 4, rounds: 2 });
+  const part = storyMode.validateTurnRange({ from: "r00001_t02_a02", to: "r00002_t01_a01" }, ids);
+  assert.deepEqual(part.turnIds, ["r00001_t02_a02", "r00001_end", "r00002_t01_a01"]);
+  assert.deepEqual(part.counts, { agentTurns: 2, rounds: 2 });
+  const reversed = storyMode.validateTurnRange({ from: "r00002_t01_a01", to: "r00001_t01_a01" }, ids);
+  assert.equal(reversed.ok, false);
+  assert.match(reversed.problems[0], /comes after/);
+  assert.match(storyMode.validateTurnRange({ from: "r00009_end", to: null }, ids).problems[0], /not in this run/);
+  assert.match(storyMode.validateTurnRange({ from: "r00001_end", to: "r00001_end" }, ids).problems[0], /no agent turns/);
+  assert.match(storyMode.validateTurnRange({ from: null, to: null }, []).problems[0], /no recorded turns/);
+  assert.deepEqual(storyMode.countTurns(["garbage", "r00003_t01_a05"]), { agentTurns: 1, rounds: 1 });
+});
+
+test("story mode estimates per turn and per round", () => {
+  const model = { chapterUsd: 0.04, chapterSeconds: 20, roundFactor: 2, summaryEvery: 5, summaryUsd: 0.01, summarySeconds: 10 };
+  const both = storyMode.estimateBoth({ agentTurns: 12, rounds: 3 }, model);
+  assert.deepEqual(both.turn, { unit: "turn", chapters: 12, summaries: 2, costUsd: 0.5, seconds: 260 });
+  assert.deepEqual(both.round, { unit: "round", chapters: 3, summaries: 0, costUsd: 0.24, seconds: 120 });
+  assert.equal(storyMode.formatEstimate(both.turn), "12 chapters · ≈$0.50 · ~4 min");
+  assert.equal(storyMode.formatEstimate(storyMode.estimateChapters({ agentTurns: 1, rounds: 1 }, "turn", { ...model, summaryEvery: 0 })), "1 chapter · ≈$0.04 · ~20 s");
+  assert.equal(storyMode.formatDuration(7500), "~2 h 5 min");
+  assert.equal(storyMode.formatUsd(0.004), "<$0.01");
+  const def = storyMode.estimateChapters({ agentTurns: 0, rounds: 0 }, "turn");
+  assert.deepEqual(def, { unit: "turn", chapters: 0, summaries: 0, costUsd: 0, seconds: 0 });
+});
+
+test("story mode chip options and POV values", () => {
+  const pov = storyMode.povOptions([{ id: "a01", name: "Eos" }]);
+  assert.deepEqual(pov.map((o) => o.value), ["chronicler", "follow:a01"]);
+  assert.equal(pov[1].label, "Follow Eos");
+  assert.deepEqual(storyMode.parsePov("follow:a01"), { kind: "follow", agentId: "a01" });
+  assert.deepEqual(storyMode.parsePov("follow:"), { kind: "chronicler" });
+  assert.deepEqual(storyMode.VIVIDNESS_OPTIONS.map((o) => o.value), [1, 2, 3, 4, 5]);
+  assert.ok(storyMode.GENRE_OPTIONS.some((o) => o.value === storyMode.DEFAULT_STORY_CHOICES.genre));
+  assert.ok(storyMode.TONE_OPTIONS.some((o) => o.value === storyMode.DEFAULT_STORY_CHOICES.tone));
+  assert.equal(storyMode.DEFAULT_STORY_CHOICES.unit, "turn");
 });

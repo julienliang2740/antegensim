@@ -79,6 +79,7 @@ import shutil
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -98,6 +99,8 @@ from .schemas import (
     ModelResult,
     ModelUsage,
     Situation,
+    TranscriptionResult,
+    WhisperStatus,
     decision_json_schema,
 )
 
@@ -112,7 +115,9 @@ logger = logging.getLogger("empyrean.model")
 # personality, not a game rule.
 # ---------------------------------------------------------------------------
 
-FAKE_MODEL_IDS: tuple[str, ...] = ("fake-heuristic", "fake-scripted", "fake-malformed")
+FAKE_MODEL_IDS: tuple[str, ...] = ("fake-heuristic", "fake-scripted", "fake-malformed", "fake-assistant")
+# Fake refs whose options carry assistant_only (hidden from agent pickers, rejected for agents).
+FAKE_ASSISTANT_ONLY_IDS: tuple[str, ...] = ("fake-assistant",)
 
 # Name of the forced tool that carries the decision schema (Anthropic API).
 DECISION_TOOL_NAME = "submit_decision"
@@ -267,11 +272,15 @@ def _compact_json(value: Any) -> str:
 
 
 def _default_fake_refs() -> list[ModelRef]:
-    """The three fake routes; present in every registry even if the file omits them."""
+    """The four fake routes; present in every registry even if the file omits them."""
     descriptions = {
         "fake-heuristic": "Deterministic seeded survival policy; no network.",
         "fake-scripted": "Replays per-agent decision scripts from request.metadata['fake_script'].",
         "fake-malformed": "Returns invalid JSON / illegal actions on a schedule to test validation gates.",
+        "fake-assistant": (
+            "Assistant test double (assistant_only): returns metadata['fake_script'][metadata['fake_script_index']] "
+            "when present, else metadata['fake_reply'], else invalid_config; a string reply is ok in text mode."
+        ),
     }
     return [
         ModelRef(
@@ -287,6 +296,7 @@ def _default_fake_refs() -> list[ModelRef]:
                 reports_usage=False,
             ),
             mind_multiplier=1.0,
+            options={"assistant_only": True} if mode in FAKE_ASSISTANT_ONLY_IDS else {},
             description=descriptions[mode],
         )
         for mode in FAKE_MODEL_IDS
@@ -328,8 +338,10 @@ class ModelRegistry:
             if ref.key in ordered:
                 raise ValueError(f"duplicate model key {ref.key!r}")
             ordered[ref.key] = ref
-        fakes = {f.key: f for f in _default_fake_refs() if f.key not in ordered}
-        self._refs: dict[str, ModelRef] = {**fakes, **ordered}
+        # Every default fake ref comes first, in FAKE_MODEL_IDS order (the file's own entry wins
+        # when it lists one), then the file's remaining entries in file order.
+        fakes = {f.key: ordered.get(f.key, f) for f in _default_fake_refs()}
+        self._refs: dict[str, ModelRef] = {**fakes, **{k: v for k, v in ordered.items() if k not in fakes}}
         self._resolved: dict[str, ModelRef] = {}
         self._unresolved: dict[str, list[str]] = {}
         for key, ref in self._refs.items():
@@ -383,6 +395,7 @@ class ModelRegistry:
             capabilities=ref.capabilities.model_copy(),
             mind_multiplier=ref.mind_multiplier,
             description=ref.description,
+            assistant_only=bool(ref.options.get("assistant_only")),
         )
 
     def list_info(self) -> list[ModelInfo]:
@@ -395,6 +408,21 @@ class ModelRegistry:
         missing = self.missing_requirements(key)
         if missing:
             return f"model '{key}' is not available: missing {', '.join(missing)}"
+        return None
+
+    def is_assistant_only(self, key: str) -> bool:
+        """True when the ref carries ``options.assistant_only`` (rev 4; unknown key -> False)."""
+        ref = self._refs.get(key)
+        return bool(ref is not None and ref.options.get("assistant_only"))
+
+    def validate_agent_key(self, key: str) -> Optional[str]:
+        """``validate_key`` plus the rev 4 rule that assistant-only refs cannot drive agents.
+        Used by validate_setup, card model keys, place_entity and update_model_assignment."""
+        error = self.validate_key(key)
+        if error:
+            return error
+        if self.is_assistant_only(key):
+            return f"model '{key}' is reserved for the assistant"
         return None
 
     def credential_env_names(self) -> set[str]:
@@ -1178,7 +1206,7 @@ class BaseAdapter:
     def complete(self, ref: ModelRef, request: ModelRequest) -> ModelResult:
         return self.attempt(ref, request, 1).result
 
-    def attempt(self, ref: ModelRef, request: ModelRequest, attempt_no: int) -> Attempt:
+    def attempt(self, ref: ModelRef, request: ModelRequest, attempt_no: int, *, cancel: Optional[threading.Event] = None) -> Attempt:
         raise NotImplementedError
 
 
@@ -1611,7 +1639,7 @@ class FakeAdapter(BaseAdapter):
     exhausts call ``_01`` while call ``_02`` succeeds.  Usage is estimated; ``status="ok"``
     with ``parsed`` set unless a failure is scheduled."""
 
-    def attempt(self, ref: ModelRef, request: ModelRequest, attempt_no: int) -> Attempt:
+    def attempt(self, ref: ModelRef, request: ModelRequest, attempt_no: int, *, cancel: Optional[threading.Event] = None) -> Attempt:
         metadata = request.metadata or {}
         options = metadata.get("fake_options") if isinstance(metadata.get("fake_options"), dict) else {}
         sleep_ms = options.get("sleep_ms")
@@ -1832,7 +1860,7 @@ class AnthropicAdapter(BaseAdapter):
             response_model=_field(response, "model"), stop_reason=stop,
         )
 
-    def attempt(self, ref: ModelRef, request: ModelRequest, attempt_no: int) -> Attempt:
+    def attempt(self, ref: ModelRef, request: ModelRequest, attempt_no: int, *, cancel: Optional[threading.Event] = None) -> Attempt:
         key_name = _api_key_name(ref, "ANTHROPIC_API_KEY")
         api_key = _env_value(key_name)
         if api_key is None:
@@ -1930,7 +1958,7 @@ class OpenAIAdapter(BaseAdapter):
         """Hook for subclasses: the effective ref, or a configuration failure."""
         return ref, None
 
-    def attempt(self, ref: ModelRef, request: ModelRequest, attempt_no: int) -> Attempt:
+    def attempt(self, ref: ModelRef, request: ModelRequest, attempt_no: int, *, cancel: Optional[threading.Event] = None) -> Attempt:
         effective, problem = self.prepare(ref, request)
         if problem is not None or effective is None:
             return problem or _failure(request, ref, "invalid_config", "invalid configuration", retryable=False)
@@ -2051,7 +2079,7 @@ class BedrockAdapter(BaseAdapter):
             request, ref, status, text=text, parsed=parsed, usage=usage, response_model=ref.model_id, stop_reason=stop
         )
 
-    def attempt(self, ref: ModelRef, request: ModelRequest, attempt_no: int) -> Attempt:
+    def attempt(self, ref: ModelRef, request: ModelRequest, attempt_no: int, *, cancel: Optional[threading.Event] = None) -> Attempt:
         region = self.region_for(ref)
         if not region:
             return _failure(request, ref, "invalid_config", "no AWS region (set the entry's region or AWS_REGION)", retryable=False)
@@ -2164,7 +2192,7 @@ class ClaudeCliAdapter(BaseAdapter):
     """Hardened Claude Code CLI subprocess (a real-model path without an API key; still
     behind this boundary).  argv::
 
-        claude -p --model <model_id> --output-format json --max-turns 1 --tools ""
+        claude -p --model <model_id> --output-format stream-json --verbose --max-turns 1 --tools ""
                --strict-mcp-config --setting-sources "" --no-session-persistence
                --disable-slash-commands --system-prompt <the packet's system message>
                [--json-schema <compact schema>] [--max-budget-usd <ref.options.max_budget_usd>]
@@ -2258,7 +2286,7 @@ class ClaudeCliAdapter(BaseAdapter):
             return chat[0][1]
         return "\n\n".join(f"{role.upper()}:\n{content}" for role, content in chat)
 
-    def attempt(self, ref: ModelRef, request: ModelRequest, attempt_no: int) -> Attempt:
+    def attempt(self, ref: ModelRef, request: ModelRequest, attempt_no: int, *, cancel: Optional[threading.Event] = None) -> Attempt:
         executable = shutil.which(config.CLAUDE_CLI_EXECUTABLE)
         if executable is None:
             return _failure(
@@ -2464,9 +2492,12 @@ def default_registry() -> ModelRegistry:
     return _DEFAULT_REGISTRY
 
 
-def call_model(request: ModelRequest, registry: Optional[ModelRegistry] = None) -> ModelResult:
+def call_model(request: ModelRequest, registry: Optional[ModelRegistry] = None, *, cancel: Optional[threading.Event] = None) -> ModelResult:
     """Resolve ``request.model_key`` -> ``ModelRef`` -> adapter.  Never raises.
-    ``registry`` defaults to ``default_registry()``.
+    ``registry`` defaults to ``default_registry()``.  ``cancel`` (rev 4, keyword-only) is
+    handed to the adapter: when set mid-call the CLI adapter kills its process group and the
+    result is ``status="error"``, ``error_code="cancelled"`` (behaviour lands with the
+    model-boundary work package; the parameter is plumbed here so callers can pass it now).
 
     * unknown key / missing credentials / unknown provider / ``max_output_tokens`` outside
       ``1..capabilities.max_output_tokens`` -> ``status="invalid_config"`` (no attempt
@@ -2484,7 +2515,7 @@ def call_model(request: ModelRequest, registry: Optional[ModelRegistry] = None) 
     try:
         if registry is None:
             registry = default_registry()
-        result = _call_model(request, registry, started)
+        result = _call_model(request, registry, started, cancel)
     except Exception as exc:  # noqa: BLE001 - the boundary never raises
         result = ModelResult(
             request_id=request.request_id,
@@ -2500,7 +2531,7 @@ def call_model(request: ModelRequest, registry: Optional[ModelRegistry] = None) 
     return result
 
 
-def _call_model(request: ModelRequest, registry: ModelRegistry, started: float) -> ModelResult:
+def _call_model(request: ModelRequest, registry: ModelRegistry, started: float, cancel: Optional[threading.Event] = None) -> ModelResult:
     try:
         public_ref = registry.get(request.model_key)
     except UnknownModelError:
@@ -2526,7 +2557,7 @@ def _call_model(request: ModelRequest, registry: ModelRegistry, started: float) 
     while True:
         attempt_no = len(attempts) + 1
         try:
-            outcome = adapter.attempt(ref, request, attempt_no)
+            outcome = adapter.attempt(ref, request, attempt_no, cancel=cancel)
         except Exception as exc:  # noqa: BLE001 - an adapter bug is an infrastructure error
             outcome = _failure(request, ref, "error", f"adapter failure: {type(exc).__name__}: {exc}", retryable=False)
         attempts.append(outcome)
@@ -2561,3 +2592,52 @@ def _call_model(request: ModelRequest, registry: ModelRegistry, started: float) 
             "error": redact(final.error, registry),
         }
     )
+
+
+# ---------------------------------------------------------------------------
+# rev 4 boundary additions: in-flight CLI processes and local speech recognition.  The bodies
+# below are the CONTRACT (signatures, never-raise semantics); the model-boundary work package
+# fills them (process-group registry, faster_whisper adapter with lazy import).
+# ---------------------------------------------------------------------------
+
+
+def kill_inflight() -> int:
+    """Kill every live CLI process group started by ``ClaudeCliAdapter`` (called from the API
+    lifespan and atexit so no orphaned ``claude`` subprocess keeps billing).  Returns the number
+    of processes signalled.  Never raises."""
+    return 0
+
+
+def whisper_status() -> WhisperStatus:
+    """Whether ``transcribe`` can serve: ``ready`` (model loaded), ``loading`` (preload in
+    progress), ``unavailable`` (package missing / load failed; ``reason`` says why) or
+    ``disabled``.  Never raises."""
+    return WhisperStatus(
+        status="unavailable",
+        model=config.WHISPER_MODEL,
+        device=config.WHISPER_DEVICE,
+        compute_type=config.WHISPER_COMPUTE_TYPE,
+        reason="local whisper adapter not loaded in this build",
+    )
+
+
+def preload_whisper() -> None:
+    """Load the Whisper model (``config.WHISPER_MODEL``, CPU int8) on the calling thread so the
+    first ``transcribe`` does not pay the ~16 s cold start.  Called by ``main`` only (never by
+    tests).  Never raises; a failure shows up in ``whisper_status().reason``."""
+    return None
+
+
+def transcribe(audio: bytes, *, language: Optional[str] = None, initial_prompt: Optional[str] = None) -> TranscriptionResult:
+    """Speech to text through the model boundary (faster_whisper / ctranslate2 / av are imported
+    only inside model.py, lazily).  ``audio`` is the raw container bytes (webm/opus from
+    MediaRecorder, wav, ...).  Never raises: ``status`` is ok | error | unavailable, like
+    ``call_model``."""
+    status = whisper_status()
+    return TranscriptionResult(
+        status="unavailable",
+        model=status.model,
+        language=language,
+        error=status.reason or "speech recognition unavailable",
+    )
+

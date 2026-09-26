@@ -31,9 +31,10 @@ refer to it).
 | `backend/empyrean/context.py` | models/context/skills | knowledge, believed self, packets, settings validation |
 | `backend/empyrean/skills.py` | models/context/skills | parser, compiler, interpreter |
 | `backend/empyrean/models.example.json` | models/context/skills | registry entries (no secrets) |
+| `backend/empyrean/assistant/` (package) | assistant (rev 4): WP2 engine/briefs/store/routes, WP3 digest/storybook/story, WP4 speech | all assistant models live in `assistant/models.py`, never in `schemas.py`; every model call goes through `assistant/calls.py` -> `model.call_model` |
 | `backend/tests/conftest.py` | architect (QA may add fixtures) | |
 | `backend/tests/test_*.py` | QA (each team adds its own unit tests too) | |
-| `frontend/src/api/types.ts`, `client.ts`, `frontend/vite.config.ts` | architect (frozen) | |
+| `frontend/src/api/types.ts`, `client.ts`, `frontend/vite.config.ts` | architect (frozen) | rev 4: `types.ts` gained the assistant `ApiErrorCode`s, `ModelInfo.assistant_only`, `InterventionOrigin 'assistant'`, `TranscriptionResult`; `client.ts` exports `request`/`API_BASE` and `listModels(includeAssistant)`; assistant/story types live in `api/assistantTypes.ts` / `api/storyTypes.ts` |
 | `frontend/src/**` (everything else) | frontend | |
 | `docs/*.md` | architect / lead | |
 
@@ -1290,6 +1291,13 @@ Shared files are frozen. Needed changes go into the team report as
 `TODO(schema): <file> <what> <why>`; the lead applies them in one integration pass. Do not work
 around a missing field by stuffing data into `details` dictionaries that another team must parse.
 
+Rev 4 (assistant) refines this: `schemas.py`, `config.py`, `api.py`, `runner.py`, `model.py`,
+`storage.py`, `models.example.json`, `types.ts`, `client.ts`, `useHashRoute.ts` and `App.tsx` are
+**change-controlled**, not frozen: they are edited only by the shared-contracts work package
+(WP0), in the same commit as the docs that describe them (CLAUDE.md "update docs in the same
+commit"), and every other package builds against the signatures recorded below. A package that
+needs another change writes it into its handoff note; the lead integrates.
+
 Applied in rev 3 (schemas.py / config.py / types.ts): `SkillRules.max_string_chars`;
 `WorldState.observation_page_size` and `.warnings`; `BelievedSelf.position`;
 `SituationEntity.queried_round`; `KnowledgeRecordInput` for `EditKnowledgeIntervention.record`;
@@ -1307,3 +1315,56 @@ types.ts, `context.observed_entities`); `storage.apply_working_changes` / `check
 `OccupantListProps.agentViewOverlay` (`AgentViewOverlay`). Deferred (still
 open): a `delete_plant_species` intervention; sharing unchanged knowledge records between turns
 (storage grows ~1 KiB per record per agent per turn).
+
+Applied in rev 4 (assistant shared contracts, WP0):
+
+* `schemas.py`: `ModelRequest.purpose` += `assistant`, `narrative`; `ModelRequest.response_format:
+  'json' | 'text' = 'json'`; `ModelErrorCode` and `ModelResult.error_code` (`budget_exceeded`,
+  `rate_limited`, `schema_mismatch`, `cancelled`, `timeout`, `not_logged_in`, `cli_missing`);
+  `ModelInfo.assistant_only: bool = False`; `InterventionOrigin = 'ui' | 'file' | 'assistant'`;
+  `ApiErrorCode` += `assistant_unavailable` (503), `assistant_busy` (409), `brief_not_pending`
+  (409), `assistant_budget_exhausted` (409), `conversation_busy` (409), `payload_too_large` (413);
+  new `TranscriptionResult` and `WhisperStatus`; `AgentCard` docstring 6-12. Every other assistant
+  model lives in `backend/empyrean/assistant/models.py`.
+* `config.py`: `ASSISTANT_MODEL_CHAT|NARRATOR|AUTHOR|SUMMARIZER` (`EMPYREAN_ASSISTANT_MODEL_*`),
+  `ASSISTANT_CHAT|STORYBOOK|STORY|GLOBAL|MESSAGE_BUDGET_USD`, `ASSISTANT_CALL_COST_ESTIMATE_USD`,
+  `ASSISTANT_MAX_STEPS`, `ASSISTANT_MESSAGE_TIMEOUT_SECONDS`, `ASSISTANT_TOOL_OUTPUT_MAX_CHARS`,
+  `ASSISTANT_TOOLS_PER_STEP`, `KNOWLEDGE_CORE_TOKENS`, `KNOWLEDGE_RETRIEVAL_TOKENS`,
+  `MEMORY_TOKEN_BUDGET`, `ASSISTANT_SYSTEM_PROMPT_MAX_BYTES`, `ASSISTANT_SCHEMA_MAX_BYTES`,
+  `ASSISTANT_OUTPUT_TOKENS`, `ASSISTANT_REQUEST_SETTINGS`, `STORYBOOK_AUTO`
+  (`EMPYREAN_STORYBOOK_AUTO` on|off|auto), `STORYBOOK_BATCH_MAX`, `STORYBOOK_BATCH_THRESHOLD`,
+  `ASSISTANT_BACKGROUND_PAUSE_SECONDS`, `ASSISTANT_PRICES` / `ASSISTANT_PRICE_FALLBACK`,
+  `WHISPER_MODEL` (`EMPYREAN_WHISPER_MODEL`), `WHISPER_PRELOAD` (`EMPYREAN_WHISPER_PRELOAD`),
+  `WHISPER_MAX_AUDIO_BYTES`, `WHISPER_MAX_SECONDS`, `WHISPER_CPU_THREADS`, `WHISPER_DEVICE`,
+  `WHISPER_COMPUTE_TYPE`, `WHISPER_LANGUAGE_DEFAULT`, `SERVER_LOG_RING_LINES`,
+  `SERVER_LOG_TAIL_MAX_CHARS`, `CLI_ARGV_MAX_BYTES`, `ASSISTANT_GLOBAL_DIR_NAME`; ASSUMPTIONS
+  gained `A-GOD-1` (registered; was only in docs) and `A-AST-1..10`.
+* `model.py` (contract part): `FAKE_MODEL_IDS` += `fake-assistant` (a default fake ref with
+  `options.assistant_only`); default fakes always come first in `FAKE_MODEL_IDS` order;
+  `ModelInfo.assistant_only` from `ref.options`; `ModelRegistry.is_assistant_only(key)` and
+  `validate_agent_key(key)`; `call_model(request, registry=None, *, cancel: threading.Event | None
+  = None)` plumbed to every adapter's `attempt(ref, request, attempt_no, *, cancel=None)`; stubs
+  `kill_inflight() -> int`, `whisper_status() -> WhisperStatus`, `preload_whisper() -> None`,
+  `transcribe(audio, *, language=None, initial_prompt=None) -> TranscriptionResult` (never raise);
+  the `ClaudeCliAdapter` docstring names `--output-format stream-json --verbose`.
+* `api.py`: `create_app(manager, assistant=None)`; `app.state.assistant`; the assistant routers
+  from `assistant.routes.build_routers(assistant)` (503 `assistant_unavailable` fallbacks when
+  None); a lifespan whose shutdown runs `manager.shutdown()`, `assistant.shutdown()`,
+  `model.kill_inflight()`; HTTP 413 -> `payload_too_large`; `GET /api/models?include_assistant=0`
+  hides assistant-only refs; the route table lists every assistant route.
+* `main.py`: `build_app(*, whisper_preload=None)` builds `AssistantService(manager, registry,
+  auto_live_allowed=True)` and starts the Whisper preload thread when `config.WHISPER_PRELOAD`.
+* `models.example.json`: `claude-cli-sonnet-assistant` (sonnet, max_budget_usd 0.25) and
+  `claude-cli-haiku-assistant` (haiku, 0.08), both `max_turns 2`, `max_model_requests 3`,
+  `assistant_only true`; the `_comment` documents `assistant_only`.
+* `runner.py`: module-level `command_allowed(state, command) -> str | None` (used by
+  `RunWorker.submit`) and `validate_intervention_on(checkpoint, registry, run_id, iv) ->
+  list[ApiProblem]` (`RunWorker.validate_intervention` delegates); `RunWorker.__init__(...,
+  on_commit=None)` called at the very end of `_commit` with `(run_id, turn_id, kind, round)` inside
+  try/except; `RunManager.add_commit_listener(cb)` / `remove_commit_listener(cb)` and the
+  `_fan_out_commit` passed to every worker; `validate_setup`, `_place_agent` and model
+  assignment use `registry.validate_agent_key`.
+* `storage.py`: `_source_hash` hashes `rglob('*.py')` by relative path (the assistant subpackage
+  is part of the recorded revision).
+* Frontend shared files (`types.ts`, `client.ts`, `useHashRoute.ts`, `App.tsx`, `state.test.mjs`
+  and the assistant stub files): see the ownership table above and the frontend packages' notes.

@@ -1,7 +1,8 @@
 /**
  * Typed fetch wrappers for every backend route (see backend/empyrean/api.py).
  *
- * FROZEN after the architecture phase.  Base URL comes from VITE_API_BASE and
+ * FROZEN after the architecture phase (rev 4 change: `request` is exported for
+ * api/assistant.ts and api/story.ts, and listModels takes `includeAssistant`).  Base URL comes from VITE_API_BASE and
  * defaults to "" (same origin: the Vite dev server proxies /api to the backend,
  * see vite.config.ts).  Every function returns the parsed JSON body typed per
  * types.ts, or throws an ApiClientError carrying the HTTP status and the
@@ -83,7 +84,12 @@ function locToPath(loc: unknown[]): string {
   return path;
 }
 
-async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+/**
+ * JSON request helper shared by every route wrapper (exported so api/assistant.ts and
+ * api/story.ts reuse the same error handling).  `body` is JSON-encoded when given; a
+ * non-2xx answer throws ApiClientError; 204 resolves to undefined.
+ */
+export async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const init: RequestInit = { method, headers: {}, signal };
   if (body !== undefined) {
     init.headers = { "Content-Type": "application/json" };
@@ -139,9 +145,9 @@ export function getDefaults(agentCount = 8): Promise<RunCreateRequest> {
   return request("GET", `/api/defaults?agent_count=${agentCount}`);
 }
 
-/** Configured model routes with availability; never contains secrets. */
-export function listModels(): Promise<ModelInfo[]> {
-  return request("GET", "/api/models");
+/** Configured model routes with availability; never contains secrets.  Assistant-only refs are left out unless `includeAssistant`. */
+export function listModels(includeAssistant = false): Promise<ModelInfo[]> {
+  return request("GET", includeAssistant ? "/api/models?include_assistant=1" : "/api/models");
 }
 
 /** The ASSUMPTIONS registry defaults (read-only). */

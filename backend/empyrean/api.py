@@ -15,16 +15,24 @@ Rules
     RequestValidationError           -> 422 validation_error     (problems from loc -> "agents[2].position")
     UnknownModelError                -> 422 unknown_model
     StorageError / NotFoundError     -> 404 not_found
+    HTTP 413 (body over a cap)       -> 413 payload_too_large
     anything else                    -> 500 internal_error (message only; traceback in the log)
+  Assistant routes (rev 4) raise ``ApiException`` with the assistant codes:
+    assistant_unavailable 503 (no AssistantService in this process, or no usable model),
+    assistant_busy 409, brief_not_pending 409, assistant_budget_exhausted 409,
+    conversation_busy 409, payload_too_large 413.
   The 500 handler is a middleware INSIDE CORSMiddleware so the browser gets a
   body and CORS headers, never a bare "Failed to fetch".
 * Never returns credentials or reads ``.env``.
+* Lifespan (rev 4): on shutdown ``manager.shutdown()`` (no more commits), then
+  ``assistant.shutdown()`` when present (executors, cancel events), then
+  ``model.kill_inflight()`` (no orphaned CLI processes).
 
 Route table (all JSON; see docs/INTERFACES.md "API" for request/response models):
 
     GET    /api/health                                   -> {"ok": true, "version": SCHEMA_VERSION}
-    GET    /api/defaults?agent_count=8                   -> RunCreateRequest (6..11 prefilled cards)
-    GET    /api/models                                   -> list[ModelInfo]
+    GET    /api/defaults?agent_count=8                   -> RunCreateRequest (6..12 prefilled cards)
+    GET    /api/models?include_assistant=0               -> list[ModelInfo] (assistant-only refs hidden unless include_assistant=1)
     GET    /api/assumptions                              -> AssumptionsView (registry defaults)
     POST   /api/world/preview       WorldPreviewRequest  -> MapState (terrain only)
     GET    /api/runs                                     -> list[RunSummary]
@@ -54,6 +62,37 @@ Route table (all JSON; see docs/INTERFACES.md "API" for request/response models)
     POST   /api/runs/{run_id}/working/reload             -> ReloadResponse
     POST   /api/runs/{run_id}/continuations ContinuationRequest -> RunSummary (201)
 
+Assistant routes (rev 4; ``empyrean/assistant/routes*.py``, included by ``create_app`` through
+``assistant.routes.build_routers(assistant)``; all answer 503 assistant_unavailable when the app
+was built without an AssistantService):
+
+    GET    /api/assistant/capabilities                   -> AssistantCapabilities
+    GET    /api/assistant/conversations?run_id=&all=0    -> list[ConversationMeta]
+    POST   /api/assistant/conversations ConversationCreateRequest -> ConversationMeta (201)
+    GET    /api/assistant/conversations/{conv_id}        -> ConversationView
+    PATCH  /api/assistant/conversations/{conv_id} ConversationPatchRequest -> ConversationMeta
+    DELETE /api/assistant/conversations/{conv_id}        -> {} (409 conversation_busy while a job runs)
+    POST   /api/assistant/conversations/{conv_id}/messages MessageCreateRequest -> MessageAccepted (202 {job_id})
+    POST   /api/assistant/conversations/{conv_id}/jobs/{job_id}/cancel -> JobView
+    POST   /api/assistant/conversations/{conv_id}/briefs/{brief_id}/approve BriefApproveRequest {validated_against_turn_id} -> BriefResponse
+    POST   /api/assistant/conversations/{conv_id}/briefs/{brief_id}/reject BriefRejectRequest -> BriefResponse
+    GET    /api/runs/{run_id}/assistant/settings         -> AssistantRunSettingsView
+    PUT    /api/runs/{run_id}/assistant/settings AssistantRunSettingsUpdate -> AssistantRunSettingsView
+    GET    /api/runs/{run_id}/assistant/storybook?last_n= -> StorybookView (read-only)
+    POST   /api/runs/{run_id}/assistant/storybook/generate StorybookGenerateRequest -> StorybookGenerateResponse (202)
+    POST   /api/runs/{run_id}/assistant/storybook/entries/{turn_id}/regenerate -> StorybookGenerateResponse (202)
+    GET    /api/runs/{run_id}/assistant/stories          -> list[StorySessionSummary]
+    POST   /api/runs/{run_id}/assistant/stories StoryCreateRequest -> StoryView (201)
+    GET    /api/runs/{run_id}/assistant/stories/{story_id} -> StoryView
+    POST   /api/runs/{run_id}/assistant/stories/{story_id}/messages StoryMessageRequest -> StoryView (202)
+    POST   /api/runs/{run_id}/assistant/stories/{story_id}/approve StoryApproveRequest -> StoryView (202)
+    POST   /api/runs/{run_id}/assistant/stories/{story_id}/reject StoryRejectRequest -> StoryView
+    POST   /api/runs/{run_id}/assistant/stories/{story_id}/cancel -> StoryView
+    POST   /api/runs/{run_id}/assistant/stories/{story_id}/continue StoryContinueRequest -> StoryView (202)
+    GET    /api/runs/{run_id}/assistant/stories/{story_id}/chapters/{n}?mark_read=1 -> StoryChapter
+    GET    /api/runs/{run_id}/assistant/stories/{story_id}/export -> StoryExport
+    POST   /api/assistant/transcribe?language=en&run_id=&initial_prompt= (raw audio body, async, 10 MB cap) -> TranscriptionResult
+
 ``turn_id`` may be the literal ``live`` in the turn-scoped GET routes to read
 from the open runner instead of disk.  Every route body is a one-line
 translation into a ``RunManager`` call; history reads go through the manager's
@@ -70,7 +109,8 @@ turn on its own).
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
 
 from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
@@ -109,6 +149,9 @@ from .schemas import (
     WorldPreviewRequest,
 )
 from .storage import StorageError
+
+if TYPE_CHECKING:  # pragma: no cover - the assistant package imports ApiException from here
+    from .assistant.service import AssistantService
 
 log = logging.getLogger("empyrean.api")
 
@@ -180,11 +223,35 @@ class InternalErrorMiddleware:
             await response(scope, receive, send)
 
 
-def create_app(manager: RunManager) -> FastAPI:
+def create_app(manager: RunManager, assistant: Optional["AssistantService"] = None) -> FastAPI:
     """Build the FastAPI app: CORS for config.CORS_ORIGINS, the error handlers/middleware
-    described above, and every route in the table.  ``app.state.manager = manager``."""
-    app = FastAPI(title="Empyrean", version=SCHEMA_VERSION)
+    described above, every route in the table, the assistant routers
+    (``assistant.routes.build_routers(assistant)``; 503 fallbacks when ``assistant`` is None)
+    and the shutdown lifespan.  ``app.state.manager = manager``, ``app.state.assistant = assistant``."""
+    from .assistant import routes as assistant_routes  # local import: assistant modules import ApiException from here
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        yield
+        shutdown = getattr(manager, "shutdown", None)
+        if callable(shutdown):
+            try:
+                shutdown()
+            except Exception:  # noqa: BLE001 - shutdown must run to the end
+                log.exception("manager shutdown failed")
+        if assistant is not None:
+            try:
+                assistant.shutdown()
+            except Exception:  # noqa: BLE001
+                log.exception("assistant shutdown failed")
+        try:
+            model.kill_inflight()
+        except Exception:  # noqa: BLE001
+            log.exception("kill_inflight failed")
+
+    app = FastAPI(title="Empyrean", version=SCHEMA_VERSION, lifespan=lifespan)
     app.state.manager = manager
+    app.state.assistant = assistant
     registry = getattr(manager, "registry", None)
     # add_middleware prepends: the error middleware is added first so CORS wraps it.
     app.add_middleware(InternalErrorMiddleware, registry=registry)
@@ -225,7 +292,7 @@ def create_app(manager: RunManager) -> FastAPI:
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-        code = "not_found" if exc.status_code == 404 else "illegal_command" if exc.status_code == 405 else "internal_error"
+        code = {404: "not_found", 405: "illegal_command", 413: "payload_too_large"}.get(exc.status_code, "internal_error")
         return _error_response(exc.status_code, code, str(exc.detail))
 
     # -- global ---------------------------------------------------------------------
@@ -239,8 +306,9 @@ def create_app(manager: RunManager) -> FastAPI:
         return config.default_run_request(config.DEFAULT_MODEL_KEY, agent_count)
 
     @app.get("/api/models", response_model=list[ModelInfo])
-    def models() -> list[ModelInfo]:
-        return manager.models_info()
+    def models(include_assistant: bool = Query(False)) -> list[ModelInfo]:
+        infos = manager.models_info()
+        return infos if include_assistant else [m for m in infos if not m.assistant_only]
 
     @app.get("/api/assumptions", response_model=AssumptionsView)
     def assumptions() -> AssumptionsView:
@@ -375,5 +443,10 @@ def create_app(manager: RunManager) -> FastAPI:
     @app.post("/api/runs/{run_id}/continuations", response_model=RunSummary, status_code=201)
     def create_continuation(run_id: str, body: ContinuationRequest) -> RunSummary:
         return manager.create_continuation(run_id, body)
+
+    # -- assistant (rev 4) -----------------------------------------------------------
+
+    for router in assistant_routes.build_routers(assistant):
+        app.include_router(router)
 
     return app

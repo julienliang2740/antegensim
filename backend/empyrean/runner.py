@@ -32,6 +32,17 @@ Owns
 * Staging interventions (in memory under the lock, persisted to
   ``staged_edits.json``), the working/ reload, effective settings views.
 * An in-memory ring buffer of recent events for the live feed.
+* Commit listeners (rev 4): ``RunManager.add_commit_listener(cb)`` registers
+  ``cb(run_id, turn_id, kind, round)``; the worker calls the manager's fan-out at
+  the very end of ``_commit`` (after the checkpoint swap and ``_work = None``),
+  on the worker thread, wrapped in try/except so a listener can never fail or
+  un-commit a turn.  Listeners only set a flag or submit to an executor.  The
+  init turn and a continuation's first turn never pass through ``_commit``.
+* Pure helpers other modules reuse without a worker (rev 4):
+  ``command_allowed(state, command)`` (the submit rule) and
+  ``validate_intervention_on(checkpoint, registry, run_id, iv)`` (the staging
+  validation, against any committed checkpoint, so an assistant brief can be
+  validated without opening the run).
 
 Must not
 --------
@@ -88,7 +99,7 @@ import traceback
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from . import config, context, model, skills, storage, world
 from .schemas import (
@@ -463,11 +474,13 @@ class RunWorker:
         checkpoint: Checkpoint,
         registry: model.ModelRegistry,
         writer_lock: Optional[storage.WriterLock] = None,
+        on_commit: Optional[Callable[[str, str, str, int], None]] = None,
     ) -> None:
         self.manifest = manifest
         self.checkpoint = checkpoint  # last committed checkpoint (what API threads read)
         self.registry = registry
         self._writer_lock = writer_lock  # released when the worker thread exits (one active writer)
+        self._on_commit = on_commit  # (run_id, turn_id, kind, round) after every commit; never raises out
         self._lock = threading.RLock()
         self._io_lock = threading.Lock()
         self._thread: Optional[threading.Thread] = None
@@ -637,10 +650,9 @@ class RunWorker:
                     self._work = None
                 # paused / finished / pause_requested: no-op
                 return self._status_locked()
-            if command not in RUN_COMMANDS:
-                raise RunnerError(f"illegal_command: unknown command {command!r}")
-            if state not in ("paused", "finished"):
-                raise RunnerError(f"illegal_command: {command} while {state}")
+            reason = command_allowed(state, command)
+            if reason is not None:
+                raise RunnerError(reason)
             self._state = "running"
             self._active_command = command
             self._pause_flag = False
@@ -894,101 +906,15 @@ class RunWorker:
     def _settings_errors(self, settings: RunSettings, agent_ids: list[str], rules: Any) -> list[str]:
         """Every agent's effective context settings checked against its effective model
         (``context.validate_settings``); messages are prefixed with the agent id."""
-        errors: list[str] = []
-        for agent_id in agent_ids:
-            key = settings.effective_model_key(agent_id)
-            try:
-                ref = self.registry.get(key)
-            except model.UnknownModelError:
-                errors.append(f"{agent_id}: unknown model {key!r}")
-                continue
-            try:
-                effective = settings.effective_context(agent_id)
-            except Exception as exc:  # noqa: BLE001 - pydantic error on a bad override
-                errors.append(f"{agent_id}: invalid context override ({exc})")
-                continue
-            for message in context.validate_settings(effective, ref.capabilities, rules.cognition.multiplier_for(key)):
-                errors.append(f"{agent_id}: {message}")
-        return errors
+        return _settings_errors(self.registry, settings, agent_ids, rules)
 
     def validate_intervention(self, iv: Intervention) -> list[ApiProblem]:
         """Staging validation against the committed checkpoint (INTERFACES section 10).
-        World and knowledge interventions are dry-run on a deep copy so the exact apply
-        rule decides; settings interventions are checked with ``context.validate_settings``."""
+        Delegates to the pure ``validate_intervention_on`` with this worker's committed
+        checkpoint (rev 4), so briefs can run the same check on a closed run."""
         with self._lock:
             cp = self.checkpoint
-        w = cp.world
-        settings = cp.settings
-        problems: list[ApiProblem] = []
-
-        def problem(path: str, message: str) -> None:
-            problems.append(ApiProblem(path=path, message=message))
-
-        kind = iv.type
-        if kind in WORLD_INTERVENTION_TYPES:
-            if kind == "place_entity" and iv.entity.kind == "agent":
-                if iv.model_key is not None:
-                    err = self.registry.validate_key(iv.model_key)
-                    if err:
-                        problem("model_key", err)
-                if iv.context_overrides is not None and not iv.context_overrides.is_empty() and not problems:
-                    key = iv.model_key or settings.default_model_key
-                    try:
-                        ref = self.registry.get(key)
-                        effective = iv.context_overrides.apply_to(settings.context)
-                        for message in context.validate_settings(effective, ref.capabilities, w.rules.cognition.multiplier_for(key)):
-                            problem("context_overrides", message)
-                    except Exception as exc:  # noqa: BLE001
-                        problem("context_overrides", str(exc))
-            try:
-                world.apply_world_intervention(copy.deepcopy(w), iv)
-            except Exception as exc:  # noqa: BLE001 - InterventionError, WorldError, pydantic
-                problem("entity_id" if kind in ("set_stat", "remove_entity") else "", str(exc))
-        elif kind == "edit_knowledge":
-            if iv.agent_id not in cp.knowledge:
-                problem("agent_id", f"unknown agent {iv.agent_id}")
-            else:
-                try:
-                    context.apply_knowledge_intervention(copy.deepcopy(cp.knowledge), iv, w.round, cp.turn.turn_id)
-                except Exception as exc:  # noqa: BLE001
-                    problem("", str(exc))
-        elif kind == "voice":
-            if iv.recipients.mode == "agents":
-                for i, agent_id in enumerate(iv.recipients.agent_ids):
-                    if agent_id not in w.agents and agent_id not in cp.knowledge:
-                        problem(f"recipients.agent_ids[{i}]", f"unknown agent {agent_id}")
-                if not iv.recipients.agent_ids:
-                    problem("recipients.agent_ids", "at least one recipient")
-            if not iv.text.strip():
-                problem("text", "voice text is empty")
-        elif kind == "update_context_settings":
-            trial = settings.model_copy(deep=True)
-            try:
-                affected = self._merge_context_settings(trial, iv, w)
-            except _InterventionRejected as exc:
-                problem("scope", str(exc))
-            else:
-                for message in self._settings_errors(trial, affected, w.rules):
-                    problem("settings", message)
-        elif kind == "update_model_assignment":
-            trial = settings.model_copy(deep=True)
-            trial_rules = w.rules.model_copy(deep=True)
-            try:
-                affected, _ = self._assign_model(trial, trial_rules, iv, w)
-            except _InterventionRejected as exc:
-                problem("model_key" if "model" in str(exc) else "scope", str(exc))
-            else:
-                for message in self._settings_errors(trial, affected, trial_rules):
-                    problem("settings", message)
-        elif kind == "apply_working_files":
-            if iv.base_turn_id != cp.turn.turn_id:
-                problem("base_turn_id", f"stale: committed turn is {cp.turn.turn_id}")
-            try:
-                storage.read_staged_snapshot(self.run_id, iv.snapshot_ref)
-            except Exception as exc:  # noqa: BLE001
-                problem("snapshot_ref", str(exc))
-        # update_run_settings: every bound is a schema constraint already
-        return problems
+        return validate_intervention_on(cp, self.registry, self.run_id, iv)
 
     # -- worker thread internals --------------------------------------------
 
@@ -1982,6 +1908,13 @@ class RunWorker:
                 except Exception:  # noqa: BLE001 - best effort cleanup
                     log.warning("could not delete applied snapshot %s", ref)
         self._work = None
+        # rev 4: the committed turn is final; tell listeners (outside both locks, on this
+        # thread).  Nothing a listener does can affect the commit.
+        if self._on_commit is not None:
+            try:
+                self._on_commit(self.run_id, work.turn_id, work.kind, work.round)
+            except Exception:  # noqa: BLE001 - a listener bug must never look like a failed turn
+                log.exception("commit listener failed for %s %s", self.run_id, work.turn_id)
 
     # -- interventions at the boundary (INTERFACES section 10) --------------------
 
@@ -2191,31 +2124,9 @@ class RunWorker:
         return [iv.scope]
 
     def _assign_model(self, settings: RunSettings, rules: Any, iv: Any, w: WorldState) -> tuple[list[str], list[FieldChange]]:
-        """Run default or per-agent model override; the key must exist and be available; a
-        missing mind multiplier is snapshotted from the registry (FieldChange)."""
-        changes: list[FieldChange] = []
-        if iv.model_key is not None:
-            error = self.registry.validate_key(iv.model_key)
-            if error:
-                raise _InterventionRejected(f"model {iv.model_key!r}: {error}")
-        if iv.scope == "run":
-            if iv.model_key is None:
-                raise _InterventionRejected("model_key: the run default cannot be cleared")
-            settings.default_model_key = iv.model_key
-            affected = [a for a in w.agents if a not in settings.model_overrides]
-        else:
-            if iv.scope not in w.agents:
-                raise _InterventionRejected(f"unknown agent scope {iv.scope!r}")
-            if iv.model_key is None:
-                settings.model_overrides.pop(iv.scope, None)
-            else:
-                settings.model_overrides[iv.scope] = iv.model_key
-            affected = [iv.scope]
-        if iv.model_key is not None and iv.model_key not in rules.cognition.mind_multipliers:
-            value = self.registry.get(iv.model_key).mind_multiplier
-            rules.cognition.mind_multipliers[iv.model_key] = value
-            changes.append(FieldChange(path=f"rules.cognition.mind_multipliers.{iv.model_key}", before=None, after=value))
-        return affected, changes
+        """Run default or per-agent model override; the key must exist, be available and not be
+        assistant-only; a missing mind multiplier is snapshotted from the registry (FieldChange)."""
+        return _assign_model(self.registry, settings, rules, iv, w)
 
     def _place_agent(self, work: _TurnWork, iv: Any) -> list[FieldChange]:
         """place_entity for an agent: world placement, then a knowledge store with the birth
@@ -2228,7 +2139,7 @@ class RunWorker:
         w = work.world
         settings = work.cp.settings
         if iv.model_key is not None:
-            error = self.registry.validate_key(iv.model_key)
+            error = self.registry.validate_agent_key(iv.model_key)
             if error:
                 raise _InterventionRejected(f"model {iv.model_key!r}: {error}")
         key = iv.model_key or settings.default_model_key
@@ -2317,6 +2228,153 @@ class RunWorker:
 # ---------------------------------------------------------------------------
 
 
+def command_allowed(state: str, command: str) -> Optional[str]:
+    """The ``RunWorker.submit`` rule as a pure function (rev 4; shared with assistant brief
+    validation).  ``None`` when ``command`` may be submitted in ``state``, else the exact
+    ``RunnerError`` message: ``pause`` is always allowed (a no-op outside running states);
+    ``run_turn`` / ``play`` / ``step_round`` only from ``paused`` or ``finished``; anything
+    else is an unknown command.  It does not know whether the run is open."""
+    if command == "pause":
+        return None
+    if command not in RUN_COMMANDS:
+        return f"illegal_command: unknown command {command!r}"
+    if state not in ("paused", "finished"):
+        return f"illegal_command: {command} while {state}"
+    return None
+
+
+def _settings_errors(registry: model.ModelRegistry, settings: RunSettings, agent_ids: list[str], rules: Any) -> list[str]:
+    """Every agent's effective context settings checked against its effective model
+    (``context.validate_settings``); messages are prefixed with the agent id."""
+    errors: list[str] = []
+    for agent_id in agent_ids:
+        key = settings.effective_model_key(agent_id)
+        try:
+            ref = registry.get(key)
+        except model.UnknownModelError:
+            errors.append(f"{agent_id}: unknown model {key!r}")
+            continue
+        try:
+            effective = settings.effective_context(agent_id)
+        except Exception as exc:  # noqa: BLE001 - pydantic error on a bad override
+            errors.append(f"{agent_id}: invalid context override ({exc})")
+            continue
+        for message in context.validate_settings(effective, ref.capabilities, rules.cognition.multiplier_for(key)):
+            errors.append(f"{agent_id}: {message}")
+    return errors
+
+
+def _assign_model(registry: model.ModelRegistry, settings: RunSettings, rules: Any, iv: Any, w: WorldState) -> tuple[list[str], list[FieldChange]]:
+    """Run default or per-agent model override; the key must exist, be available and not be
+    assistant-only (``validate_agent_key``); a missing mind multiplier is snapshotted from the
+    registry (FieldChange).  Mutates ``settings`` / ``rules`` (callers pass trial copies when
+    validating)."""
+    changes: list[FieldChange] = []
+    if iv.model_key is not None:
+        error = registry.validate_agent_key(iv.model_key)
+        if error:
+            raise _InterventionRejected(f"model {iv.model_key!r}: {error}")
+    if iv.scope == "run":
+        if iv.model_key is None:
+            raise _InterventionRejected("model_key: the run default cannot be cleared")
+        settings.default_model_key = iv.model_key
+        affected = [a for a in w.agents if a not in settings.model_overrides]
+    else:
+        if iv.scope not in w.agents:
+            raise _InterventionRejected(f"unknown agent scope {iv.scope!r}")
+        if iv.model_key is None:
+            settings.model_overrides.pop(iv.scope, None)
+        else:
+            settings.model_overrides[iv.scope] = iv.model_key
+        affected = [iv.scope]
+    if iv.model_key is not None and iv.model_key not in rules.cognition.mind_multipliers:
+        value = registry.get(iv.model_key).mind_multiplier
+        rules.cognition.mind_multipliers[iv.model_key] = value
+        changes.append(FieldChange(path=f"rules.cognition.mind_multipliers.{iv.model_key}", before=None, after=value))
+    return affected, changes
+
+
+def validate_intervention_on(cp: Checkpoint, registry: model.ModelRegistry, run_id: str, iv: Intervention) -> list[ApiProblem]:
+    """Staging validation of ``iv`` against the committed checkpoint ``cp`` (INTERFACES section
+    10), as a pure function (rev 4): nothing is opened, locked or written.  World and knowledge
+    interventions are dry-run on a deep copy so the exact apply rule decides; settings
+    interventions are checked with ``context.validate_settings``; a ``place_entity`` /
+    ``update_model_assignment`` model key must pass ``registry.validate_agent_key``.
+    ``run_id`` is needed only to look up an ``apply_working_files`` snapshot.  Empty = valid."""
+    w = cp.world
+    settings = cp.settings
+    problems: list[ApiProblem] = []
+
+    def problem(path: str, message: str) -> None:
+        problems.append(ApiProblem(path=path, message=message))
+
+    kind = iv.type
+    if kind in WORLD_INTERVENTION_TYPES:
+        if kind == "place_entity" and iv.entity.kind == "agent":
+            if iv.model_key is not None:
+                err = registry.validate_agent_key(iv.model_key)
+                if err:
+                    problem("model_key", err)
+            if iv.context_overrides is not None and not iv.context_overrides.is_empty() and not problems:
+                key = iv.model_key or settings.default_model_key
+                try:
+                    ref = registry.get(key)
+                    effective = iv.context_overrides.apply_to(settings.context)
+                    for message in context.validate_settings(effective, ref.capabilities, w.rules.cognition.multiplier_for(key)):
+                        problem("context_overrides", message)
+                except Exception as exc:  # noqa: BLE001
+                    problem("context_overrides", str(exc))
+        try:
+            world.apply_world_intervention(copy.deepcopy(w), iv)
+        except Exception as exc:  # noqa: BLE001 - InterventionError, WorldError, pydantic
+            problem("entity_id" if kind in ("set_stat", "remove_entity") else "", str(exc))
+    elif kind == "edit_knowledge":
+        if iv.agent_id not in cp.knowledge:
+            problem("agent_id", f"unknown agent {iv.agent_id}")
+        else:
+            try:
+                context.apply_knowledge_intervention(copy.deepcopy(cp.knowledge), iv, w.round, cp.turn.turn_id)
+            except Exception as exc:  # noqa: BLE001
+                problem("", str(exc))
+    elif kind == "voice":
+        if iv.recipients.mode == "agents":
+            for i, agent_id in enumerate(iv.recipients.agent_ids):
+                if agent_id not in w.agents and agent_id not in cp.knowledge:
+                    problem(f"recipients.agent_ids[{i}]", f"unknown agent {agent_id}")
+            if not iv.recipients.agent_ids:
+                problem("recipients.agent_ids", "at least one recipient")
+        if not iv.text.strip():
+            problem("text", "voice text is empty")
+    elif kind == "update_context_settings":
+        trial = settings.model_copy(deep=True)
+        try:
+            affected = RunWorker._merge_context_settings(trial, iv, w)
+        except _InterventionRejected as exc:
+            problem("scope", str(exc))
+        else:
+            for message in _settings_errors(registry, trial, affected, w.rules):
+                problem("settings", message)
+    elif kind == "update_model_assignment":
+        trial = settings.model_copy(deep=True)
+        trial_rules = w.rules.model_copy(deep=True)
+        try:
+            affected, _ = _assign_model(registry, trial, trial_rules, iv, w)
+        except _InterventionRejected as exc:
+            problem("model_key" if "model" in str(exc) else "scope", str(exc))
+        else:
+            for message in _settings_errors(registry, trial, affected, trial_rules):
+                problem("settings", message)
+    elif kind == "apply_working_files":
+        if iv.base_turn_id != cp.turn.turn_id:
+            problem("base_turn_id", f"stale: committed turn is {cp.turn.turn_id}")
+        try:
+            storage.read_staged_snapshot(run_id, iv.snapshot_ref)
+        except Exception as exc:  # noqa: BLE001
+            problem("snapshot_ref", str(exc))
+    # update_run_settings: every bound is a schema constraint already
+    return problems
+
+
 def _context_problem(prefix: str, message: str) -> tuple[str, str]:
     """``context.validate_settings`` reports ``"<field path>: <message>"``; turn that into an
     ApiProblem path under ``prefix`` (``context.generation_allowance``,
@@ -2340,6 +2398,38 @@ class RunManager:
         self._closing: dict[str, RunWorker] = {}  # closed workers still finishing their last turn
         self._lock = threading.Lock()
         self._open_lock = threading.Lock()  # serialises open_run so a concurrent second open is idempotent
+        self._commit_listeners: list[Callable[[str, str, str, int], None]] = []  # rev 4; read at call time
+
+    # -- commit listeners (rev 4) -------------------------------------------------
+
+    def add_commit_listener(self, callback: Callable[[str, str, str, int], None]) -> None:
+        """Register ``callback(run_id, turn_id, kind, round)`` for every turn any worker of this
+        manager commits from now on (``kind`` is ``agent_turn`` | ``round_end``; the init turn
+        and a continuation's first turn are not commits).  Called on the worker thread right
+        after the commit is final; it must return quickly and only set a flag or submit to an
+        executor.  Exceptions are logged and swallowed; ``RuntimeError`` (an executor that was
+        shut down) is dropped silently."""
+        with self._lock:
+            if callback not in self._commit_listeners:
+                self._commit_listeners.append(callback)
+
+    def remove_commit_listener(self, callback: Callable[[str, str, str, int], None]) -> None:
+        with self._lock:
+            if callback in self._commit_listeners:
+                self._commit_listeners.remove(callback)
+
+    def _fan_out_commit(self, run_id: str, turn_id: str, kind: str, round_no: int) -> None:
+        """The single ``on_commit`` every worker gets: snapshots the listener list at call time
+        and isolates each listener's failure."""
+        with self._lock:
+            listeners = list(self._commit_listeners)
+        for callback in listeners:
+            try:
+                callback(run_id, turn_id, kind, round_no)
+            except RuntimeError as exc:  # an executor after shutdown: expected during process exit
+                log.debug("commit listener dropped (%s) for %s %s", exc, run_id, turn_id)
+            except Exception:  # noqa: BLE001
+                log.exception("commit listener %r failed for %s %s", callback, run_id, turn_id)
 
     # -- setup -------------------------------------------------------------------
 
@@ -2356,7 +2446,7 @@ class RunManager:
             problem("agents", f"{config.MIN_AGENTS} to {config.MAX_AGENTS} agent cards are required")
         if isinstance(request.seed, bool) or not isinstance(request.seed, int):
             problem("seed", "seed must be an integer")
-        default_error = self.registry.validate_key(request.default_model_key)
+        default_error = self.registry.validate_agent_key(request.default_model_key)
         if default_error:
             problem("default_model_key", default_error)
         rules = request.rules
@@ -2395,7 +2485,7 @@ class RunManager:
             if stats.essence > stats.essence_capacity:
                 problem(f"{path}.stats.essence", "essence exceeds essence_capacity")
             key = card.model_key or request.default_model_key
-            card_error = self.registry.validate_key(card.model_key) if card.model_key else default_error
+            card_error = self.registry.validate_agent_key(card.model_key) if card.model_key else default_error
             if card.model_key and card_error:
                 problem(f"{path}.model_key", card_error)
             if not card_error:
@@ -2506,7 +2596,7 @@ class RunManager:
         lock = storage.acquire_writer_lock(run_id)
         if lock is None:  # the id is fresh; only a foreign opener racing on the new dir could hold it
             raise RunnerError(f"illegal_command: run {run_id} is open in another process")
-        worker = RunWorker(manifest, checkpoint, self.registry, writer_lock=lock)
+        worker = RunWorker(manifest, checkpoint, self.registry, writer_lock=lock, on_commit=self._fan_out_commit)
         try:
             worker.start([])
         except BaseException:
@@ -2545,7 +2635,7 @@ class RunManager:
                     log.warning("recovery of %s: %s", run_id, warning)
                 manifest = storage.read_manifest(run_id)
                 checkpoint = storage.load_checkpoint(run_id)
-                worker = RunWorker(manifest, checkpoint, self.registry, writer_lock=lock)
+                worker = RunWorker(manifest, checkpoint, self.registry, writer_lock=lock, on_commit=self._fan_out_commit)
                 worker.start(list(report.pending_calls))
             except BaseException:
                 lock.release()

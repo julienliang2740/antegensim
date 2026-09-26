@@ -227,7 +227,7 @@ def test_models_file_env_override_and_placeholders(tmp_path, clean_env):
     clean_env.setenv("EMPYREAN_TEST_ENDPOINT", "https://example.openai.azure.com/")
     clean_env.delenv("EMPYREAN_TEST_DEPLOYMENT", raising=False)
     registry = load_registry()
-    assert registry.keys() == ["fake-heuristic", "fake-scripted", "fake-malformed", "my-foundry"]
+    assert registry.keys() == ["fake-heuristic", "fake-scripted", "fake-malformed", "fake-assistant", "my-foundry"]
     # Stored/snapshotted ref keeps the placeholder; the adapter copy is resolved.
     assert registry.get("my-foundry").endpoint == "${EMPYREAN_TEST_ENDPOINT}"
     assert registry.resolved("my-foundry").endpoint == "https://example.openai.azure.com/"

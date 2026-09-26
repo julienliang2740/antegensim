@@ -374,8 +374,9 @@ def _source_hash() -> str:
     recorded revision identifies the code that ran even when git cannot."""
     digest = hashlib.sha256()
     package_dir = Path(__file__).resolve().parent
-    for path in sorted(package_dir.glob("*.py")):
-        digest.update(path.name.encode("utf-8"))
+    # rglob: subpackages (assistant/) are part of the code that ran (rev 4).
+    for path in sorted(package_dir.rglob("*.py"), key=lambda p: p.relative_to(package_dir).as_posix()):
+        digest.update(path.relative_to(package_dir).as_posix().encode("utf-8"))
         try:
             digest.update(path.read_bytes())
         except OSError:

@@ -337,6 +337,114 @@ INITIAL_FEED_WINDOW = 300  # the UI starts polling at max(0, latest_seq - this)
 POLL_INTERVAL_MS = 700
 
 # ---------------------------------------------------------------------------
+# Assistant (rev 4).  Every value is environment-overridable and none is a secret.  The
+# assistant's model calls go through model.call_model like the agents' but are metered in
+# their own ledger (<scope>/assistant/usage.jsonl), never in Manifest.real_usage.
+# ---------------------------------------------------------------------------
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(_env(name, str(default)))
+    except ValueError:
+        return default
+
+
+def _env_flag(name: str, default: str) -> bool:
+    return _env(name, default).strip().lower() not in ("0", "false", "no", "off")
+
+
+# Model key per profile (registry keys; validated with ModelRegistry.validate_key at service start).
+ASSISTANT_MODEL_CHAT = _env("EMPYREAN_ASSISTANT_MODEL_CHAT", "claude-cli-sonnet-assistant")
+ASSISTANT_MODEL_NARRATOR = _env("EMPYREAN_ASSISTANT_MODEL_NARRATOR", "claude-cli-haiku-assistant")
+ASSISTANT_MODEL_AUTHOR = _env("EMPYREAN_ASSISTANT_MODEL_AUTHOR", "claude-cli-sonnet-assistant")
+ASSISTANT_MODEL_SUMMARIZER = _env("EMPYREAN_ASSISTANT_MODEL_SUMMARIZER", "claude-cli-haiku-assistant")
+ASSISTANT_PROFILES: tuple[str, ...] = ("chat", "narrator", "author", "summarizer")
+
+# Budgets in USD (list-price estimates; A-AST-2).  chat: per scope (run or global); storybook: per
+# run; story: per story job (the story brief may set its own); message: per user message (all
+# steps); global: across every scope in this process.
+ASSISTANT_CHAT_BUDGET_USD = _env_float("EMPYREAN_ASSISTANT_CHAT_BUDGET_USD", 5.0)
+ASSISTANT_STORYBOOK_BUDGET_USD = _env_float("EMPYREAN_ASSISTANT_STORYBOOK_BUDGET_USD", 2.0)
+ASSISTANT_STORY_BUDGET_USD = _env_float("EMPYREAN_ASSISTANT_STORY_BUDGET_USD", 5.0)
+ASSISTANT_GLOBAL_BUDGET_USD = _env_float("EMPYREAN_ASSISTANT_GLOBAL_BUDGET_USD", 20.0)
+ASSISTANT_MESSAGE_BUDGET_USD = _env_float("EMPYREAN_ASSISTANT_MESSAGE_BUDGET_USD", 0.75)
+# Before every call the engine checks spent + this estimate against the applicable limits (R1).
+ASSISTANT_CALL_COST_ESTIMATE_USD = 0.05
+
+# Chat step loop (A-AST-7).
+ASSISTANT_MAX_STEPS = 4  # model calls per user message; the last step gets the answer|ask schema
+ASSISTANT_MESSAGE_TIMEOUT_SECONDS = 90.0  # wall clock per user message (all steps)
+ASSISTANT_TOOL_OUTPUT_MAX_CHARS = 6000  # each read tool's result is capped with a truncation note
+ASSISTANT_TOOLS_PER_STEP = 3  # read tools one step may request
+
+# Prompt layout (A-AST-4/5): byte-stable system prompt (knowledge core + rules + tool catalogue),
+# volatile user message (context, memory, retrieved docs, tool results, the question).
+KNOWLEDGE_CORE_TOKENS = 8000
+KNOWLEDGE_RETRIEVAL_TOKENS = 4000
+MEMORY_TOKEN_BUDGET = 3000
+ASSISTANT_SYSTEM_PROMPT_MAX_BYTES = 96 * 1024  # asserted before every call (CLI argv)
+ASSISTANT_SCHEMA_MAX_BYTES = 16 * 1024  # compact per-profile JSON schema
+# Output caps per profile (R6): generous relative to the expected output; the prompt asks for brevity.
+ASSISTANT_OUTPUT_TOKENS: dict[str, int] = {
+    "chat": 2000,
+    "narrator": 600,
+    "narrator_batched": 2400,
+    "chapter": 2000,
+    "summarizer": 1000,
+}
+# Request settings per profile (R6): (timeout_seconds per attempt, max_retries).
+ASSISTANT_REQUEST_SETTINGS: dict[str, tuple[float, int]] = {
+    "chat": (90.0, 0),
+    "author": (90.0, 0),
+    "narrator": (60.0, 1),
+    "summarizer": (60.0, 1),
+}
+
+# Storybook (A-AST-1/3).  STORYBOOK_AUTO: "on" | "off" | "auto" (auto = the default rule: on unless a
+# paid narrator would narrate an all-fake-agent run).
+STORYBOOK_AUTO = _env("EMPYREAN_STORYBOOK_AUTO", "auto").strip().lower()
+if STORYBOOK_AUTO not in ("on", "off", "auto"):
+    STORYBOOK_AUTO = "auto"
+STORYBOOK_BATCH_MAX = 12  # turns per narrator call when the backlog is > STORYBOOK_BATCH_THRESHOLD
+STORYBOOK_BATCH_THRESHOLD = 2
+ASSISTANT_BACKGROUND_PAUSE_SECONDS = 60.0  # background profiles pause after a 429/overload
+
+# List prices in USD per million tokens keyed by response_model PREFIX (longest match wins):
+# (input, cache_read, cache_write, output).  Anthropic first-party rates as of 2026-06 (the CLI
+# reports total_cost_usd itself; this table only prices calls whose cost the provider left None).
+ASSISTANT_PRICES: dict[str, tuple[float, float, float, float]] = {
+    "claude-haiku-4-5": (1.00, 0.10, 1.25, 5.00),
+    "claude-sonnet-4-6": (3.00, 0.30, 3.75, 15.00),
+    "claude-sonnet-5": (2.00, 0.20, 2.50, 10.00),
+    "claude-opus-4": (5.00, 0.50, 6.25, 25.00),
+    "claude-opus-5": (5.00, 0.50, 6.25, 25.00),
+    "fake": (0.0, 0.0, 0.0, 0.0),
+}
+ASSISTANT_PRICE_FALLBACK: tuple[float, float, float, float] = (3.00, 0.30, 3.75, 15.00)
+
+# Speech (A-AST-6): local faster-whisper behind model.transcribe.  Preload happens in main only.
+WHISPER_MODEL = _env("EMPYREAN_WHISPER_MODEL", "large-v3-turbo")
+WHISPER_PRELOAD = _env_flag("EMPYREAN_WHISPER_PRELOAD", "1")
+WHISPER_MAX_AUDIO_BYTES = 10_000_000
+WHISPER_MAX_SECONDS = 65  # the UI stops recording at 60 s
+WHISPER_CPU_THREADS = min(8, os.cpu_count() or 1)
+WHISPER_DEVICE = "cpu"
+WHISPER_COMPUTE_TYPE = "int8"
+WHISPER_LANGUAGE_DEFAULT = "en"
+
+# Server log ring buffer (assistant get_server_log tool): empyrean.* loggers at INFO+, redacted.
+SERVER_LOG_RING_LINES = 2000
+SERVER_LOG_TAIL_MAX_CHARS = 6000
+
+# claude_cli: any single argv string above this many bytes is refused as invalid_config (the OS
+# limit is ~128 KiB; the assistant asserts its system prompt < ASSISTANT_SYSTEM_PROMPT_MAX_BYTES).
+CLI_ARGV_MAX_BYTES = 100_000
+
+# Storage under the worlds dir for conversations that belong to no run (A-AST-10).
+ASSISTANT_GLOBAL_DIR_NAME = "_assistant"
+
+# ---------------------------------------------------------------------------
 # ASSUMPTIONS registry
 # ---------------------------------------------------------------------------
 
@@ -890,6 +998,74 @@ ASSUMPTIONS: dict[str, Assumption] = {
         default="mandatory = stable rules (catalogue without source) + core situation (believed self, latest result, digest header with counts by kind and one <= 40-token line per urgent record) + decision request + model overhead; then fill: full unread bodies (urgent kinds first), notebook, recent history, retrieved memories, skill source",
         citation="Spec: 'How selection works' step 1 (compact digest; overflow counts)",
         rationale="A flood of messages can never make every packet unaffordable.",
+    ),
+    # -- god mode -----------------------------------------------------------------
+    "A-GOD-1": Assumption(
+        key="staged edits application order; working/ reload applied as a diff (storage.apply_working_changes)",
+        default="staged edits are applied at the boundary in staging order, each as a delta onto the state at that moment; a working/ reload is staged as the field diff of the files against the committed turn and applied AS THAT DIFF (never a wholesale replacement), so UI edits staged before or after it all survive; a field changed by both keeps the value of the edit staged later; a file change whose parent no longer exists or a result failing validation (schema, cross-file references, validate_world, effective context settings) rejects the whole file edit (ok=false with the paths and reasons; the other edits still apply); the record's before values are the values found at apply time",
+        citation="Spec: 'God mode and direct file editing' (both paths record before/after values, origin and effective boundary; invalid files leave the last valid state available); fix-pass finding (a reload staged after UI edits silently undid them)",
+        rationale="An operator's UI edits and file edits for the same turn must both take effect; the later-staged value wins a conflict.",
+    ),
+    # -- assistant (rev 4) ----------------------------------------------------------
+    "A-AST-1": Assumption(
+        key="storybook automatic narration default (STORYBOOK_AUTO, <run>/assistant/settings.json)",
+        default="a new run's storybook_auto is ON unless the narrator model is a paid (non-fake) key AND every agent model in the run is fake; runs without assistant/settings.json (existing runs) are OFF; auto covers only turns committed after auto_since_turn_id (set when the flag is switched on) plus the opening entry written at creation; catch-up of history is never automatic (only the explicit 'Write missing' button / POST storybook/generate); auto pauses with a visible notice at the run's storybook budget",
+        citation="User requirement 5 (automatic per-turn storybook); measured Haiku CLI cost $0.0081 and 7.3 s per call, fake runs commit ~5 turns/s, 285-turn runs on disk",
+        rationale="Per-turn narration is what the user asked for, but silently spending on a fake demo run or on an old run that is merely opened is not.",
+    ),
+    "A-AST-2": Assumption(
+        key="assistant budgets (ASSISTANT_*_BUDGET_USD) and ledger",
+        default="separate limits: chat per scope (run or global) 5.0, storybook per run 2.0, story per job 5.0 (the story brief may set its own), per user message 0.75, global across all scopes 20.0; before every call the engine checks spent + ASSISTANT_CALL_COST_ESTIMATE_USD (0.05) against the applicable limits; each call settles the CLI-reported provider_cost_usd or, when None, a list-price estimate from tokens (ASSISTANT_PRICES by response_model prefix; cost_estimated=true); usage.jsonl per scope is the only source and is aggregated on read; nothing is ever written to Manifest.real_usage; limits are per-run/per-scope settings the user raises directly",
+        citation="Design 'Compute metering' (the agents' economy is separate); judges' finding that one shared budget lets background narration lock the user out of chat",
+        rationale="Background narration, chat and story generation must not starve one another, and assistant spend must never distort the agents' ledger or run budget.",
+    ),
+    "A-AST-3": Assumption(
+        key="storybook batching (STORYBOOK_BATCH_MAX, STORYBOOK_BATCH_THRESHOLD)",
+        default="one coalescing job per run narrates missing eligible turns in order; when the backlog is > 2 turns a narrator call covers up to 12 turns (one round) and returns one '## <turn_id>' section per turn, parsed deterministically, with missing sections re-queued singly; a backlog <= 2 is narrated singly so live play gets prompt per-turn entries; background profiles share a global semaphore of 1 while any open claude_cli run is not idle and pause 60 s after a 429/overload; a non-blocking flock on <run>/assistant/.storybook.lock guards against a second process",
+        citation="Measured: the fixed prompt prefix is ~3k tokens per narrator call, so batching per round saves ~65%; fake runs commit ~30x faster than one narrator writes",
+        rationale="Keeps one entry per turn (the user's unit) without an hour-long tail behind a fast run.",
+    ),
+    "A-AST-4": Assumption(
+        key="assistant structured output: lean schemas, untyped brief action args, one repair step",
+        default="constrained JSON is used only where code consumes the output (chat step answer|tool|ask|brief, interview ask/brief, story brief); every compact schema is < 16 KB and brief.action is {type: enum, args: object} with args untyped in the JSON schema, validated server-side with TypeAdapter(BriefAction); before any re-call the engine applies deterministic salvage (unwrap single-key string wrappers such as {'output': '<json>'}, json-decode stringified fields, collapse doubled nesting) and then at most one repair step with the validation errors; assistant refs run with max_turns 2 and max_model_requests 3 so the CLI's own validator verdict reaches the model against a warm cache",
+        citation="Measured: 144 of 1,066 live Haiku schema calls in worlds/ were malformed (13.5%), terminal and paid with max_turns=1; the typed Intervention schema is 35,634 chars with 215 $refs",
+        rationale="A typed action union would add ~12k tokens per step; server-side validation gives the same safety at a fraction of the cost.",
+    ),
+    "A-AST-5": Assumption(
+        key="ModelRequest.response_format='text' profiles",
+        default="narrator entries, story chapters and both summaries (conversation memory, story-so-far) are requested in text mode (no JSON instruction, neutral CLI fallback prompt, any non-empty reply is ok); the engine supplies metadata deterministically (turn ids, chapter numbers, the title from the first '# ' line); chat steps, interview ask/brief and the story brief stay constrained JSON",
+        citation="Design decision D2 as amended (hybrid); model.py single boundary (U4/U15)",
+        rationale="Prose profiles gain nothing from a schema and inherit its failure mode; text mode keeps every provider difference inside model.py.",
+    ),
+    "A-AST-6": Assumption(
+        key="speech input (WHISPER_* defaults; 'Dictate')",
+        default="local faster-whisper large-v3-turbo, int8 on CPU with min(8, nproc) threads, behind model.transcribe on a dedicated 1-worker speech executor with a bounded queue; preloaded by main only (never in tests); 60 s recording cap in the UI (WHISPER_MAX_SECONDS 65 server side), raw-body POST capped at 10 MB (413 payload_too_large); language defaults to en; initial_prompt built from the run's agent names, glossary terms and control labels; the feature is called 'Dictate' everywhere because god mode owns 'voice'",
+        citation="User requirement 9 (accurate local Whisper, not tiny); measured 7.2 s (large-v3-turbo) vs 5.5-6 s (medium) for an 11 s clip, 15.8 s cold load",
+        rationale="Accuracy on game vocabulary matters more than one second of latency; preload removes the cold-start risk.",
+    ),
+    "A-AST-7": Assumption(
+        key="chat step loop (ASSISTANT_MAX_STEPS, ASSISTANT_MESSAGE_TIMEOUT_SECONDS, ASSISTANT_TOOLS_PER_STEP)",
+        default="at most 4 model calls per user message; step 1 is pre-injected with deterministic context (run status, viewed turn digest, selected entity dossier, last round digest, highlights) so most questions need one call; a tool step may request up to 3 read tools; the last step is sent the restricted answer|ask schema so a chain always ends in an answer; wall clock 90 s and ASSISTANT_MESSAGE_BUDGET_USD per message; answers are stamped 'as of turn <id>'; the system prompt is byte-stable across steps (< 96 KiB) so the CLI serves it from cache",
+        citation="Live records: mean cache_read 4,412 / cache_creation 2,399 tokens per Haiku call; every CLI step is a blocking subprocess of 7-20 s",
+        rationale="Bounded latency and spend per question; the cache makes the stable prefix nearly free after step 1.",
+    ),
+    "A-AST-8": Assumption(
+        key="assistant-only model refs (ref.options.assistant_only)",
+        default="claude-cli-sonnet-assistant (sonnet, max_budget_usd 0.25), claude-cli-haiku-assistant (haiku, 0.08) and the default fake ref fake-assistant carry options.assistant_only=true; GET /api/models hides them unless ?include_assistant=1; ModelRegistry.validate_agent_key rejects them ('reserved for the assistant') in validate_setup, card model keys, place_entity and update_model_assignment; assistant profile keys validate with validate_key",
+        citation="runner.validate_setup / validate_intervention check validate_key only; the assistant refs carry larger per-call CLI caps and turn limits",
+        rationale="A frontend-only filter would leave the assistant's larger caps assignable to agents through the API, god mode and the assistant's own briefs.",
+    ),
+    "A-AST-9": Assumption(
+        key="execution briefs: validation, approval lifecycle, provenance",
+        default="the model's brief is data, never authority: a typed action (create_run | run_command {rounds 1-50 only with step_round} | stage_interventions | create_continuation | open_run | update_assistant_settings) is validated deterministically before it is shown (validation never opens a run: the open worker's committed checkpoint or storage.load_checkpoint read-only); approve = POST {validated_against_turn_id} under the conversation lock with CAS pending->executing, revalidation, server-side execution and a stored idempotent effect; interventions staged by a brief get origin 'assistant' and note 'assistant: <summary>'; apply_working_files can never be proposed; a play/step is never chained into a create_run approval",
+        citation="User requirement 2 (request -> brief -> Approve/Change/Reject -> execute); spec 'God mode' (record origin)",
+        rationale="Nothing mutates before approval; a double click or second tab cannot execute twice; history shows what the assistant did.",
+    ),
+    "A-AST-10": Assumption(
+        key="conversation scope and storage (<worlds_dir>/_assistant/conversations/<conv_id>/)",
+        default="every conversation lives under the worlds dir's _assistant folder with meta.json (mutable run_id, null = global) and messages.jsonl; the drawer lists conversations by the page's scope; after an approved create_run or open_run the same conversation is rebound to the new run; a ConversationStore with a per-conversation lock owns every mutation; on service start and lazily on load, messages or jobs left pending/executing are rewritten to interrupted; the sim state is the memory: no cross-conversation memory, the assistant re-reads the world through read tools",
+        citation="User requirement 4 (conversations/memory/sessions tightly bound to the sim); recovery never touches <run>/assistant/",
+        rationale="One location with a mutable scope avoids moving files across runs and keeps the flagship flow ('set up a fight arena' on Home, approve, follow into the run) in one thread.",
     ),
 }
 

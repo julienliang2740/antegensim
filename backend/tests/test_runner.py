@@ -365,6 +365,9 @@ class FakeRegistry:
     def validate_key(self, key: str) -> Optional[str]:
         return None if key in self.refs else f"unknown model {key!r}"
 
+    def validate_agent_key(self, key: str) -> Optional[str]:  # rev 4 (no assistant-only refs here)
+        return self.validate_key(key)
+
     def list_info(self) -> list[ModelInfo]:
         return [ModelInfo(key=r.key, provider=r.provider, model_id=r.model_id, available=True, capabilities=r.capabilities) for r in self.refs.values()]
 

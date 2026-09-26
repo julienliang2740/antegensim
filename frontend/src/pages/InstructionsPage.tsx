@@ -5,22 +5,26 @@
  * are the shipped defaults and every one of them is configurable per run.
  *
  * The app uses a hash router ("#/..."), so the table of contents scrolls with
- * scrollIntoView instead of changing the hash.
+ * scrollIntoView instead of changing the hash.  "#/instructions?section=<id>"
+ * is a first-class route (hooks/useHashRoute.ts) and opens the page scrolled
+ * to that section (the assistant links docs sections this way).
  */
 
 import { useEffect, type MouseEvent, type ReactNode } from "react";
-import { navigate } from "../hooks/useHashRoute";
+import { navigate, parseHash } from "../hooks/useHashRoute";
 import "../setup.css";
 
-/** Hash of this page (App.tsx routes it; see isInstructionsHash). */
+/** Hash of this page without a section (App.tsx routes it as { name: "instructions" }). */
 export const INSTRUCTIONS_HASH = "#/instructions";
 
+/** True for "#/instructions" with or without "?section=<id>". */
 export function isInstructionsHash(hash: string): boolean {
-  return hash.replace(/\?.*$/, "") === INSTRUCTIONS_HASH;
+  return parseHash(hash).name === "instructions";
 }
 
+/** Open the page at the top (a section deep link is navigate({ name: "instructions", section })). */
 export function openInstructions(): void {
-  if (window.location.hash !== INSTRUCTIONS_HASH) window.location.hash = INSTRUCTIONS_HASH;
+  navigate({ name: "instructions", section: null });
 }
 
 const SECTIONS: { id: string; title: string }[] = [
@@ -59,11 +63,17 @@ function Section(props: { id: string; children: ReactNode }) {
   );
 }
 
-export function InstructionsPage() {
+export function InstructionsPage(props: { section?: string | null }) {
+  const section = props.section ?? null;
   useEffect(() => {
     document.title = "How the world works · Empyrean";
-    window.scrollTo(0, 0);
   }, []);
+  // Open at the linked section (or the top); runs again when a link names another section.
+  useEffect(() => {
+    const target = section ? document.getElementById(section) : null;
+    if (target) target.scrollIntoView({ block: "start" });
+    else window.scrollTo(0, 0);
+  }, [section]);
 
   return (
     <div className="page doc-page">

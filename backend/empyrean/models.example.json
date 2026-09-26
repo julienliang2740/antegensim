@@ -1,5 +1,5 @@
 {
-  "_comment": "Model registry. credential_env lists ENV VAR NAMES only; values come from .env. Copy this file and point EMPYREAN_MODELS_FILE at it to customise. Keys are what agent cards and run defaults reference. mind_multiplier is snapshotted into each run at creation (rules.cognition.mind_multipliers); editing it here never changes an existing run. options: temperature, param_style ('chat' | 'reasoning'), strict_schema (bool, OpenAI family), tool_choice ('tool' default | 'auto', anthropic), api_key_env (env var NAME of the key), overhead_tokens (provider-side input tokens beyond messages and schema; model.FIXED_OVERHEAD_TOKENS by default), max_budget_usd, max_turns, max_model_requests (accepted CLI re-prompts per decision, config.CLI_MAX_MODEL_REQUESTS) and max_thinking_tokens (MAX_THINKING_TOKENS for the subprocess, 0 = off, null = CLI default; config.CLI_MAX_THINKING_TOKENS) (claude_cli). ${VAR} placeholders in endpoint/deployment/api_version/region are resolved from the environment.",
+  "_comment": "Model registry. credential_env lists ENV VAR NAMES only; values come from .env. Copy this file and point EMPYREAN_MODELS_FILE at it to customise. Keys are what agent cards and run defaults reference. mind_multiplier is snapshotted into each run at creation (rules.cognition.mind_multipliers); editing it here never changes an existing run. options: temperature, param_style ('chat' | 'reasoning'), strict_schema (bool, OpenAI family), tool_choice ('tool' default | 'auto', anthropic), api_key_env (env var NAME of the key), overhead_tokens (provider-side input tokens beyond messages and schema; model.FIXED_OVERHEAD_TOKENS by default), max_budget_usd, max_turns, max_model_requests (accepted CLI re-prompts per decision, config.CLI_MAX_MODEL_REQUESTS) and max_thinking_tokens (MAX_THINKING_TOKENS for the subprocess, 0 = off, null = CLI default; config.CLI_MAX_THINKING_TOKENS) (claude_cli); assistant_only (bool): the ref serves the built-in assistant only (ModelInfo.assistant_only; hidden from GET /api/models unless ?include_assistant=1 and rejected for agent cards, run defaults, place_entity and update_model_assignment by ModelRegistry.validate_agent_key). ${VAR} placeholders in endpoint/deployment/api_version/region are resolved from the environment.",
   "models": [
     {
       "key": "fake-heuristic",
@@ -47,6 +47,26 @@
       "mind_multiplier": 1.0,
       "options": {"max_budget_usd": 0.05, "overhead_tokens": 850},
       "description": "Same hardened Claude Code CLI route without --json-schema: the decision format is described in the prompt and the reply is extracted and validated by the format gate. About half the input tokens of the schema route (no StructuredOutput tool)."
+    },
+    {
+      "key": "claude-cli-sonnet-assistant",
+      "provider": "claude_cli",
+      "model_id": "sonnet",
+      "credential_env": [],
+      "capabilities": {"supports_json_schema": true, "supports_json_mode": false, "context_window": 200000, "max_output_tokens": 8000, "reports_usage": true},
+      "mind_multiplier": 1.0,
+      "options": {"max_budget_usd": 0.25, "max_turns": 2, "max_model_requests": 3, "assistant_only": true},
+      "description": "Built-in assistant (chat, author profiles): Claude Code CLI with the 'sonnet' alias, assistant-only. max_turns 2 / max_model_requests 3 let the CLI's structured-output verdict reach the model once against a warm cache."
+    },
+    {
+      "key": "claude-cli-haiku-assistant",
+      "provider": "claude_cli",
+      "model_id": "haiku",
+      "credential_env": [],
+      "capabilities": {"supports_json_schema": true, "supports_json_mode": false, "context_window": 200000, "max_output_tokens": 8000, "reports_usage": true},
+      "mind_multiplier": 1.0,
+      "options": {"max_budget_usd": 0.08, "max_turns": 2, "max_model_requests": 3, "assistant_only": true},
+      "description": "Built-in assistant (narrator, summarizer profiles): Claude Code CLI with the 'haiku' alias, assistant-only."
     },
     {
       "key": "anthropic-haiku",
