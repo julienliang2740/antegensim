@@ -1164,3 +1164,21 @@ test("selection: prune drops ids that no longer exist and keeps the same set whe
   const same = sel("r1", "r2");
   assert.equal(selection.pruneSelection(same, IDS), same);
 });
+
+
+test("agent view overlay: one marker per entity, the latest sighting wins", async () => {
+  const logic = await load("components/inspect/logic.mjs");
+  const overlay = {
+    agentId: "a01", agentName: "Aster", believedPosition: { x: 0, y: 0 },
+    observed: [
+      { id: "a02", kind: "agent", alive: true, position: { x: 1, y: 0 }, observed_round: 3 },
+      { id: "a02", kind: "agent", alive: true, position: { x: 2, y: 0 }, observed_round: 7 },
+      { id: "a01", kind: "agent", alive: true, position: { x: 0, y: 0 }, observed_round: 7 },
+      { id: "p0001", kind: "plant", alive: true, position: { x: 1, y: 0 }, observed_round: 1 },
+    ],
+  };
+  const markers = logic.overlayMarkers(overlay);
+  assert.deepEqual(markers.map((m) => m.id).sort(), ["a01", "a02", "p0001"]);
+  assert.deepEqual(markers.find((m) => m.id === "a02").position, { x: 2, y: 0 });
+  assert.equal(markers.find((m) => m.id === "a01").self, true);
+});

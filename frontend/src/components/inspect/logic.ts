@@ -381,9 +381,16 @@ export function sightingLine(o: ObservedEntity): string {
 }
 
 export function overlayMarkers(overlay: AgentViewOverlay): MapMarker[] {
-  const markers: MapMarker[] = overlay.observed
-    .filter((o) => o.id !== overlay.agentId)
-    .map((o) => ({ id: o.id, kind: o.kind, dead: o.alive === false, position: o.position, title: `${o.id} ${o.kind}`, line: sightingLine(o), observedRound: o.observed_round }));
+  // One marker per entity: the knowledge records can hold several sightings of the same entity
+  // (different rounds, or different cells before and after it moved); keep the most recent one,
+  // otherwise the same agent shows twice in a cell's tooltip.
+  const latest = new Map<string, AgentViewOverlay["observed"][number]>();
+  for (const o of overlay.observed) {
+    if (o.id === overlay.agentId) continue;
+    const seen = latest.get(o.id);
+    if (!seen || (o.observed_round ?? -1) >= (seen.observed_round ?? -1)) latest.set(o.id, o);
+  }
+  const markers: MapMarker[] = [...latest.values()].map((o) => ({ id: o.id, kind: o.kind, dead: o.alive === false, position: o.position, title: `${o.id} ${o.kind}`, line: sightingLine(o), observedRound: o.observed_round }));
   if (overlay.believedPosition) {
     markers.push({
       id: overlay.agentId,
