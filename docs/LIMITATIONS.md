@@ -18,8 +18,6 @@ None open. The one found by the browser re-test (a `working/` reload undid UI go
   - *Next step:* add pending records to `real_usage` when a run is listed or summarised, or write them to the ledger at the moment of failure with a flag.
 - **The prompt is stored three times per turn.** The model call record keeps `request.messages` (and `request.metadata.situation`), and the decision packet keeps the same messages plus the same text split into sections. That is about 26 KB of duplicate data per agent turn.
   - *Next step:* when a call has a `packet_id` and identical messages, store a reference to the packet instead of a copy.
-- **A rejected CLI structured reply gives a generic reason.** The `claude_cli` adapter uses `--output-format json`, whose envelope does not include the validator's message, so the record says only "structured output did not match the decision schema".
-  - *Next step:* switch to `--output-format stream-json` (already used for diagnostic replays) and keep the validator's message in `attempt_errors`.
 - **One live test fails whenever Haiku slips.** `test_live_claude_cli_decision_bills_near_packet_estimate` asserts `status == "ok"` with `max_retries=0`, so a stochastic malformed reply fails it. On the final source its first invocation failed that way (2 of 3 passed); the immediate re-run and a second full invocation passed (3 of 3). Live runs show about 2 malformed replies in 24.
   - *Next step:* let the test retry once on `malformed`, or check the billing ratio on any agent-output status (usage is reported either way).
 

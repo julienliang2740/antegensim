@@ -1175,7 +1175,7 @@ def test_claude_cli_argv_env_cwd(fake_cli, monkeypatch, registry):
         return argv[argv.index(flag) + 1]
 
     assert value_of("--model") == "haiku"
-    assert value_of("--output-format") == "json"
+    assert value_of("--output-format") == "stream-json" and "--verbose" in argv
     assert value_of("--max-turns") == str(model.CLI_MAX_TURNS) == "1"
     assert value_of("--tools") == ""
     assert value_of("--setting-sources") == ""
@@ -1447,3 +1447,36 @@ def test_system_prompt_fallback_folds_the_system_text_into_the_first_user_turn()
     with_system = ModelRef(key="k", provider="fake", model_id="m")
     assert model._split_messages(request, with_system) == ("RULES", [("user", "BODY")])
     assert model._split_messages(request) == ("RULES", [("user", "BODY")])
+
+
+def test_claude_cli_rejected_payload_is_stored(fake_cli, registry, delays):
+    """A schema-rejected StructuredOutput reply is stored: result.text holds the payload the
+    model sent, result.error the validator's message, attempt_errors the model's prose."""
+    rejected = {"action": {"thought": "nested by mistake", "action": {"name": "wait", "args": {"rounds": 1}}}}
+    verdict = "Output does not match required schema: /action: must have required property 'name'"
+    events = [
+        {"type": "system", "subtype": "init"},
+        {"type": "assistant", "message": {"content": [{"type": "text", "text": "I will wait this turn."}]}},
+        {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "StructuredOutput", "input": rejected}]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "content": verdict}]}},
+        cli_envelope(is_error=True, subtype="error_max_turns", result=None, structured_output=None),
+    ]
+    fake_cli.stdout_text = "\n".join(json.dumps(e) for e in events)
+    result = call_model(make_request("claude-cli-haiku"), registry)
+    assert result.status == "malformed" and not result.ok
+    assert json.loads(result.text) == rejected
+    assert result.error.startswith("structured output did not match the decision schema: Output does not match")
+    assert any("I will wait this turn." in note for note in result.attempt_errors)
+    assert result.usage.output_tokens == 97 and result.provider_cost_usd == 0.001666
+
+
+def test_claude_cli_stream_success_uses_the_result_event(fake_cli, registry):
+    """With stream-json the envelope is the final result event; earlier events do not confuse it."""
+    events = [
+        {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "StructuredOutput", "input": VALID_DECISION}]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "content": "Structured output provided successfully"}]}},
+        cli_envelope(),
+    ]
+    fake_cli.stdout_text = "\n".join(json.dumps(e) for e in events)
+    result = call_model(make_request("claude-cli-haiku"), registry)
+    assert result.status == "ok" and result.parsed == VALID_DECISION and result.error is None

@@ -2109,6 +2109,57 @@ def _kill_process_group(proc: Any) -> None:
         pass
 
 
+class _CliTranscript:
+    """What the claude CLI stream-json events exposed besides the final envelope."""
+
+    def __init__(self) -> None:
+        self.tool_inputs: list[Any] = []  # StructuredOutput inputs, in order (last = final attempt)
+        self.tool_results: list[str] = []  # validator messages, in order
+        self.prose: str = ""  # assistant text blocks, joined (capped)
+
+
+def _read_cli_stream(stdout: str) -> tuple[Any, _CliTranscript]:
+    """Parse ``--output-format stream-json`` output (one JSON event per line): return the final
+    ``result`` event (the same envelope ``--output-format json`` prints) and the transcript of
+    assistant ``tool_use`` inputs, assistant text and ``tool_result`` verdicts.  A plain
+    single-envelope stdout (old format, tests) is accepted unchanged."""
+    transcript = _CliTranscript()
+    envelope: Any = None
+    prose_parts: list[str] = []
+    for line in stdout.strip().splitlines():
+        event = _decode_whole(line.strip())
+        if not isinstance(event, dict):
+            continue
+        kind = event.get("type")
+        if kind == "result":
+            envelope = event
+            continue
+        message = event.get("message") if isinstance(event.get("message"), dict) else None
+        content = message.get("content") if message else None
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            block_type = block.get("type")
+            if kind == "assistant" and block_type == "tool_use":
+                transcript.tool_inputs.append(block.get("input"))
+            elif kind == "assistant" and block_type == "text" and isinstance(block.get("text"), str):
+                prose_parts.append(block["text"])
+            elif kind == "user" and block_type == "tool_result":
+                body = block.get("content")
+                if isinstance(body, list):
+                    body = " ".join(str(b.get("text", "")) if isinstance(b, dict) else str(b) for b in body)
+                if body:
+                    transcript.tool_results.append(str(body)[:config.ERROR_TEXT_MAX_CHARS])
+    if envelope is None:
+        whole = _decode_whole(stdout.strip())
+        if isinstance(whole, dict):
+            envelope = whole
+    transcript.prose = "\n".join(prose_parts).strip()[:config.ERROR_TEXT_MAX_CHARS]
+    return envelope, transcript
+
+
 class ClaudeCliAdapter(BaseAdapter):
     """Hardened Claude Code CLI subprocess (a real-model path without an API key; still
     behind this boundary).  argv::
@@ -2178,7 +2229,8 @@ class ClaudeCliAdapter(BaseAdapter):
             "--model",
             ref.model_id,
             "--output-format",
-            "json",
+            "stream-json",  # the final "result" event is the --output-format json envelope
+            "--verbose",  # required by the CLI for stream-json in -p mode
             "--max-turns",
             str(self.max_turns(ref)),
             "--tools",
@@ -2251,12 +2303,7 @@ class ClaudeCliAdapter(BaseAdapter):
     def parse_output(
         self, ref: ModelRef, request: ModelRequest, stdout: str, stderr: str, returncode: Optional[int], schema_sent: bool
     ) -> Attempt:
-        envelope = _decode_whole(stdout.strip())
-        if not isinstance(envelope, dict):
-            for line in reversed(stdout.strip().splitlines()):
-                envelope = _decode_whole(line.strip())
-                if isinstance(envelope, dict):
-                    break
+        envelope, transcript = _read_cli_stream(stdout)
         if not isinstance(envelope, dict):
             excerpt = (stderr or stdout).strip()[-400:]
             return _failure(
@@ -2285,12 +2332,21 @@ class ClaudeCliAdapter(BaseAdapter):
 
         subtype = envelope.get("subtype")
         if subtype == "error_max_turns" and schema_sent and usage.output_tokens > 0:
+            # The envelope's "result" is empty here; the stream carries what the model actually
+            # sent (its StructuredOutput input) and the validator's verdict.  Store both so the
+            # model call record shows the rejected payload, not an empty string.
+            rejected = transcript.tool_inputs[-1] if transcript.tool_inputs else None
+            text = json.dumps(rejected) if rejected is not None else (result_text or transcript.prose or None)
+            verdict = transcript.tool_results[-1] if transcript.tool_results else None
+            message = "structured output did not match the decision schema"
+            if verdict:
+                message = f"{message}: {verdict}"
             result = _make_result(
-                request, ref, "malformed", text=result_text, usage=usage, response_model=response_model,
-                provider_cost_usd=cost, error="structured output did not match the decision schema",
-                stop_reason=envelope.get("stop_reason"),
+                request, ref, "malformed", text=text, usage=usage, response_model=response_model,
+                provider_cost_usd=cost, error=message, stop_reason=envelope.get("stop_reason"),
             )
-            return Attempt(result)
+            notes = [f"model prose before the structured reply: {transcript.prose}"] if transcript.prose else []
+            return Attempt(result, notes=notes)
         if envelope.get("is_error") or (subtype is not None and subtype != "success"):
             http_status = envelope.get("api_error_status")
             http_status = http_status if isinstance(http_status, int) and not isinstance(http_status, bool) else None

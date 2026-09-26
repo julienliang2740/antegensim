@@ -674,7 +674,7 @@ always present. Bedrock with an empty `credential_env` uses the boto3 default ch
 newer Claude models; set `options.tool_choice = "auto"` for those routes.
 
 claude_cli adapter (hardened, measured with Claude Code 2.1.282): `claude -p --model <id>
---output-format json --tools "" --strict-mcp-config --setting-sources ""
+--output-format stream-json --verbose --tools "" --strict-mcp-config --setting-sources ""
 --no-session-persistence --disable-slash-commands --max-turns <config.CLI_MAX_TURNS = 1>
 --system-prompt <system message> [--json-schema <schema>] [--max-budget-usd <options>]`, user
 body on stdin, fresh empty temp cwd outside the repo, env = `config.CLAUDE_CLI_ENV_ALLOWLIST`
@@ -692,9 +692,12 @@ A-COG-9; per entry `options.max_model_requests`) requests the reply is ACCEPTED,
 summed usage, and `attempt_errors` carries the note "claude CLI re-prompted the model: N model
 requests billed for this reply"; more than that is the infrastructure status `error`. Subtype
 `error_max_turns` after a rejected StructuredOutput call is the agent-output status `malformed`
-(charged; the turn is lost) rather than an infrastructure error; with `--output-format json`
-the envelope does not expose the rejected tool input or the validator's message, so the stored
-error is the generic "structured output did not match the decision schema"; `total_cost_usd` →
+(charged; the turn is lost) rather than an infrastructure error. The stream's final `result`
+event is the same envelope `--output-format json` prints; the earlier `assistant` / `user`
+events expose what the envelope hides, so on a rejection `result.text` holds the JSON the model
+actually passed to StructuredOutput, `result.error` is "structured output did not match the
+decision schema: <the validator's message>" and `attempt_errors` carries the model's prose
+before the tool call ("model prose before the structured reply: …"); `total_cost_usd` →
 `provider_cost_usd`; `modelUsage` keys → `response_model`. Never `--bare`. The registry ships a
 prompt-guided entry (`claude-cli-haiku-prompted`, no `--json-schema`) that bills about half the
 tokens and avoids the malformed case.
