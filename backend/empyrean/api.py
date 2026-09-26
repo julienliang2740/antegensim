@@ -16,6 +16,9 @@ Rules
     UnknownModelError                -> 422 unknown_model
     StorageError / NotFoundError     -> 404 not_found
     HTTP 413 (body over a cap)       -> 413 payload_too_large
+    storage.RunInUseError            -> 409 run_in_use (DELETE of an open run, one held by another
+                                        process, or one with a queued/running story, storybook or
+                                        sequencer job)
     anything else                    -> 500 internal_error (message only; traceback in the log)
   Assistant routes (rev 4) raise ``ApiException`` with the assistant codes:
     assistant_unavailable 503 (no AssistantService in this process, or no usable model),
@@ -35,12 +38,15 @@ Route table (all JSON; see docs/INTERFACES.md "API" for request/response models)
     GET    /api/models?include_assistant=0               -> list[ModelInfo] (assistant-only refs hidden unless include_assistant=1)
     GET    /api/assumptions                              -> AssumptionsView (registry defaults)
     POST   /api/world/preview       WorldPreviewRequest  -> MapState (terrain only)
-    GET    /api/runs                                     -> list[RunSummary]
+    GET    /api/runs?archived=0|1|all                    -> list[RunSummary] (default 0: active runs only)
     POST   /api/runs                RunCreateRequest     -> RunSummary          (201)
     POST   /api/runs/validate       RunCreateRequest     -> RunValidationResponse
     POST   /api/runs/{run_id}/open                       -> RunStatus
     POST   /api/runs/{run_id}/close                      -> RunStatus (paused, worker stopped)
     GET    /api/runs/{run_id}                            -> RunSummary
+    DELETE /api/runs/{run_id}                            -> 204 (folder removed for good; 409 run_in_use while open)
+    POST   /api/runs/{run_id}/archive                    -> RunSummary (writes archive.json; idempotent)
+    POST   /api/runs/{run_id}/unarchive                  -> RunSummary (removes archive.json; idempotent)
     GET    /api/runs/{run_id}/assumptions                -> AssumptionsView (as recorded at creation)
     GET    /api/runs/{run_id}/status                     -> RunStatus
     POST   /api/runs/{run_id}/commands  CommandRequest   -> RunStatus           (409 on illegal)
@@ -111,9 +117,9 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
+from typing import TYPE_CHECKING, Any, AsyncIterator, Literal, Optional
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -149,7 +155,7 @@ from .schemas import (
     TurnView,
     WorldPreviewRequest,
 )
-from .storage import StorageError
+from .storage import RunInUseError, StorageError
 
 if TYPE_CHECKING:  # pragma: no cover - the assistant package imports ApiException from here
     from .assistant.service import AssistantService
@@ -285,6 +291,10 @@ def create_app(manager: RunManager, assistant: Optional["AssistantService"] = No
     async def _not_found(request: Request, exc: NotFoundError) -> JSONResponse:
         return _error_response(404, "not_found", str(exc))
 
+    @app.exception_handler(RunInUseError)
+    async def _run_in_use(request: Request, exc: RunInUseError) -> JSONResponse:
+        return _error_response(409, "run_in_use", str(exc))
+
     @app.exception_handler(StorageError)
     async def _storage_error(request: Request, exc: StorageError) -> JSONResponse:
         return _error_response(404, "not_found", _safe_message(exc, registry))
@@ -333,8 +343,8 @@ def create_app(manager: RunManager, assistant: Optional["AssistantService"] = No
     # -- runs --------------------------------------------------------------------------
 
     @app.get("/api/runs", response_model=list[RunSummary])
-    def list_runs() -> list[RunSummary]:
-        return manager.list_runs()
+    def list_runs(archived: Literal["0", "1", "all"] = Query("0")) -> list[RunSummary]:
+        return manager.list_runs(archived)
 
     @app.post("/api/runs", response_model=RunSummary, status_code=201)
     def create_run(body: RunCreateRequest) -> RunSummary:
@@ -358,6 +368,21 @@ def create_app(manager: RunManager, assistant: Optional["AssistantService"] = No
     @app.get("/api/runs/{run_id}", response_model=RunSummary)
     def get_run(run_id: str) -> RunSummary:
         return manager.get_summary(run_id)
+
+    @app.delete("/api/runs/{run_id}", status_code=204)
+    def delete_run(run_id: str) -> Response:
+        if assistant is not None and assistant.run_writing_jobs(run_id):
+            raise RunInUseError(f"run {run_id} has a story, storybook or sequencer job queued or running; cancel it or wait before deleting")
+        manager.delete_run(run_id)
+        return Response(status_code=204)
+
+    @app.post("/api/runs/{run_id}/archive", response_model=RunSummary)
+    def archive_run(run_id: str) -> RunSummary:
+        return manager.archive_run(run_id)
+
+    @app.post("/api/runs/{run_id}/unarchive", response_model=RunSummary)
+    def unarchive_run(run_id: str) -> RunSummary:
+        return manager.unarchive_run(run_id)
 
     @app.get("/api/runs/{run_id}/assumptions", response_model=AssumptionsView)
     def run_assumptions(run_id: str) -> AssumptionsView:

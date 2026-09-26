@@ -206,7 +206,8 @@ def basic_turn_summary(run_id: str, turn_id: str, *, max_events: int = 40) -> di
 
 def _list_runs(service: "AssistantService", args: dict[str, Any]) -> ToolResult:
     limit = _i(args, "limit", 20, 1, 50) or 20
-    runs = service.manager.list_runs()
+    archived = _s(args, "archived", "0")
+    runs = service.manager.list_runs(archived if archived in ("0", "1", "all") else "0")
     payload = [
         {
             "run_id": r.run_id,
@@ -219,6 +220,7 @@ def _list_runs(service: "AssistantService", args: dict[str, Any]) -> ToolResult:
             "default_model_key": r.default_model_key,
             "saved_at": r.saved_at,
             "parent_run_id": r.parent.run_id if r.parent else None,
+            "archived": r.archived,
         }
         for r in runs[:limit]
     ]
@@ -558,7 +560,7 @@ _TOOLS: dict[str, Callable[["AssistantService", dict[str, Any]], ToolResult]] = 
 _RUN = {"run_id": {"type": "string", "description": "run id (run_...)"}}
 
 _CATALOGUE: list[dict[str, Any]] = [
-    {"name": "list_runs", "description": "Every run on disk (name, status, rounds, agents, model), newest first.", "params": {"limit": {"type": "integer", "default": 20}}},
+    {"name": "list_runs", "description": "Runs on disk (name, status, rounds, agents, model), newest first. Archived runs are left out unless archived is \"1\" (archived only) or \"all\".", "params": {"limit": {"type": "integer", "default": 20}, "archived": {"type": "string", "default": "0"}}},
     {"name": "get_run_status", "description": "Live status of a run (state, current turn, next step, living agents, staged edits, last error, real spend); 'open: false' with the saved summary when the run is not open.", "params": {**_RUN}},
     {"name": "get_rules_and_settings", "description": "The run's rule numbers (prices, upgrades, plants, death ...) and settings (models, max_rounds, play delay, real budget, context) at the committed turn.", "params": {**_RUN, "turn_id": {"type": "string", "description": "optional committed turn; default current"}}},
     {"name": "list_turns", "description": "Committed turns in order with actor, action name, ok flag and decision source; optional round range; newest 'limit' shown.", "params": {**_RUN, "from_round": {"type": "integer"}, "to_round": {"type": "integer"}, "limit": {"type": "integer", "default": 60}}},

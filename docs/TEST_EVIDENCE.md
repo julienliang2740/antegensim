@@ -24,6 +24,7 @@ Requirement-to-test mapping is in [TEST_PLAN.md](TEST_PLAN.md). Known gaps are i
 | Assistant playtest, model tiers per capability | LIVE | 2026-09-26 | 80 ground-truthed questions per chat arm: Haiku 74/80, Sonnet 73/80; narrator, author and briefs arms; **USD 10.93** of a USD 22 cap |
 | Sonnet smoke on the primary backend | LIVE | 2026-09-26 | 1 chat step, CLI `malformed` then salvaged into a correct answer, **USD 0.10** |
 | Replay of stored malformed CLI replies through salvage | LOCAL | 2026-09-26 | 83 payloads: 77 validate after salvage (the same-key unwrap rule shipped in `calls.salvage`; 28 before it) |
+| Resume page archive and delete (multi-select, archive view, restore, delete with confirmation) | MOCKED | 2026-09-26 18:05 UTC | Backend **693 passed, 4 skipped** (+10: `test_run_archive.py` 9, `test_api.py` 1); `state.test.mjs` **60 of 60** (+6 selection tests); tsc clean, lint 0 errors and the same 4 warnings; `docs check: clean`; browser **34 of 34** on a fake QA backend (port 8022, `qa/worlds-archive`; `qa/out/2026-09-26_17-57-24`) and step 34 again after the last UI change (`qa/out/2026-09-26_18-05-57`); USD 0. See "Resume page archive and delete" below |
 | Resilience and completion criteria (13 scripts, 165 checks) | MOCKED | 2026-09-25 | 165 of 165 on the source before the assistant release (not re-run) |
 | Headless simulations | MOCKED | 2026-09-25 | 2 runs of 8 agents x 3 rounds, no errors (not re-run) |
 | Live simulations, live tests and a live UI session | LIVE | 2026-09-25 | 6 runs, the 3 live pytest tests (2 of 3, then 3 of 3), 102 calls, USD 0.782 (not re-run) |
@@ -127,6 +128,20 @@ Full results, step table, findings and screenshots: [evidence/browser_qa_assista
 No model money was spent: the primary's assistant spend stayed at USD 0.1028 (the Sonnet smoke) before and after. No console or page errors in either final pass. Screenshots: `docs/evidence/screenshots/assistant/` (each opened and checked by eye).
 
 Findings (none failed a step): the fifth run-page tab ("Storybook") is partly hidden in the scrolling tabs row at the default side-column width; the drawer printed the backend's stale "0 s" progress text under the ticking line; the step list numbered steps from 2; the as-of chip read "TURN turn <id>"; an approved interventions brief showed in the God mode count only after the next status poll (about 1.5 s). All five were fixed by the frontend fix pass (tabs sized by the tabs-row container, backend progress text no longer shown and the elapsed time derived client-side, 1-based step list, ref chips without a doubled kind, staged count applied at approval), and the browser check passed again afterwards (09:24 UTC). `http://127.0.0.1` is a secure context in Chromium, so Dictate's disabled state is checked on a non-loopback host alias (`QA_INSECURE_HOST`).
+
+### Resume page archive and delete (2026-09-26): MOCKED
+
+Browser step 34 `resume-select-archive-delete` (see `qa/README.md`) on `qa/assistant_fake_server.py`
+(port 8022, worlds `qa/worlds-archive/`) with Vite on 5182: five closed runs and one open run created
+through the API; Ctrl-click on the first and third rows and Shift-click on the fifth selected exactly
+rows 1, 3, 4 and 5; **Archive selected** showed "Archived 4 runs." and the API listed them only with
+`?archived=1`; the archive view had no Open buttons; **Restore** moved one back; **Delete selected…**
+opened the dialog naming the run and saying it cannot be undone, then the folder was gone (404); the
+open run was refused with "Not deleted: run … is open in this backend; leave it (Back to sessions)
+before deleting". The only console error is that intended 409. Screenshots, each checked by eye:
+`docs/evidence/screenshots/resume-selection-toolbar.png`, `resume-archive-view.png`,
+`resume-delete-dialog.png`, `resume-delete-refused.png` and `resume-dark-selection.png` (dark
+scheme). The same full run passed all 33 earlier steps.
 
 ### Legacy steps 1-17 and the reviewer passes (2026-09-25)
 
@@ -234,7 +249,7 @@ From the repository root:
 .venv/bin/python scripts/run_sim.py --model fake-heuristic --worlds-dir /tmp/w      # MOCKED
 bash qa/resilience/run_all.sh     # MOCKED; own backend on :8020, about 3.5 min; overwrites qa/resilience/out/
                                   # RES_PORT / RES_WORLDS / RES_OUT / RES_LOG select another port and folders; expect 165 of 165
-# browser check, all 33 steps on fake models (see qa/README.md)
+# browser check, all 34 steps on fake models (see qa/README.md)
 .venv/bin/python qa/assistant_fake_server.py
 (cd frontend && EMPYREAN_API_PROXY=http://127.0.0.1:8020 npx vite --port 5180 --strictPort)
 (cd qa && BASE_URL=http://127.0.0.1:5180 API_URL=http://127.0.0.1:8020 node browser_check.mjs)

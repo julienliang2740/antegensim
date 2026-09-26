@@ -297,6 +297,7 @@ worlds/
     usage.jsonl                            global assistant ledger (one line per model call)
   world_<stamp>_<hex>/runs/run_<stamp>_<hex>/
     manifest.json        commit point: current turn, counters, real-usage ledger, parent
+    archive.json         only while the run is archived: {archived_at, note} (hidden from the run list)
     run_request.json     the request the run was created from
     assumptions.json     the assumption table in force at creation
     working/             editable copy of the latest checkpoint (literal god mode)
@@ -315,6 +316,13 @@ Turn ids: `r00000_init`, `r{round:05d}_t{index:02d}_{agent_id}`, `r{round:05d}_e
 `turns/index.jsonl`, never a directory listing (lexical order puts `r00001_end` before
 `r00001_t01_…`). Checkpoints are never modified after commit; recovery after a crash discards
 half-written turns and never touches `assistant/`. Details: `docs/INTERFACES.md` section 5.
+
+Archiving a run (Resume page) only writes `archive.json`: the run leaves the default list
+(`GET /api/runs`), shows in the archive view (`?archived=1`), and keeps all of its data; restoring
+removes the file. Recovery never touches the marker and continuations do not copy it. Deleting a run
+removes its whole folder for good, including its turns, storybook and stories, and then the world
+folder if no run is left in it. The backend refuses to delete a run that is open (409
+`run_in_use`), so leave a run before deleting it.
 
 ## God mode, interventions and continuations
 

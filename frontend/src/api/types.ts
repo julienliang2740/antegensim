@@ -1228,7 +1228,14 @@ export interface RunSummary {
   default_model_key: string;
   /** Absolute run folder on the backend machine (edit <run_dir>/working/ in literal god mode); null when unknown. */
   run_dir: string | null;
+  /** The run folder holds archive.json: hidden from GET /api/runs unless ?archived=1|all. */
+  archived: boolean;
+  /** When the run was archived (ISO); null while active. */
+  archived_at: string | null;
 }
+
+/** GET /api/runs?archived=: "0" active runs only (default), "1" archived only, "all". */
+export type RunArchiveFilter = "0" | "1" | "all";
 
 export interface CommandRequest {
   command: RunCommand;
@@ -1341,7 +1348,9 @@ export type ApiErrorCode =
   /** 409: the conversation already has a pending job. */
   | "conversation_busy"
   /** 413: the request body is too large (for example dictated audio over the cap). */
-  | "payload_too_large";
+  | "payload_too_large"
+  /** 409: DELETE of a run that is open, held by another process, or has a story/storybook job. */
+  | "run_in_use";
 
 export interface ApiError {
   error: ApiErrorCode;

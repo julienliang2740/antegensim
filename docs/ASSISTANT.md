@@ -85,7 +85,7 @@ one per turn lost to a malformed reply) `total_matches` / `counts_by_round`.
 
 | Tool | Returns |
 | --- | --- |
-| `list_runs` | saved runs (name, ids, last turn, state) |
+| `list_runs` | saved runs (name, ids, last turn, state, `archived`); archived runs are left out unless the model passes `archived: "1"` (the archive only) or `"all"` |
 | `get_run_status` | live status of an open run (state, turn, next step, errors, spend) |
 | `get_rules_and_settings` | the run's rules and effective settings (numbers for this run) |
 | `list_turns` | the turn index for a round range |

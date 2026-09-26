@@ -2036,6 +2036,19 @@ class RunSummary(StrictModel):
     # Absolute path of the run folder on the backend machine (its ``working/`` copy is what
     # the operator edits in literal god mode).  None when it cannot be resolved.
     run_dir: Optional[str] = None
+    # Run archive: the run folder holds ``archive.json`` (RunArchiveMarker).  Archived runs
+    # are hidden from ``GET /api/runs`` unless ``?archived=1|all``; nothing else changes.
+    archived: bool = False
+    archived_at: Optional[str] = None
+
+
+class RunArchiveMarker(LooseModel):
+    """``<run>/archive.json``: the run is archived (hidden from the default run list).  Written
+    by ``storage.archive_run``, removed by ``storage.unarchive_run``; recovery never touches it
+    and continuations do not copy it."""
+
+    archived_at: str
+    note: str = ""
 
 
 class CommandRequest(StrictModel):
@@ -2178,6 +2191,8 @@ ApiErrorCode = Literal[
     "assistant_budget_exhausted",  # 409: an assistant budget (message/scope/global) would be exceeded
     "conversation_busy",  # 409: delete/rename while a job runs on the conversation
     "payload_too_large",  # 413: raw body over the cap (transcribe: config.WHISPER_MAX_AUDIO_BYTES)
+    # run archive
+    "run_in_use",  # 409: DELETE of a run that is open in this process, held by another process, or has a story job
 ]
 
 

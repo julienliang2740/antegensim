@@ -789,7 +789,10 @@ worlds_root() ; run_dir(world_id, run_id) ; find_run_dir(run_id)
 atomic_write_json(path, data, fsync=True) ; read_json(path)
 add_call_usage(ledger, record, interrupted=False) -> RealUsageLedger   # pure ledger helper (rev 3); one rule with runner.add_record_to_ledger (fix pass): every record counts in `calls`, an interrupted one ALSO in `interrupted_calls` (a subset)
 new_run_id(name) ; new_world_id() ; code_revision()
-list_runs() -> list[RunSummary] ; read_manifest(run_id) ; write_manifest(manifest)
+list_runs() -> list[RunSummary] ; read_manifest(run_id) ; write_manifest(manifest)   # list_runs returns archived runs too (RunSummary.archived)
+read_archive_marker(rdir) -> RunArchiveMarker | None ; archive_state(world_id, run_id) -> (archived, archived_at)
+archive_run(run_id, note="") -> RunArchiveMarker ; unarchive_run(run_id)   # write / remove <run>/archive.json (idempotent)
+delete_run(run_id) -> [removed folders]   # writer lock (RunInUseError when held), manifest first, then the run folder; runs/ and the world folder only when left empty
 create_run(request, manifest, checkpoint, assumptions) -> Manifest
 write_checkpoint(manifest, checkpoint) -> Manifest
 recover_run(run_id) -> RecoveryReport
@@ -851,6 +854,7 @@ reopen). `create_continuation` also copies `run_request.json` and starts a fresh
 worlds/world_20260925_101500_ab12/runs/run_20260925_101500_cd34/
   manifest.json                       # commit point
   .writer.lock                        # flock held by the one open worker (one active writer)
+  archive.json                        # RunArchiveMarker, only while the run is archived (Resume page)
   run_request.json                    # the RunCreateRequest used (reference only)
   assumptions.json                    # [AssumptionEntry] recorded at creation
   staged_snapshots/iv_0003.json       # WorkingState of a staged apply_working_files
@@ -964,6 +968,14 @@ agent's own growing file plus the constant call/packet/map files); `map.json` a 
 `rules.json` a `RulesConfig`; `settings.json` a `RunSettings`; `model_calls/*.json` a
 `ModelCallRecord`; `model_calls/index.json` a list of `ModelCallSummary`;
 `decision_packets/*.json` a `DecisionPacketRecord`; `staged_edits.json` a `StagedEdits`.
+
+`archive.json` (`RunArchiveMarker`, present only while the run is archived):
+`{"archived_at": "2026-09-26T10:00:00+00:00", "note": ""}`. It is written by
+`POST /api/runs/{run_id}/archive` and removed by `.../unarchive`; it lives outside `turns/` and
+`working/`, recovery never touches it, and a continuation does not copy it (the child run starts
+active). A marker that cannot be read is logged and the run is listed as active.
+`DELETE /api/runs/{run_id}` removes the whole run folder (manifest first, so a half-finished removal
+is never listed), then `runs/` and the world folder only if they are left empty.
 
 `working/README.txt` explains: pause the run, edit any file here, then `POST /api/runs/{id}/working/reload`
 (or the "Reload working files" button); invalid files are reported and nothing changes; the
@@ -1198,8 +1210,10 @@ Errors return `ApiError {error: ApiErrorCode, detail, problems}` (section "Rules
 (paths like `agents[2].position`); 413 `payload_too_large`; 500 `internal_error` (with CORS
 headers). Assistant routes (rev 4) add 503 `assistant_unavailable` (no `AssistantService` in this
 process, or no usable model), 409 `assistant_busy` (a bounded queue is full),
-409 `brief_not_pending`, 409 `assistant_budget_exhausted`, 409 `conversation_busy`. The UI
-reopens the run once on `run_not_open`.
+409 `brief_not_pending`, 409 `assistant_budget_exhausted`, 409 `conversation_busy`. The run archive
+adds 409 `run_in_use` (`DELETE /runs/{run_id}` of a run that is open in this backend, whose writer
+lock another process or a closing worker holds, or that has a queued or running story, storybook or
+sequencer job). The UI reopens the run once on `run_not_open`.
 
 This table, the route table in the `api.py` docstring and the request calls in
 `frontend/src/api/*.ts` must list exactly the routes the app serves; `scripts/check_docs.py`
@@ -1212,12 +1226,15 @@ compares all four (path parameters are compared by position, query strings are i
 | GET | `/models?include_assistant=0` | | `ModelInfo[]` (assistant-only refs hidden unless `include_assistant=1`) |
 | GET | `/assumptions` | | `AssumptionsView` |
 | POST | `/world/preview` | `WorldPreviewRequest` | `MapState` |
-| GET | `/runs` | | `RunSummary[]` |
+| GET | `/runs?archived=0\|1\|all` | | `RunSummary[]` (default `0`: active runs only; `1` the archive; `all` both) |
 | POST | `/runs` | `RunCreateRequest` | `RunSummary` (201) |
 | POST | `/runs/validate` | `RunCreateRequest` | `RunValidationResponse` |
 | POST | `/runs/{run_id}/open` | | `RunStatus` |
 | POST | `/runs/{run_id}/close` | | `RunStatus` |
 | GET | `/runs/{run_id}` | | `RunSummary` |
+| DELETE | `/runs/{run_id}` | | 204, no body (the run folder is removed for good; 409 `run_in_use` while open; 404 unknown) |
+| POST | `/runs/{run_id}/archive` | | `RunSummary` (writes `archive.json`; idempotent, keeps the first `archived_at`) |
+| POST | `/runs/{run_id}/unarchive` | | `RunSummary` (removes `archive.json`; idempotent) |
 | GET | `/runs/{run_id}/assumptions` | | `AssumptionsView` |
 | GET | `/runs/{run_id}/status` | | `RunStatus` |
 | POST | `/runs/{run_id}/commands` | `CommandRequest` | `RunStatus` |
@@ -1322,6 +1339,12 @@ Fix-pass fields: `RunStatus.next_round_order` (when `next_step == "new_round"`: 
 private copy at commit time; a prediction, staged edits can change it; null otherwise);
 `RunSummary.run_dir` (absolute run folder on the backend machine, so the UI can show
 `<run_dir>/working/`); `ModelCallSummary.provider_cost_usd` and `.reasoning_tokens`.
+
+Run archive: `RunSummary.archived` (bool, default false) and `RunSummary.archived_at` (ISO or null)
+come from the run folder's `archive.json` in every summary (`GET /runs`, `GET /runs/{id}`, create,
+continuation, archive, unarchive). `GET /runs` hides archived runs unless `archived=1` or `all`; the
+Story Mode run picker and the assistant's `list_runs` tool use the default. Archiving an open run is
+allowed (it keeps running; only the listing changes). Deleting needs the run closed everywhere.
 
 Frontend polling: `pollEvents(runId, …, initialSince = max(0, status.latest_seq − 300))` every
 ~700 ms (also while paused, cheaply), plus `getLiveState` when `status.current_turn_id`
@@ -1545,3 +1568,20 @@ Applied in rev 4 (assistant shared contracts, WP0):
   is part of the recorded revision).
 * Frontend shared files (`types.ts`, `client.ts`, `useHashRoute.ts`, `App.tsx`, `state.test.mjs`
   and the assistant stub files): see the ownership table above and the frontend packages' notes.
+
+Applied for the run archive (Resume page archive and delete):
+
+* `schemas.py`: `RunSummary.archived: bool = False`, `RunSummary.archived_at: Optional[str] = None`;
+  new stored record `RunArchiveMarker(LooseModel)` `{archived_at, note=""}` (`<run>/archive.json`);
+  `ApiErrorCode` += `run_in_use` (409).
+* `api.py`: `GET /api/runs?archived=0|1|all` (default `0`), `DELETE /api/runs/{run_id}` (204),
+  `POST /api/runs/{run_id}/archive`, `POST /api/runs/{run_id}/unarchive`; `storage.RunInUseError`
+  -> 409 `run_in_use`; the delete route also refuses while `AssistantService.run_writing_jobs(run_id)`
+  lists a queued or running story, storybook or sequencer job.
+* `storage.py`: `ARCHIVE_FILE`, `RunInUseError`, `read_archive_marker`, `archive_state`,
+  `archive_run`, `unarchive_run`, `delete_run`; summaries carry the archive fields.
+* `runner.py`: `summary_from_manifest` fills the archive fields; `RunManager.list_runs(archived="0")`,
+  `archive_run`, `unarchive_run`, `delete_run` (refuses an open run; waits up to
+  `DELETE_CLOSING_WAIT_SECONDS` for a closed worker still finishing its turn).
+* `types.ts`: `RunSummary.archived` / `archived_at`, `RunArchiveFilter`, `ApiErrorCode` +=
+  `run_in_use`. `client.ts`: `listRuns(archived = "0")`, `archiveRun`, `unarchiveRun`, `deleteRun`.

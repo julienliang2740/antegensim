@@ -138,6 +138,8 @@ class FakeManager:
         self.registry = None
         self.workers: dict[str, FakeWorker] = {}
         self.created: list[Any] = []
+        self.list_filters: list[str] = []
+        self.deleted: list[str] = []
 
     def models_info(self) -> list[ModelInfo]:
         return [ModelInfo(key="fake-heuristic", provider="fake", model_id="fake-heuristic", available=True, capabilities={})]  # type: ignore[arg-type]
@@ -145,8 +147,29 @@ class FakeManager:
     def preview_world(self, request: Any) -> MapState:
         return MapState(region=request.world.region, cells={"0,0": "land"})
 
-    def list_runs(self) -> list[RunSummary]:
+    def list_runs(self, archived: str = "0") -> list[RunSummary]:
+        self.list_filters.append(archived)
         return [make_summary()]
+
+    def archive_run(self, run_id: str) -> RunSummary:
+        if run_id == "missing":
+            raise StorageError("unknown run")
+        return make_summary().model_copy(update={"archived": True, "archived_at": "2026-09-26T10:00:00+00:00"})
+
+    def unarchive_run(self, run_id: str) -> RunSummary:
+        if run_id == "missing":
+            raise StorageError("unknown run")
+        return make_summary()
+
+    def delete_run(self, run_id: str) -> list[str]:
+        from empyrean.storage import RunInUseError
+
+        if run_id == "missing":
+            raise StorageError("unknown run")
+        if run_id in self.workers:
+            raise RunInUseError(f"run {run_id} is open")
+        self.deleted.append(run_id)
+        return [run_id]
 
     def validate_setup(self, request: Any) -> list[ApiProblem]:
         return [ApiProblem(path="agents[1].id", message="duplicate id")] if request.name == "dupe" else []
@@ -260,6 +283,27 @@ def test_world_preview_and_run_listing(client: TestClient) -> None:
     missing = client.get("/api/runs/missing")
     assert missing.status_code == 404 and missing.json()["error"] == "not_found"
     assert client.get(f"/api/runs/{RUN}/assumptions").json()["entries"][0]["id"] == "A-COG-1"
+
+
+def test_archive_unarchive_delete_routes_and_list_filter(client: TestClient, fake_manager: FakeManager) -> None:
+    for query, expected in (("", "0"), ("?archived=0", "0"), ("?archived=1", "1"), ("?archived=all", "all")):
+        assert client.get(f"/api/runs{query}").status_code == 200
+        assert fake_manager.list_filters[-1] == expected
+    bad = client.get("/api/runs?archived=yes")
+    assert bad.status_code == 422 and bad.json()["error"] == "validation_error" and bad.json()["problems"][0]["path"] == "archived"
+    archived = client.post(f"/api/runs/{RUN}/archive")
+    assert archived.status_code == 200 and archived.json()["archived"] is True and archived.json()["archived_at"]
+    restored = client.post(f"/api/runs/{RUN}/unarchive")
+    assert restored.status_code == 200 and restored.json()["archived"] is False and restored.json()["archived_at"] is None
+    for route in ("/api/runs/missing/archive", "/api/runs/missing/unarchive"):
+        assert client.post(route).json()["error"] == "not_found"
+    deleted = client.delete(f"/api/runs/{RUN}")
+    assert deleted.status_code == 204 and deleted.content == b"" and fake_manager.deleted == [RUN]
+    missing = client.delete("/api/runs/missing")
+    assert missing.status_code == 404 and missing.json()["error"] == "not_found"
+    assert client.post(f"/api/runs/{RUN}/open").status_code == 200
+    in_use = client.delete(f"/api/runs/{RUN}")
+    assert in_use.status_code == 409 and in_use.json()["error"] == "run_in_use" and fake_manager.deleted == [RUN]
 
 
 def test_create_and_validate_runs(client: TestClient, fake_manager: FakeManager) -> None:

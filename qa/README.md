@@ -59,7 +59,8 @@ when the script is interrupted.
 
 ## What it checks
 
-Steps 1-17 (the simulation UI); steps 18-33 are in the assistant section below.
+Steps 1-17 (the simulation UI); steps 18-33 are in the assistant section below; step 34
+(Resume page housekeeping) is described after them.
 
 | # | Step id | Check | Requirement |
 | --- | --- | --- | --- |
@@ -142,6 +143,8 @@ step that would call a model skips itself, so the script never spends against a 
 | 31 | `assistant-escape-record-viewer` | With the record viewer open, Escape closes the drawer first and the viewer stays open |
 | 32 | `story-mode` | **Story Mode** from the entry page: run picker, step-0 card, story brief with both estimates, Accept, chapter 1 in the reader, Export Markdown (model calls) |
 | 33 | `assistant-dictate` | The **Dictate** button: enabled on secure origins when speech is ready; on a non-secure origin disabled with its reason |
+
+| 34 | `resume-select-archive-delete` | Resume page housekeeping (runs after the assistant steps, never calls a model): creates five closed runs and one open run through the API, Ctrl-clicks two rows, Shift-clicks a range (the checkboxes must show exactly the four runs), **Archive selected** ("Archived 4 runs."), **View archive** (no Open buttons), **Restore** one, deletes one with **Delete selected…** and the confirmation dialog (it must name the run and say it cannot be undone), checks both lists and the 404 through the API, then tries to delete the open run and expects "Not deleted:" in the dialog. Extra screenshots `34-resume-selection-toolbar.png`, `-archive-view`, `-delete-dialog`, `-delete-refused`. Removes the runs it created. `QA_ONLY_RESUME_ARCHIVE=1` runs only the preflight and this step |
 
 "Scripted" steps need the fake-metadata hook and skip with that reason without it; they and the
 "model call(s)" steps run only when every profile is fake (8 steps: 23-28, 30 and 32). The others spend

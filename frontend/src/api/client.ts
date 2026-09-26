@@ -36,6 +36,7 @@ import type {
   ReloadResponse,
   RulesConfig,
   RunCommand,
+  RunArchiveFilter,
   RunCreateRequest,
   RunStatus,
   RunSummary,
@@ -164,8 +165,25 @@ export function previewWorld(body: WorldPreviewRequest): Promise<MapState> {
 // Runs / sessions
 // ---------------------------------------------------------------------------
 
-export function listRuns(): Promise<RunSummary[]> {
-  return request("GET", "/api/runs");
+/** Saved runs, newest first.  `archived`: "0" active only (default), "1" the archive, "all". */
+export function listRuns(archived: RunArchiveFilter = "0"): Promise<RunSummary[]> {
+  const query = archived === "0" ? "" : `?archived=${archived}`;
+  return request("GET", `/api/runs${query}`);
+}
+
+/** Hide a run from the default list (writes <run>/archive.json; idempotent). */
+export function archiveRun(runId: string): Promise<RunSummary> {
+  return request("POST", `/api/runs/${enc(runId)}/archive`);
+}
+
+/** Bring an archived run back to the default list (idempotent). */
+export function unarchiveRun(runId: string): Promise<RunSummary> {
+  return request("POST", `/api/runs/${enc(runId)}/unarchive`);
+}
+
+/** Remove the run folder permanently (204).  409 run_in_use while the run is open somewhere. */
+export function deleteRun(runId: string): Promise<void> {
+  return request("DELETE", `/api/runs/${enc(runId)}`);
 }
 
 /** Every setup problem at once, nothing created (inline form feedback). */

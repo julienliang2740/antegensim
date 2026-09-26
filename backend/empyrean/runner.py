@@ -378,10 +378,16 @@ def turn_view(
     )
 
 
+# How long DELETE /api/runs/{id} waits for a closed worker that is still finishing its last turn
+# (a paused run's worker exits in milliseconds) before answering 409 run_in_use.
+DELETE_CLOSING_WAIT_SECONDS = 5.0
+
+
 def summary_from_manifest(manifest: Manifest, status: Optional[str] = None) -> RunSummary:
     """``RunSummary`` for a manifest; ``status`` overlays the live state of an open run."""
     if status is None:
         status = "finished" if manifest.finished else "paused"
+    archived, archived_at = storage.archive_state(manifest.world_id, manifest.run_id)
     return RunSummary(
         world_id=manifest.world_id,
         run_id=manifest.run_id,
@@ -396,6 +402,8 @@ def summary_from_manifest(manifest: Manifest, status: Optional[str] = None) -> R
         parent=manifest.parent,
         default_model_key=manifest.default_model_key,
         run_dir=storage.run_dir_path(manifest.world_id, manifest.run_id),
+        archived=archived,
+        archived_at=archived_at,
     )
 
 
@@ -2696,9 +2704,14 @@ class RunManager:
     def models_info(self) -> list[Any]:
         return self.registry.list_info()
 
-    def list_runs(self) -> list[RunSummary]:
-        """storage.list_runs() with live status overlaid for open runs."""
+    def list_runs(self, archived: str = "0") -> list[RunSummary]:
+        """storage.list_runs() filtered by ``archived`` ("0" active only, the default; "1"
+        archived only; "all") with live status overlaid for open runs."""
         summaries = storage.list_runs()
+        if archived == "0":
+            summaries = [s for s in summaries if not s.archived]
+        elif archived == "1":
+            summaries = [s for s in summaries if s.archived]
         with self._lock:
             workers = dict(self._workers)
         out: list[RunSummary] = []
@@ -2709,6 +2722,34 @@ class RunManager:
             else:
                 out.append(summary)
         return out
+
+    def archive_run(self, run_id: str) -> RunSummary:
+        """Write the run's archive marker (idempotent) and return its summary.  An open run
+        stays open; archiving only hides it from the default list."""
+        storage.archive_run(run_id)
+        return self.get_summary(run_id)
+
+    def unarchive_run(self, run_id: str) -> RunSummary:
+        """Remove the run's archive marker (idempotent) and return its summary."""
+        storage.unarchive_run(run_id)
+        return self.get_summary(run_id)
+
+    def delete_run(self, run_id: str) -> list[str]:
+        """Remove a closed run's folder for good (``storage.delete_run``).  ``RunInUseError``
+        when this process has the run open, or a worker anywhere still holds its writer lock (a
+        closed worker finishing its last turn, another backend process).  Holds the open lock
+        so no concurrent ``open_run`` of this process can start in between."""
+        with self._open_lock:
+            if self.get(run_id) is not None:
+                raise storage.RunInUseError(f"run {run_id} is open in this backend; leave it (Back to sessions) before deleting")
+            with self._lock:
+                closing = self._closing.get(run_id)
+            if closing is not None and not closing.join(DELETE_CLOSING_WAIT_SECONDS):
+                raise storage.RunInUseError(f"run {run_id} is still finishing its last turn; try again when it has stopped")
+            removed = storage.delete_run(run_id)
+            with self._lock:
+                self._closing.pop(run_id, None)
+        return removed
 
     def get_summary(self, run_id: str) -> RunSummary:
         worker = self.get(run_id)

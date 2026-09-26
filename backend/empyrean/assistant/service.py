@@ -315,6 +315,17 @@ class AssistantService:
         with self._jobs_lock:
             return self.jobs.get(job_id)
 
+    def run_writing_jobs(self, run_id: str) -> list[JobView]:
+        """Queued or running jobs that write into ``run_id``'s folder (story, storybook,
+        sequencer).  ``DELETE /api/runs/{run_id}`` refuses (409 ``run_in_use``) while any exist;
+        chat jobs only read and are not counted."""
+        with self._jobs_lock:
+            return [
+                job
+                for job in self.jobs.values()
+                if job.run_id == run_id and job.kind in ("story", "storybook", "sequencer") and job.status in ("queued", "running")
+            ]
+
     def update_job(self, job_id: str, **changes: Any) -> Optional[JobView]:
         with self._jobs_lock:
             job = self.jobs.get(job_id)

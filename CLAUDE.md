@@ -22,7 +22,7 @@ install into the system Python.
 | Backend server | `cd backend && ../.venv/bin/python -m empyrean.main` |
 | Frontend dev server | `cd frontend && npm run dev -- --host 127.0.0.1 --port 5173 --strictPort` |
 | Browser check (needs both servers; the 8 model-calling assistant steps skip themselves on a live backend) | `cd qa && node browser_check.mjs` |
-| Browser check, all 33 steps on fake assistant models | `.venv/bin/python qa/assistant_fake_server.py`, then `cd frontend && EMPYREAN_API_PROXY=http://127.0.0.1:8020 npx vite --port 5180 --strictPort`, then `cd qa && BASE_URL=http://127.0.0.1:5180 API_URL=http://127.0.0.1:8020 node browser_check.mjs` |
+| Browser check, all 34 steps on fake assistant models | `.venv/bin/python qa/assistant_fake_server.py`, then `cd frontend && EMPYREAN_API_PROXY=http://127.0.0.1:8020 npx vite --port 5180 --strictPort`, then `cd qa && BASE_URL=http://127.0.0.1:5180 API_URL=http://127.0.0.1:8020 node browser_check.mjs` |
 
 Tests never spend money. Every test uses fake model keys (`fake-heuristic`, `fake-scripted`,
 `fake-malformed`, `fake-assistant`). Live tests are marked `@pytest.mark.live` and run only

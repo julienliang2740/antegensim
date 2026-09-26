@@ -142,6 +142,8 @@ The **Storybook** tab on the run page is an AI-written narrative with one entry 
 
 On the entry page choose **Resume session**. The list shows each run's name, last saved round and turn, and save time. Opening a run resumes it paused at its last saved turn; **Story** on a row opens Story Mode for that run. **Back to sessions** closes the run you are in; if a turn is running it is finished and saved first.
 
+To tidy the list, select runs with the checkboxes: click a row to select it, Ctrl-click (Cmd on a Mac) to add or remove runs, and Shift-click to add a range. **Archive selected** moves them to the archive, which hides them from the list and keeps all their data; **Archived runs** shows the archive, where **Restore** brings a run back. **Delete selected…** asks for confirmation and then removes the run folders permanently; a run that is still open is refused, so leave it first.
+
 ## Literal god mode: edit files, then reload
 
 Every run has a `working/` folder with a human-editable copy of the latest saved checkpoint. The UI shows its absolute path, and `working/README.txt` explains each file.

@@ -15,7 +15,9 @@
 // Env: BASE_URL, API_URL, HEADED=1 (show the browser), STEP_TIMEOUT_MS (default 8000),
 //      QA_RUN_NAME (default "qa browser <timestamp>"), QA_SKIP_ERROR_STEP=1,
 //      QA_ASSISTANT=auto|0|1 (assistant steps; see runAssistantSteps), QA_ONLY_ASSISTANT=1 with
-//      QA_RUN_ID=<run> (assistant steps only), QA_INSECURE_HOST (default qa-insecure.test).
+//      QA_RUN_ID=<run> (assistant steps only), QA_INSECURE_HOST (default qa-insecure.test),
+//      QA_ONLY_RESUME_ARCHIVE=1 (preflight plus the resume-select-archive-delete step only; it
+//      creates and deletes its own runs and never calls a model).
 // Exit status: 0 when every attempted step passed, 1 otherwise (the log is always written).
 
 import { chromium } from "playwright";
@@ -335,6 +337,14 @@ async function main() {
 }
 
 async function runSteps(page) {
+  if (process.env.QA_ONLY_RESUME_ARCHIVE === "1") {
+    await step(page, "preflight", "Backend health and defaults reachable", async () => {
+      await api("GET", "/health");
+      state.defaults = await api("GET", "/defaults?agent_count=6");
+    });
+    await runResumeArchiveStep(page);
+    return;
+  }
   if (process.env.QA_ONLY_ASSISTANT === "1") {
     // Iterate on the assistant steps against an existing run with committed model turns.
     state.runId = process.env.QA_RUN_ID ?? null;
@@ -921,6 +931,127 @@ async function runSteps(page) {
   }
 
   if (ASSISTANT_MODE !== "0") await runAssistantSteps(page);
+  await runResumeArchiveStep(page);
+}
+
+// ---------------------------------------------------------------------------
+// Resume page housekeeping: multi-select, archive, restore, delete (run archive)
+// ---------------------------------------------------------------------------
+//
+// Creates five closed runs "<QA_RUN_NAME> tidy-N" and one open run "<QA_RUN_NAME> busy" through
+// the API (run creation never calls a model), then drives the Resume page: Ctrl-click two rows,
+// Shift-click a range, Archive selected, the archive view, Restore one, Delete one through the
+// confirmation dialog, and a refused delete of the open run.  Every outcome is checked against
+// GET /api/runs?archived=0|1.  Extra screenshots: resume-selection-toolbar, resume-archive-view,
+// resume-delete-dialog, resume-delete-refused.  The step removes the runs it created.
+
+async function runResumeArchiveStep(page) {
+  const created = [];
+  await step(
+    page,
+    "resume-select-archive-delete",
+    "Resume page: Ctrl/Shift multi-select, archive, archive view, restore, delete with confirmation",
+    async (rec) => {
+      const prefix = `${RUN_NAME} tidy-`;
+      const request = await api("GET", "/defaults?agent_count=6");
+      request.play_delay_seconds = 0;
+      for (let i = 1; i <= 5; i += 1) {
+        const run = await api("POST", "/runs", { ...request, name: `${prefix}${i}` });
+        created.push(run.run_id);
+        await api("POST", `/runs/${run.run_id}/close`);
+        // no background storybook opening job (it would make a delete answer run_in_use for a moment)
+        await api("PUT", `/runs/${run.run_id}/assistant/settings`, { storybook_auto: false }).catch(() => {});
+      }
+      const busy = await api("POST", "/runs", { ...request, name: `${RUN_NAME} busy` }); // stays open
+      created.push(busy.run_id);
+      rec.found.created = created;
+
+      await page.goto(`${BASE_URL}/#/resume`, { waitUntil: "domcontentloaded" });
+      const filterBox = await mustFind(rec, "Filter by name or id", fields(page, /filter by name or id/i));
+      await filterBox.fill(prefix);
+      const rows = page.locator("table.resume-table tbody tr");
+      await waitApi("five filtered rows", async () => rows.count(), (n) => n === 5, 10_000);
+      const order = await rows.evaluateAll((trs) => trs.map((tr) => tr.getAttribute("data-run-id")));
+      rec.found.order = order;
+      const row = (id) => page.locator(`tr[data-run-id="${id}"]`);
+      const cell = (id) => row(id).locator("td").nth(3); // "Saved at": plain text, not a control
+      const checked = async () => rows.evaluateAll((trs) => trs.filter((tr) => tr.querySelector("input.resume-check")?.checked).map((tr) => tr.getAttribute("data-run-id")));
+
+      await cell(order[0]).click({ modifiers: ["Control"] });
+      await cell(order[2]).click({ modifiers: ["Control"] });
+      const afterCtrl = await checked();
+      if (afterCtrl.join() !== [order[0], order[2]].join()) throw new Error(`Ctrl-click selected ${afterCtrl}`);
+      await cell(order[4]).click({ modifiers: ["Shift"] });
+      const expected = [order[0], order[2], order[3], order[4]];
+      const afterShift = await checked();
+      rec.found.selected_after_shift = afterShift;
+      if (afterShift.join() !== expected.join()) throw new Error(`Shift-click range gave ${afterShift}, expected ${expected}`);
+      const toolbar = page.getByRole("region", { name: "Selected runs" });
+      await waitVisible(toolbar.getByText("4 selected"), "the toolbar count '4 selected'");
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-resume-selection-toolbar.png`) });
+
+      await toolbar.getByRole("button", { name: "Archive selected" }).click();
+      await waitVisible(page.getByText("Archived 4 runs."), "the notice 'Archived 4 runs.'");
+      await waitApi("one active tidy row", async () => rows.count(), (n) => n === 1, 10_000);
+      const activeIds = (await api("GET", "/runs")).map((r) => r.run_id);
+      const archivedIds = (await api("GET", "/runs?archived=1")).map((r) => r.run_id);
+      if (!activeIds.includes(order[1]) || expected.some((id) => activeIds.includes(id))) throw new Error("the active list after archiving is wrong");
+      if (!expected.every((id) => archivedIds.includes(id))) throw new Error("the archive does not hold the four runs");
+
+      await page.getByRole("button", { name: "View archive" }).click();
+      await waitVisible(page.getByRole("button", { name: "Back to active runs" }), "the archive view");
+      await waitApi("four archived rows", async () => rows.count(), (n) => n === 4, 10_000);
+      rec.found.archive_rows_have_open = await page.locator("table.resume-table .run-open").count();
+      if (rec.found.archive_rows_have_open) throw new Error("archived rows show an Open button");
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-resume-archive-view.png`) });
+
+      await row(order[0]).getByRole("button", { name: "Restore", exact: true }).click();
+      await waitApi("three archived rows", async () => rows.count(), (n) => n === 3, 10_000);
+      if (!(await api("GET", "/runs")).some((r) => r.run_id === order[0])) throw new Error("the restored run is not active");
+
+      await row(order[2]).locator("input.resume-check").click();
+      await waitVisible(toolbar.getByText("1 selected"), "the toolbar count '1 selected'");
+      await toolbar.getByRole("button", { name: "Delete selected…" }).click();
+      const dialog = page.getByRole("dialog");
+      await waitVisible(dialog, "the delete dialog");
+      const dialogText = await dialog.innerText();
+      rec.found.dialog_names_run = dialogText.includes(`${prefix}`) && dialogText.includes(order[2]);
+      rec.found.dialog_warns = /cannot be undone/i.test(dialogText) && /permanently/i.test(dialogText);
+      if (!rec.found.dialog_names_run || !rec.found.dialog_warns) throw new Error(`the dialog does not name the run or warn: ${dialogText.slice(0, 300)}`);
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-resume-delete-dialog.png`) });
+      await dialog.getByRole("button", { name: "Delete 1 run" }).click();
+      await dialog.waitFor({ state: "hidden", timeout: 10_000 });
+      await waitVisible(page.getByText("Deleted 1 run permanently."), "the notice 'Deleted 1 run permanently.'");
+      const gone = await api("GET", `/runs/${order[2]}`).then(() => false, (error) => error.status === 404);
+      if (!gone) throw new Error("the deleted run still answers GET /runs/{id}");
+      await waitApi("two archived rows", async () => rows.count(), (n) => n === 2, 10_000);
+      const archivedNow = (await api("GET", "/runs?archived=1")).map((r) => r.run_id).filter((id) => order.includes(id));
+      if (archivedNow.sort().join() !== [order[3], order[4]].sort().join()) throw new Error(`archive holds ${archivedNow}`);
+
+      await page.getByRole("button", { name: "Back to active runs" }).click();
+      await waitApi("two active tidy rows", async () => rows.count(), (n) => n === 2, 10_000);
+      const activeNow = (await rows.evaluateAll((trs) => trs.map((tr) => tr.getAttribute("data-run-id")))).sort();
+      if (activeNow.join() !== [order[0], order[1]].sort().join()) throw new Error(`active rows ${activeNow}`);
+
+      // an open run is refused, and the dialog says so next to that run
+      await filterBox.fill(`${RUN_NAME} busy`);
+      await waitApi("the busy row", async () => rows.count(), (n) => n === 1, 10_000);
+      await cell(busy.run_id).click();
+      await toolbar.getByRole("button", { name: "Delete selected…" }).click();
+      await waitVisible(dialog, "the delete dialog for the open run");
+      await dialog.getByRole("button", { name: "Delete 1 run" }).click();
+      await waitVisible(dialog.getByText(/Not deleted:/), "the per-run refusal in the dialog");
+      rec.found.refusal = (await dialog.getByText(/Not deleted:/).first().innerText()).slice(0, 200);
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-resume-delete-refused.png`) });
+      await dialog.getByRole("button", { name: "Close" }).click();
+      if (!(await api("GET", `/runs/${busy.run_id}`)).run_id) throw new Error("the open run was deleted");
+    },
+    { needs: ["defaults"] },
+  );
+  for (const runId of created) {
+    await api("POST", `/runs/${runId}/close`).catch(() => {});
+    await api("DELETE", `/runs/${runId}`).catch(() => {});
+  }
 }
 
 // ---------------------------------------------------------------------------

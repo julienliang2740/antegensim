@@ -6,6 +6,8 @@ Layout (see docs/INTERFACES.md "Storage layout" for example contents):
     worlds/{world_id}/runs/{run_id}/
         manifest.json                    Manifest — the COMMIT POINT (atomic write)
         .writer.lock                     flock held by the one open worker (acquire_writer_lock)
+        archive.json                     RunArchiveMarker, present only while the run is archived
+                                         (archive_run / unarchive_run; hidden from the default list)
         run_request.json                 the RunCreateRequest used (reference only)
         assumptions.json                 [AssumptionEntry] recorded once at creation
         staged_snapshots/{iv_id}.json    WorkingState snapshot of a staged apply_working_files
@@ -98,6 +100,17 @@ Recovery (recover_run, called by RunManager.open_run)
   pending file whose call id is already in a committed turn (crash between steps 2
   and 5) is deleted instead: its usage is already in ``manifest.real_usage``.
 * ``list_runs`` skips run dirs without a manifest.
+* ``archive.json`` is never touched by recovery and never copied by ``create_continuation``.
+
+Archive and delete (run archive)
+--------------------------------
+``archive_run`` writes ``archive.json`` (``RunArchiveMarker``; idempotent, the first
+``archived_at`` is kept); ``unarchive_run`` removes it.  ``list_runs`` reports every run with
+``archived``/``archived_at``; a marker that cannot be read or validated is logged and the run is
+treated as active.  ``delete_run`` takes the writer lock (``RunInUseError`` when another worker
+holds it), removes ``manifest.json`` first (the run disappears from every listing at once), then
+the whole run folder, then ``runs/`` and the world folder only if they are left empty
+(``os.rmdir``: nothing else is ever removed).
 
 Real usage ledger
 -----------------
@@ -171,6 +184,7 @@ from .schemas import (
     RemovedEntity,
     Residue,
     RulesConfig,
+    RunArchiveMarker,
     RunCreateRequest,
     RunSettings,
     RunSummary,
@@ -194,6 +208,7 @@ MANIFEST_FILE = "manifest.json"
 RUN_REQUEST_FILE = "run_request.json"
 ASSUMPTIONS_FILE = "assumptions.json"
 WRITER_LOCK_FILE = ".writer.lock"  # exclusive advisory lock held by the one open worker (spec: one active writer)
+ARCHIVE_FILE = "archive.json"  # RunArchiveMarker; present only while the run is archived
 STAGED_SNAPSHOTS_DIR = "staged_snapshots"
 WORKING_DIR = "working"
 TURNS_DIR = "turns"
@@ -255,6 +270,11 @@ MAX_ERRORS_PER_FILE = 8
 # agent/intervention ids).  Rejects separators, dots and glob characters.
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_\-]{0,127}$")
 _SNAPSHOT_REF = re.compile(r"^staged_snapshots/([A-Za-z0-9][A-Za-z0-9_\-]{0,127})\.json$")
+
+
+class RunInUseError(Exception):
+    """``delete_run`` refused: another worker (this process or another) holds the run's
+    writer lock.  The API answers 409 ``run_in_use``."""
 
 
 class StorageError(Exception):
@@ -450,7 +470,9 @@ def acquire_writer_lock(run_id: str) -> Optional[WriterLock]:
 def list_runs() -> list[RunSummary]:
     """Scan ``worlds/*/runs/*/manifest.json`` (dirs without one are skipped, unreadable
     manifests are logged and skipped); newest ``updated_at`` first.  ``status`` is
-    "finished" when ``manifest.finished`` else "paused" (the runner overlays live status)."""
+    "finished" when ``manifest.finished`` else "paused" (the runner overlays live status).
+    Every run is returned, archived or not (``archived``/``archived_at`` from ``archive.json``);
+    ``RunManager.list_runs`` filters."""
     root = worlds_root()
     if not root.is_dir():
         return []
@@ -464,6 +486,82 @@ def list_runs() -> list[RunSummary]:
         summaries.append(_summary_from_manifest(manifest))
     summaries.sort(key=lambda s: (_timestamp_key(s.saved_at), s.run_id), reverse=True)
     return summaries
+
+
+def read_archive_marker(rdir: Path) -> Optional[RunArchiveMarker]:
+    """The run folder's ``archive.json`` or None (not archived).  A marker that cannot be read
+    or validated is logged and treated as absent (the run stays visible and can be archived
+    again, which rewrites it)."""
+    path = Path(rdir) / ARCHIVE_FILE
+    if not path.is_file():
+        return None
+    try:
+        return _read_model(path, RunArchiveMarker, str(path))
+    except StorageError as exc:
+        log.warning("ignoring unreadable archive marker (run treated as active): %s", exc)
+        return None
+
+
+def archive_state(world_id: str, run_id: str) -> tuple[bool, Optional[str]]:
+    """``(archived, archived_at)`` for ``RunSummary``; ``(False, None)`` for unsafe ids."""
+    try:
+        marker = read_archive_marker(run_dir(world_id, run_id))
+    except (StorageError, OSError):
+        return False, None
+    return (True, marker.archived_at) if marker is not None else (False, None)
+
+
+def archive_run(run_id: str, note: str = "") -> RunArchiveMarker:
+    """Write ``archive.json`` (atomic).  Idempotent: an existing valid marker is kept with its
+    ``archived_at``.  Works for open runs too (the marker is outside the checkpoint data).
+    Raises StorageError for an unknown run."""
+    rdir = find_run_dir(run_id)
+    existing = read_archive_marker(rdir)
+    if existing is not None:
+        return existing
+    marker = RunArchiveMarker(archived_at=utc_now_iso(), note=note)
+    atomic_write_json(rdir / ARCHIVE_FILE, marker)
+    return marker
+
+
+def unarchive_run(run_id: str) -> None:
+    """Remove ``archive.json`` (a no-op when the run is not archived).  Raises StorageError for
+    an unknown run."""
+    rdir = find_run_dir(run_id)
+    (rdir / ARCHIVE_FILE).unlink(missing_ok=True)
+    _fsync_path(rdir)
+
+
+def delete_run(run_id: str) -> list[str]:
+    """Remove the run folder permanently (see "Archive and delete" in the module docstring).
+    The caller must make sure this process has no worker for the run; the writer lock covers
+    other processes and closed workers still finishing a turn (``RunInUseError``).  Returns
+    the removed folders (the run folder, then ``runs/`` and the world folder when they were
+    left empty).  Raises StorageError for an unknown run."""
+    rdir = find_run_dir(run_id)
+    lock = acquire_writer_lock(run_id)
+    if lock is None:
+        raise RunInUseError(f"run {run_id} is open (a worker holds its writer lock)")
+    removed: list[str] = []
+    try:
+        # The manifest is the commit point and what makes a folder a run: without it the run
+        # vanishes from list_runs/find_run_dir even if the tree removal below is interrupted.
+        (rdir / MANIFEST_FILE).unlink()
+        _fsync_path(rdir)
+        shutil.rmtree(rdir)
+        removed.append(str(rdir))
+    finally:
+        lock.release()
+    runs_dir = rdir.parent
+    world_dir = runs_dir.parent
+    for folder in (runs_dir, world_dir):
+        try:
+            folder.rmdir()  # only succeeds when empty: never removes anything else
+        except OSError:
+            break
+        removed.append(str(folder))
+    log.info("deleted run %s (%s)", run_id, ", ".join(removed))
+    return removed
 
 
 def read_manifest(run_id: str) -> Manifest:
@@ -1326,6 +1424,7 @@ def _manifest_after_commit(manifest: Manifest, checkpoint: Checkpoint) -> Manife
 
 
 def _summary_from_manifest(manifest: Manifest) -> RunSummary:
+    archived, archived_at = archive_state(manifest.world_id, manifest.run_id)
     return RunSummary(
         world_id=manifest.world_id,
         run_id=manifest.run_id,
@@ -1340,6 +1439,8 @@ def _summary_from_manifest(manifest: Manifest) -> RunSummary:
         parent=manifest.parent,
         default_model_key=manifest.default_model_key,
         run_dir=run_dir_path(manifest.world_id, manifest.run_id),
+        archived=archived,
+        archived_at=archived_at,
     )
 
 

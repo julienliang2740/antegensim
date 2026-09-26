@@ -458,6 +458,9 @@ class FakeStorage:
     def run_dir_path(self, world_id: str, run_id: str) -> Optional[str]:
         return f"/fake/worlds/{world_id}/runs/{run_id}"
 
+    def archive_state(self, world_id: str, run_id: str) -> tuple[bool, Optional[str]]:
+        return False, None  # no archive markers in the in-memory storage
+
     def code_revision(self) -> str:
         return "test"
 

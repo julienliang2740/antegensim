@@ -85,10 +85,19 @@ Loads `GET /api/defaults?agent_count=8` (and `?agent_count=12` for new-card temp
 | Area | Label | Effect | API | States |
 | --- | --- | --- | --- | --- |
 | Action row | **Filter by name or id** | Filters the list locally | | |
-| Action row | **Refresh list** | Reloads the saved runs | `GET /api/runs` | |
+| Action row | **Refresh list** | Reloads the active runs and the archive | `GET /api/runs`, `GET /api/runs?archived=1` | |
 | Action row | **New session instead** | Open `#/new` | | |
-| Runs table | Run name (**Run (click to open)**) | Opens the run page; the run resumes paused at its latest checkpoint | `POST /api/runs/{run_id}/open` | |
-| Runs table (*new*) | **Story** | Open Story Mode for that run | | |
+| Action row, right | **Archived runs** (with the count) | Switches the table to the archive: runs you archived, hidden from the normal list, data untouched | `GET /api/runs?archived=1` | Active view |
+| Action row, right | **Back to active runs** | Switches back to the normal list | `GET /api/runs` | Archive view |
+| Runs table | Run name (**Run (click to open)**) | Opens the run page; the run resumes paused at its latest checkpoint | `POST /api/runs/{run_id}/open` | Active view |
+| Runs table (*new*) | **Story** | Open Story Mode for that run | | Active view |
+| Runs table | Checkbox per row (**Select all shown runs** in the header) | Click toggles a run; Ctrl-click (Cmd on a Mac) on a checkbox or a row adds or removes one; Shift-click adds the range from the last clicked run; a plain click on a row (not on a button) selects only that run; Space toggles the focused checkbox. The header box selects or clears the rows the filter shows; selected rows hidden by the filter stay selected | | Both views |
+| Selection toolbar | **Archive selected** | Moves the selected runs to the archive at once, then reloads; the notice "Archived N runs." offers **View archive** | `POST /api/runs/{run_id}/archive` per run | Active view, something selected |
+| Selection toolbar | **Restore selected** | Moves the selected archived runs back to the active list | `POST /api/runs/{run_id}/unarchive` per run | Archive view, something selected |
+| Selection toolbar | **Delete selected…** | Opens a confirmation that names the runs and says the folders are removed permanently and cannot be undone; its Delete button removes them one by one. A run that is open (playing, or shown in another tab) is refused and the reason is shown next to that run | `DELETE /api/runs/{run_id}` per run (409 `run_in_use` while open) | Both views, something selected |
+| Selection toolbar | **Clear selection** | Unselects every run | | Something selected |
+| Archive table | **Restore** | Puts that one run back in the active list (archived rows have no Open button) | `POST /api/runs/{run_id}/unarchive` | Archive view |
+| Notice | **Dismiss** | Hides the archive, restore or delete notice | | After an action |
 
 ## Run page (`#/run/<run_id>`)
 

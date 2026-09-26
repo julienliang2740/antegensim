@@ -33,6 +33,7 @@ const MODULES = [
   "components/inspect/logic.ts",
   "state/working.ts",
   "state/assistantBrief.ts",
+  "state/selection.ts",
 ];
 
 function build() {
@@ -66,6 +67,7 @@ const assistantBrief = await load("state/assistantBrief.mjs");
 const assistantFormat = await load("state/assistantFormat.mjs");
 const storyMode = await load("state/storyMode.mjs");
 const working = await load("state/working.mjs");
+const selection = await load("state/selection.mjs");
 
 // ---------------------------------------------------------------- fixtures
 
@@ -1087,4 +1089,78 @@ test("story mode run picker: unfinished stories first, finished newest first", (
   assert.equal(storyMode.unfinishedStoryText(work.get("r2")), "Story brief waiting for you · T");
   assert.equal(storyMode.unfinishedStoryText(undefined), "");
   assert.deepEqual(storyMode.finishedStoriesNewestFirst(stories).map((s) => s.story_id), ["e", "d"]);
+});
+
+// ---------------------------------------------------------------- selection (Resume page multi-select)
+
+const IDS = ["r1", "r2", "r3", "r4", "r5"];
+const sel = (...ids) => new Set(ids);
+const sorted = (set) => [...set].sort();
+
+test("selection: a plain checkbox click toggles and sets the anchor", () => {
+  let out = selection.applySelectionClick(sel(), null, "r2", IDS, { ctrl: false, shift: false, source: "checkbox" });
+  assert.deepEqual(sorted(out.selection), ["r2"]);
+  assert.equal(out.anchor, "r2");
+  out = selection.applySelectionClick(sel("r2", "r4"), "r2", "r4", IDS, { ctrl: false, shift: false, source: "checkbox" });
+  assert.deepEqual(sorted(out.selection), ["r2"]);
+  assert.equal(out.anchor, "r4");
+  // source defaults to the checkbox
+  assert.deepEqual(sorted(selection.applySelectionClick(sel("r1"), "r1", "r3", IDS, { ctrl: false, shift: false }).selection), ["r1", "r3"]);
+});
+
+test("selection: ctrl/cmd-click toggles on the checkbox and on the row; a plain row click selects only that row", () => {
+  let out = selection.applySelectionClick(sel("r1"), "r1", "r3", IDS, { ctrl: true, shift: false, source: "row" });
+  assert.deepEqual(sorted(out.selection), ["r1", "r3"]);
+  assert.equal(out.anchor, "r3");
+  out = selection.applySelectionClick(out.selection, out.anchor, "r1", IDS, { ctrl: true, shift: false, source: "checkbox" });
+  assert.deepEqual(sorted(out.selection), ["r3"]);
+  out = selection.applySelectionClick(sel("r1", "r3", "r5"), "r5", "r2", IDS, { ctrl: false, shift: false, source: "row" });
+  assert.deepEqual(sorted(out.selection), ["r2"]);
+  assert.equal(out.anchor, "r2");
+  // a plain row click on the only selected row keeps it selected
+  assert.deepEqual(sorted(selection.applySelectionClick(sel("r2"), "r2", "r2", IDS, { ctrl: false, shift: false, source: "row" }).selection), ["r2"]);
+});
+
+test("selection: shift-click adds the range from the anchor in either direction and keeps the anchor", () => {
+  let out = selection.applySelectionClick(sel("r1"), "r2", "r4", IDS, { ctrl: false, shift: true, source: "checkbox" });
+  assert.deepEqual(sorted(out.selection), ["r1", "r2", "r3", "r4"]);
+  assert.equal(out.anchor, "r2");
+  out = selection.applySelectionClick(sel(), "r4", "r2", IDS, { ctrl: false, shift: true, source: "row" });
+  assert.deepEqual(sorted(out.selection), ["r2", "r3", "r4"]);
+  // ctrl + shift is still a range
+  out = selection.applySelectionClick(sel(), "r5", "r5", IDS, { ctrl: true, shift: true, source: "row" });
+  assert.deepEqual(sorted(out.selection), ["r5"]);
+  // the anchor is not shown (filtered out) or missing: behaves like a ctrl-click
+  out = selection.applySelectionClick(sel("r1"), "gone", "r3", IDS, { ctrl: false, shift: true });
+  assert.deepEqual(sorted(out.selection), ["r1", "r3"]);
+  assert.equal(out.anchor, "r3");
+  out = selection.applySelectionClick(sel(), null, "r3", IDS, { ctrl: false, shift: true });
+  assert.deepEqual(sorted(out.selection), ["r3"]);
+});
+
+test("selection: the example flow of the browser check (two ctrl-clicks, then a shift range)", () => {
+  let state = { selection: sel(), anchor: null };
+  state = selection.applySelectionClick(state.selection, state.anchor, "r1", IDS, { ctrl: true, shift: false, source: "row" });
+  state = selection.applySelectionClick(state.selection, state.anchor, "r3", IDS, { ctrl: true, shift: false, source: "row" });
+  state = selection.applySelectionClick(state.selection, state.anchor, "r5", IDS, { ctrl: false, shift: true, source: "row" });
+  assert.deepEqual(sorted(state.selection), ["r1", "r3", "r4", "r5"]);
+  assert.deepEqual(selection.selectedInOrder(state.selection, IDS), ["r1", "r3", "r4", "r5"]);
+});
+
+test("selection: the header checkbox reflects and toggles only the shown rows; filtering keeps hidden selections", () => {
+  const shown = ["r2", "r3"];
+  assert.equal(selection.headerState(sel(), shown), "none");
+  assert.equal(selection.headerState(sel("r1"), shown), "none");
+  assert.equal(selection.headerState(sel("r1", "r2"), shown), "some");
+  assert.equal(selection.headerState(sel("r2", "r3"), shown), "all");
+  assert.equal(selection.headerState(sel("r2"), []), "none");
+  assert.deepEqual(sorted(selection.toggleAllShown(sel("r1", "r2"), shown)), ["r1", "r2", "r3"]);
+  assert.deepEqual(sorted(selection.toggleAllShown(sel("r1", "r2", "r3"), shown)), ["r1"]);
+});
+
+test("selection: prune drops ids that no longer exist and keeps the same set when nothing changed", () => {
+  const current = sel("r1", "r9");
+  assert.deepEqual(sorted(selection.pruneSelection(current, IDS)), ["r1"]);
+  const same = sel("r1", "r2");
+  assert.equal(selection.pruneSelection(same, IDS), same);
 });
