@@ -842,7 +842,11 @@ function placeTooltip(el: HTMLElement, anchor: { left: number; top: number; size
 function HoverTooltip(props: HoverTooltipProps) {
   const { point, terrain, occupants, removed, focusId } = props;
   const localRef = useRef<HTMLDivElement | null>(null);
-  const focus = focusId ? (occupants.find((m) => m.id === focusId) ?? null) : null;
+  const listRef = useRef<HTMLUListElement | null>(null);
+  useEffect(() => {
+    if (!focusId) return;
+    listRef.current?.querySelector<HTMLElement>("li.insp-tooltip-focus")?.scrollIntoView({ block: "nearest" });
+  }, [focusId]);
   // Measured after layout, before paint: the tooltip starts off-screen and is moved into place.
   useLayoutEffect(() => {
     const el = localRef.current;
@@ -879,21 +883,17 @@ function HoverTooltip(props: HoverTooltipProps) {
           ×
         </button>
       </div>
-      {/* The hovered dot's summary line is only useful when there are other rows to tell it apart
-          from; with a single occupant the highlighted row already says the same thing. */}
-      {focus && occupants.length > 1 ? (
-        <div className="insp-tooltip-focus-head">
-          <KindTag kind={focus.kind} dead={focus.dead} /> <strong>{focus.title}</strong>: {focus.line}
-        </div>
-      ) : null}
+      {/* The hovered dot is never repeated above the list: its row is highlighted and marked
+          "hovered" instead, so every entity appears exactly once. */}
       {props.agentViewOf ? <div className="insp-tooltip-agentview">agent view: only what {props.agentViewOf} has observed</div> : null}
       {occupants.length === 0 ? <div className="insp-muted">Nobody and nothing here.</div> : null}
-      <ul className="insp-tooltip-rows">
+      <ul className="insp-tooltip-rows" ref={listRef}>
         {occupants.map((m) => (
           <li key={m.id} className={`${m.dead ? "insp-dead" : ""}${m.id === focusId ? " insp-tooltip-focus" : ""}`}>
             <button type="button" className="insp-tooltip-row" title={`Select ${m.title}`} onClick={() => props.onPick(m.id)}>
               <KindTag kind={m.kind} dead={m.dead} /> <strong>{m.title}</strong>
               {m.self ? <span className="insp-badge insp-badge-info">you</span> : null}
+              {m.id === focusId ? <span className="insp-badge insp-badge-info">hovered</span> : null}
               <span className="insp-tooltip-stats">{m.line}</span>
             </button>
           </li>

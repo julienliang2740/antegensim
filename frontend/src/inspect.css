@@ -985,14 +985,6 @@
   display: block;
 }
 
-.insp-tooltip-focus-head {
-  margin-top: 4px;
-  padding: 4px 6px;
-  border-radius: 4px;
-  background: var(--insp-accent-bg);
-  border: 1px solid var(--insp-accent);
-}
-
 .insp-tooltip-hint {
   color: var(--insp-muted);
   font-size: 11.5px;
