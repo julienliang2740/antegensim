@@ -367,3 +367,13 @@ def test_assumptions_registry_has_god_and_assistant_entries() -> None:
     assert ast == [f"A-AST-{i}" for i in range(1, 11)]
     ids = {e.id for e in config.assumption_entries()}
     assert "A-GOD-1" in ids and "A-AST-1" in ids
+
+
+def test_models_hide_test_only_fakes_unless_asked(client) -> None:
+    """GET /api/models: fake-scripted and fake-malformed are test doubles (ModelInfo.test_only)
+    hidden from the operator's pickers unless include_test=1; fake-heuristic stays listed."""
+    keys = {m["key"] for m in client.get("/api/models").json()}
+    assert "fake-heuristic" in keys and not ({"fake-scripted", "fake-malformed"} & keys)
+    with_test = {m["key"]: m for m in client.get("/api/models?include_test=1").json()}
+    assert {"fake-scripted", "fake-malformed"} <= set(with_test)
+    assert with_test["fake-scripted"]["test_only"] is True and with_test["fake-heuristic"]["test_only"] is False

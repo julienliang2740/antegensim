@@ -145,6 +145,9 @@ logger = logging.getLogger("empyrean.model")
 FAKE_MODEL_IDS: tuple[str, ...] = ("fake-heuristic", "fake-scripted", "fake-malformed", "fake-assistant")
 # Fake refs whose options carry assistant_only (hidden from agent pickers, rejected for agents).
 FAKE_ASSISTANT_ONLY_IDS: tuple[str, ...] = ("fake-assistant",)
+# Fake refs that exist for the test suite (scripted replies, scheduled malformed replies); hidden
+# from the operator's model pickers (GET /api/models needs include_test=1) but usable by key.
+FAKE_TEST_ONLY_IDS: tuple[str, ...] = ("fake-scripted", "fake-malformed")
 
 # Name of the forced tool that carries the decision schema (Anthropic API).
 DECISION_TOOL_NAME = "submit_decision"
@@ -363,7 +366,7 @@ def _default_fake_refs() -> list[ModelRef]:
                 reports_usage=False,
             ),
             mind_multiplier=1.0,
-            options={"assistant_only": True} if mode in FAKE_ASSISTANT_ONLY_IDS else {},
+            options=({"assistant_only": True} if mode in FAKE_ASSISTANT_ONLY_IDS else {"test_only": True} if mode in FAKE_TEST_ONLY_IDS else {}),
             description=descriptions[mode],
         )
         for mode in FAKE_MODEL_IDS
@@ -463,6 +466,7 @@ class ModelRegistry:
             mind_multiplier=ref.mind_multiplier,
             description=ref.description,
             assistant_only=bool(ref.options.get("assistant_only")),
+            test_only=bool(ref.options.get("test_only")),
         )
 
     def list_info(self) -> list[ModelInfo]:

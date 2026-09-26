@@ -35,7 +35,7 @@ Route table (all JSON; see docs/INTERFACES.md "API" for request/response models)
 
     GET    /api/health                                   -> {"ok": true, "version": SCHEMA_VERSION}
     GET    /api/defaults?agent_count=8                   -> RunCreateRequest (6..12 prefilled cards)
-    GET    /api/models?include_assistant=0               -> list[ModelInfo] (assistant-only refs hidden unless include_assistant=1)
+    GET    /api/models?include_assistant=0&include_test=0 -> list[ModelInfo] (assistant-only refs hidden unless include_assistant=1; test-only fakes hidden unless include_test=1)
     GET    /api/assumptions                              -> AssumptionsView (registry defaults)
     POST   /api/world/preview       WorldPreviewRequest  -> MapState (terrain only)
     GET    /api/runs?archived=0|1|all                    -> list[RunSummary] (default 0: active runs only)
@@ -325,12 +325,12 @@ def create_app(manager: RunManager, assistant: Optional["AssistantService"] = No
 
     @app.get("/api/defaults", response_model=RunCreateRequest)
     def defaults(agent_count: int = Query(8, ge=config.MIN_AGENTS, le=config.MAX_AGENTS)) -> RunCreateRequest:
-        return config.default_run_request(config.DEFAULT_MODEL_KEY, agent_count)
+        return config.default_run_request(config.operator_default_model_key(getattr(manager, "registry", None)), agent_count)
 
     @app.get("/api/models", response_model=list[ModelInfo])
-    def models(include_assistant: bool = Query(False)) -> list[ModelInfo]:
+    def models(include_assistant: bool = Query(False), include_test: bool = Query(False)) -> list[ModelInfo]:
         infos = manager.models_info()
-        return infos if include_assistant else [m for m in infos if not m.assistant_only]
+        return [m for m in infos if (include_assistant or not m.assistant_only) and (include_test or not m.test_only)]
 
     @app.get("/api/assumptions", response_model=AssumptionsView)
     def assumptions() -> AssumptionsView:

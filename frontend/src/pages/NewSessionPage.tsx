@@ -51,12 +51,21 @@ import "../setup.css";
 
 type Validation = "never" | "valid" | "invalid" | "stale";
 
-/** Read and remove the assistant's setup draft (null when absent or unreadable). */
+function clearSetupDraft(): void {
+  try {
+    window.sessionStorage.removeItem(SETUP_DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Read the assistant's setup draft (null when absent or unreadable); cleared after it is applied. */
 function takeSetupDraft(): SetupDraft | null {
   try {
     const raw = window.sessionStorage.getItem(SETUP_DRAFT_KEY);
     if (!raw) return null;
-    window.sessionStorage.removeItem(SETUP_DRAFT_KEY);
+    // Not removed here: React StrictMode runs the mount effect twice in development, and the
+    // second run must still see the draft (it is cleared once the form has been prefilled).
     const parsed = JSON.parse(raw) as Partial<SetupDraft>;
     if (!parsed.partial || typeof parsed.partial !== "object") return null;
     const count = typeof parsed.agent_count === "number" ? Math.min(MAX_AGENTS, Math.max(MIN_AGENTS, Math.round(parsed.agent_count))) : 8;
@@ -95,6 +104,7 @@ export function NewSessionPage() {
         if (cancelled) return;
         const initial = draft ? mergeSetupDraft(defaults, draft.partial) : defaults;
         setRequest(initial);
+        if (draft) clearSetupDraft();
         setTemplates(full?.agents ?? defaults.agents);
         setRulesText(otherRulesText(initial));
         if (draft) setDraftBanner(draft.source);

@@ -333,6 +333,7 @@ export interface ModelInfo {
   description: string;
   /** Reserved for the assistant (ref.options.assistant_only): hidden from GET /api/models unless ?include_assistant=1 and refused as an agent model. */
   assistant_only: boolean;
+  test_only: boolean; // fake-scripted / fake-malformed: hidden from pickers unless ?include_test=1
 }
 
 export type ModelRole = "system" | "user" | "assistant";

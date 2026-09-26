@@ -512,7 +512,7 @@ def _search_docs(service: "AssistantService", args: dict[str, Any]) -> ToolResul
 
 def _get_defaults(service: "AssistantService", args: dict[str, Any]) -> ToolResult:
     count = _i(args, "agent_count", 8, config.MIN_AGENTS, config.MAX_AGENTS) or 8
-    request = config.default_run_request(config.DEFAULT_MODEL_KEY, count)
+    request = config.default_run_request(config.operator_default_model_key(service.registry), count)
     payload = {
         "name": request.name,
         "seed": request.seed,

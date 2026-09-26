@@ -558,6 +558,7 @@ class ModelInfo(StrictModel):
     # rev 4: ``ref.options["assistant_only"]``; such refs are hidden from GET /api/models unless
     # ``?include_assistant=1`` and rejected for agents by ``ModelRegistry.validate_agent_key``.
     assistant_only: bool = False
+    test_only: bool = False  # test doubles (fake-scripted, fake-malformed): hidden from pickers unless include_test=1
 
 
 ModelRole = Literal["system", "user", "assistant"]

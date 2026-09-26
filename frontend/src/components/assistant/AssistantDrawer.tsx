@@ -581,9 +581,12 @@ export function AssistantDrawer(props: AssistantDrawerProps) {
   };
   const openInSetup = (brief: Brief) => {
     if (brief.action?.type !== "create_run") return;
+    // Prefer the backend's merged request (exactly what Approve would create); fall back to the
+    // model's overlay merged onto the defaults by the form.
+    const merged = brief.merged_request && typeof brief.merged_request === "object" ? (brief.merged_request as Record<string, unknown>) : null;
     const draft: SetupDraft = {
-      agent_count: brief.action.agent_count,
-      partial: { name: brief.action.name, ...brief.action.overlay },
+      agent_count: merged && Array.isArray(merged.agents) ? merged.agents.length : brief.action.agent_count,
+      partial: merged ?? { name: brief.action.name, ...brief.action.overlay },
       source: brief.title,
     };
     try {

@@ -1222,8 +1222,8 @@ compares all four (path parameters are compared by position, query strings are i
 | Method | Path | Body | Response |
 | --- | --- | --- | --- |
 | GET | `/health` | | `{ok, version}` |
-| GET | `/defaults?agent_count=8` | | `RunCreateRequest` (6–12 prefilled cards) |
-| GET | `/models?include_assistant=0` | | `ModelInfo[]` (assistant-only refs hidden unless `include_assistant=1`) |
+| GET | `/defaults?agent_count=8` | | `RunCreateRequest` (6–12 prefilled cards; `default_model_key` is the operator default `EMPYREAN_DEFAULT_MODEL`, `claude-cli-haiku` unless unavailable, then `fake-heuristic`) |
+| GET | `/models?include_assistant=0&include_test=0` | | `ModelInfo[]` (assistant-only refs hidden unless `include_assistant=1`; the test doubles `fake-scripted` and `fake-malformed` hidden unless `include_test=1`; `ModelInfo.test_only`) |
 | GET | `/assumptions` | | `AssumptionsView` |
 | POST | `/world/preview` | `WorldPreviewRequest` | `MapState` |
 | GET | `/runs?archived=0\|1\|all` | | `RunSummary[]` (default `0`: active runs only; `1` the archive; `all` both) |

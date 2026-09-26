@@ -271,7 +271,11 @@ DIGEST_LINE_MAX_TOKENS = 40
 MAX_STORED_PRIORITIES = 20
 PRIORITY_IMPORTANCE_BONUS = 0.3
 
-DEFAULT_MODEL_KEY = "fake-heuristic"
+DEFAULT_MODEL_KEY = "fake-heuristic"  # code and test default (free, deterministic)
+# The model GET /api/defaults, the New session form and the assistant's create-run briefs start
+# from (EMPYREAN_DEFAULT_MODEL). Falls back to DEFAULT_MODEL_KEY when the key is unknown or
+# unavailable (for example no `claude` on PATH); see operator_default_model_key().
+OPERATOR_DEFAULT_MODEL_KEY = _env("EMPYREAN_DEFAULT_MODEL", "claude-cli-haiku")
 DEFAULT_PLAY_DELAY_SECONDS = 0.2
 
 # ---------------------------------------------------------------------------
@@ -1121,6 +1125,21 @@ def default_agent_cards(count: int = 8, model_key: str | None = None) -> list[Ag
     if not MIN_AGENTS <= count <= MAX_AGENTS:
         raise ValueError(f"agent count must be {MIN_AGENTS}..{MAX_AGENTS}")
     return [default_agent_card(i, model_key) for i in range(count)]
+
+
+def operator_default_model_key(registry: Any = None) -> str:
+    """``OPERATOR_DEFAULT_MODEL_KEY`` when the registry knows it and it is available (credentials
+    or the CLI present), else ``DEFAULT_MODEL_KEY``.  ``registry`` is a model.ModelRegistry; None
+    means "trust the configured key"."""
+    key = OPERATOR_DEFAULT_MODEL_KEY or DEFAULT_MODEL_KEY
+    if registry is None:
+        return key
+    try:
+        if registry.validate_key(key) is None and not registry.is_assistant_only(key):
+            return key
+    except Exception:  # noqa: BLE001 - a broken registry never breaks the defaults
+        pass
+    return DEFAULT_MODEL_KEY
 
 
 def default_run_request(default_model_key: str = DEFAULT_MODEL_KEY, agent_count: int = 8) -> RunCreateRequest:

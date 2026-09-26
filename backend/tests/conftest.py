@@ -134,6 +134,16 @@ def api(client, worlds_dir, no_retry_sleep):
 
 
 @pytest.fixture(autouse=True)
+def _fake_operator_default(monkeypatch):
+    """Tests never start from a paid model: GET /api/defaults and the assistant's create-run base use
+    the fake heuristic regardless of EMPYREAN_DEFAULT_MODEL or the CLI being installed."""
+    from empyrean import config as empyrean_config
+
+    monkeypatch.setattr(empyrean_config, "OPERATOR_DEFAULT_MODEL_KEY", empyrean_config.DEFAULT_MODEL_KEY)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _never_live_in_assistant_tests(request, monkeypatch):
     """Fail any test in a test_assistant_* module that reaches ``ClaudeCliAdapter.attempt``
     (the only live route on this machine).  Other modules keep their own fake_cli fixtures."""

@@ -64,6 +64,7 @@ Backend options (environment variables or `.env`):
 | --- | --- | --- |
 | `EMPYREAN_API_HOST` / `EMPYREAN_API_PORT` | `127.0.0.1` / `8000` | Where the API listens |
 | `EMPYREAN_WORLDS_DIR` | `<repo>/worlds` | Where run data is written |
+| `EMPYREAN_DEFAULT_MODEL` | `claude-cli-haiku` | The model a new run starts from (the New session form, `GET /api/defaults`, the assistant's create-run briefs). Falls back to `fake-heuristic` when the key is unknown or unavailable (no `claude` on PATH) |
 | `EMPYREAN_MODELS_FILE` | `backend/empyrean/models.example.json` | Model registry |
 | `EMPYREAN_LOG_LEVEL` | `INFO` | Backend log level |
 | `EMPYREAN_FSYNC` | `1` | `0` skips fsync of turn files: commits are about 2.5x faster and a process crash is still safe, but a power loss is not |
@@ -206,7 +207,7 @@ Models are defined in `backend/empyrean/models.example.json`. Agent cards and ru
 
 | Key | Provider | Needs |
 | --- | --- | --- |
-| `fake-heuristic`, `fake-scripted`, `fake-malformed` | `fake` | Nothing. Deterministic stand-ins used by the tests |
+| `fake-heuristic`, `fake-scripted`, `fake-malformed` | `fake` | Nothing. Deterministic stand-ins; only `fake-heuristic` is offered in the pickers (the other two are test doubles, listed by `GET /api/models?include_test=1`) |
 | `fake-assistant` | `fake` | Nothing. Deterministic assistant stand-in (tests, demos); assistant only |
 | `claude-cli-haiku`, `claude-cli-haiku-prompted` | `claude_cli` | The `claude` CLI on `PATH`, logged in. No variable in `.env` |
 | `claude-cli-sonnet-assistant`, `claude-cli-haiku-assistant` | `claude_cli` | The `claude` CLI, logged in. Assistant only (per-call caps USD 0.25 / 0.08) |

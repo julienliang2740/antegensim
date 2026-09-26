@@ -136,6 +136,7 @@ export interface Brief {
   /** The model's envelope as emitted ({type, args}). */
   action_raw: Record<string, unknown>;
   validation: BriefValidation;
+  merged_request?: Record<string, unknown> | null; // create_run: the merged RunCreateRequest ("Open in setup form instead")
   effect: BriefEffect | null;
   error: string | null;
   superseded_by: string | null;

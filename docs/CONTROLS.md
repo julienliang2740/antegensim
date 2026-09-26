@@ -65,7 +65,7 @@ Loads `GET /api/defaults?agent_count=8` (and `?agent_count=12` for new-card temp
 | --- | --- | --- | --- | --- |
 | Action bar | **Validate setup** | Checks the whole request; every problem appears by its path next to its field and in a summary; later edits mark the result stale | `POST /api/runs/validate` | |
 | Action bar | **Create and open** | Creates the run and opens it paused at `r00000_init` | `POST /api/runs` | |
-| Run | **Run name**, **Seed**, **Default model (every card without its own model)**, **Max rounds (empty = no limit)**, **Play delay (seconds between turns)**, **Real budget in USD (empty = no limit)** | Fields of the run request; a paid default model shows a cost warning; unavailable models are disabled with the missing variables | | |
+| Run | **Run name**, **Seed**, **Default model (every card without its own model)**, **Max rounds (empty = no limit)**, **Play delay (seconds between turns)**, **Real budget in USD (empty = no limit)** | Fields of the run request; the default model starts as `EMPYREAN_DEFAULT_MODEL` (`claude-cli-haiku` when the CLI is installed, else the fake model); the picker lists one fake model (the free, instant stand-in; the test doubles `fake-scripted` and `fake-malformed` are hidden), a paid default model shows a cost warning; unavailable models are disabled with the missing variables | | |
 | Agents | Row click or **Edit…** | Opens the agent card dialog | | |
 | Agents | **Remove** | Removes that card (disabled at 6 cards) | | |
 | Agents | **Add agent** | Appends a card from the next default template (disabled at 12) | | |

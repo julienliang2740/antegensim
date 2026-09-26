@@ -137,10 +137,10 @@ def _is_fake_key(service: "AssistantService", key: Optional[str]) -> bool:
 
 
 def merge_create_run(service: "AssistantService", name: str, agent_count: int, overlay: dict[str, Any]) -> RunCreateRequest:
-    """``config.default_run_request(DEFAULT_MODEL_KEY, agent_count)`` + overlay (dicts merge,
+    """``config.default_run_request(operator default model, agent_count)`` + overlay (dicts merge,
     everything else replaces; agent cards merge by index onto the default cards, extra cards
     are dropped).  Raises ``pydantic.ValidationError`` for a shape problem."""
-    base = config.default_run_request(config.DEFAULT_MODEL_KEY, agent_count).model_dump(mode="json")
+    base = config.default_run_request(config.operator_default_model_key(service.registry), agent_count).model_dump(mode="json")
     overlay = dict(overlay or {})
     cards_overlay = overlay.pop("agents", None)
     merged = deep_merge(base, overlay)
@@ -159,7 +159,7 @@ def merge_create_run(service: "AssistantService", name: str, agent_count: int, o
 def setup_diff(request: RunCreateRequest) -> list[SetupDiffEntry]:
     """Non-default fields vs ``config.default_run_request`` for the same agent count (paths
     like ``agents[2].stats.attack``, ``rules.prices.move``).  ``name`` is included."""
-    default = config.default_run_request(config.DEFAULT_MODEL_KEY, len(request.agents)).model_dump(mode="json")
+    default = config.default_run_request(request.default_model_key, len(request.agents)).model_dump(mode="json")
     current = request.model_dump(mode="json")
     flat_default: dict[str, Any] = {}
     flat_current: dict[str, Any] = {}

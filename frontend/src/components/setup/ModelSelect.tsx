@@ -8,7 +8,7 @@
 import type { ModelInfo } from "../../api/types";
 
 function modelOptionText(m: ModelInfo): string {
-  const base = `${m.key} (${m.provider}/${m.model_id})`;
+  const base = m.provider === "fake" ? `${m.key} — fake model (free, instant, no network)` : `${m.key} (${m.provider}/${m.model_id})`;
   return m.available ? base : `${base} — unavailable: missing ${m.missing_credentials.join(", ") || "configuration"}`;
 }
 
