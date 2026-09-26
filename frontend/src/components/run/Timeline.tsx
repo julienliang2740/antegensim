@@ -3,6 +3,9 @@
  * right round navigation, turn selection, live/history indicator and an
  * obvious return to live view).  Viewing history never changes the run.
  *
+ * Laid out for the run page's left rail: mode badge and sentence, Return to
+ * live, round arrows, turn arrows and the turn selector, stacked.
+ *
  * On a continuation's first turn the previous arrow leads into the parent
  * run at the copied turn (INTERFACES sections 9 and 11: "previous" resolves
  * through TurnView.parent).
@@ -49,94 +52,94 @@ export function Timeline(props: TimelineProps) {
 
   return (
     <section className={`timeline ${live ? "timeline-live" : "timeline-history"}`} aria-label="History timeline">
-      <div className="timeline-row">
-        <div className="timeline-mode">
-          <span className={`mode-badge ${live ? "mode-live" : "mode-history"}`}>{live ? "LIVE" : "HISTORY"}</span>
-          <span>
-            {live ? (
-              <>
-                Following the latest saved turn <code>{liveTurnId}</code>.
-              </>
-            ) : (
-              <>
-                Viewing history: turn <code>{viewTurnId}</code> (round {round}). The run itself is unchanged and the live log keeps running.
-              </>
-            )}
-            {props.loading ? <span className="hint"> Fetching the turn…</span> : null}
-          </span>
-        </div>
-        <div className="timeline-cluster">
-          <button type="button" className="btn" disabled={previousRound === null} onClick={() => previousRound && go(previousRound)}>
+      <div className="timeline-mode">
+        <span className={`mode-badge ${live ? "mode-live" : "mode-history"}`}>{live ? "LIVE" : "HISTORY"}</span>
+        <span className="timeline-mode-text">
+          {live ? (
+            <>
+              Following the latest saved turn <code>{liveTurnId}</code>.
+            </>
+          ) : (
+            <>
+              Viewing history: turn <code>{viewTurnId}</code> (round {round}). The run itself is unchanged and the live log keeps running.
+            </>
+          )}
+          {props.loading ? <span className="hint"> Fetching the turn…</span> : null}
+        </span>
+      </div>
+      <button type="button" className="btn btn-primary timeline-return" disabled={live} onClick={() => props.onView(null)}>
+        Return to live
+      </button>
+      <div className="timeline-nav">
+        <span className="timeline-group" title={`Recorded rounds ${minRound}–${maxRound}`}>
+          Round <span className="timeline-round">{round}</span>
+        </span>
+        <div className="timeline-pair">
+          <button type="button" className="btn btn-small" disabled={previousRound === null} onClick={() => previousRound && go(previousRound)}>
             ◀ Previous round
           </button>
-          <span className="timeline-round" title={`Recorded rounds ${minRound}–${maxRound}`}>
-            Round {round}
-          </span>
-          <button type="button" className="btn" disabled={nextRound === null} onClick={() => nextRound && go(nextRound)}>
+          <button type="button" className="btn btn-small" disabled={nextRound === null} onClick={() => nextRound && go(nextRound)}>
             Next round ▶
           </button>
         </div>
-        <button type="button" className="btn btn-primary timeline-return" disabled={live} onClick={() => props.onView(null)}>
-          Return to live
-        </button>
       </div>
-      <div className="timeline-row">
-        <div className="timeline-cluster timeline-cluster-turn">
-          <span className="timeline-group">Turn</span>
+      <div className="timeline-nav">
+        <span className="timeline-group">Turn</span>
+        <div className="timeline-pair">
           {previousTurn === null && props.parent ? (
             <button
               type="button"
-              className="btn"
+              className="btn btn-small"
               title={`Open the parent run ${props.parent.run_id} at turn ${props.parent.turn_id}`}
               onClick={() => props.parent && props.onOpenParent(props.parent)}
             >
               ‹ Parent run
             </button>
           ) : (
-            <button type="button" className="btn" disabled={previousTurn === null} onClick={() => previousTurn && go(previousTurn)}>
+            <button type="button" className="btn btn-small" disabled={previousTurn === null} onClick={() => previousTurn && go(previousTurn)}>
               ‹ Previous turn
             </button>
           )}
-          <label className="turn-select">
-            <span>Turn in round {round}</span>
-            <select value={shownId} onChange={(e) => go(e.target.value)} title={shownId}>
-              {!knownShown ? <option value={shownId}>{shownId}</option> : null}
-              {otherTurns
-                .filter((t) => t.kind === "init")
-                .map((t) => (
-                  <option key={t.turn_id} value={t.turn_id}>
-                    {turnOptionLabel(t, name)}
-                  </option>
-                ))}
-              {agentTurns.length > 0 ? (
-                <optgroup label={`Agent turns of round ${round} (${agentTurns.length})`}>
-                  {agentTurns.map((t) => (
-                    <option key={t.turn_id} value={t.turn_id}>
-                      {turnOptionLabel(t, name)}
-                      {t.turn_id === liveTurnId ? " (latest)" : ""}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null}
-              {otherTurns.some((t) => t.kind === "round_end") ? (
-                <optgroup label="Round end">
-                  {otherTurns
-                    .filter((t) => t.kind === "round_end")
-                    .map((t) => (
-                      <option key={t.turn_id} value={t.turn_id}>
-                        {turnOptionLabel(t, name)}
-                        {t.turn_id === liveTurnId ? " (latest)" : ""}
-                      </option>
-                    ))}
-                </optgroup>
-              ) : null}
-            </select>
-          </label>
-          <button type="button" className="btn" disabled={nextTurn === null} onClick={() => nextTurn && go(nextTurn)}>
+          <button type="button" className="btn btn-small" disabled={nextTurn === null} onClick={() => nextTurn && go(nextTurn)}>
             Next turn ›
           </button>
         </div>
       </div>
+      <label className="turn-select">
+        <span>Turn in round {round}</span>
+        <select value={shownId} onChange={(e) => go(e.target.value)} title={shownId}>
+          {!knownShown ? <option value={shownId}>{shownId}</option> : null}
+          {otherTurns
+            .filter((t) => t.kind === "init")
+            .map((t) => (
+              <option key={t.turn_id} value={t.turn_id}>
+                {turnOptionLabel(t, name)}
+              </option>
+            ))}
+          {agentTurns.length > 0 ? (
+            <optgroup label={`Agent turns of round ${round} (${agentTurns.length})`}>
+              {agentTurns.map((t) => (
+                <option key={t.turn_id} value={t.turn_id}>
+                  {turnOptionLabel(t, name)}
+                  {t.turn_id === liveTurnId ? " (latest)" : ""}
+                </option>
+              ))}
+            </optgroup>
+          ) : null}
+          {otherTurns.some((t) => t.kind === "round_end") ? (
+            <optgroup label="Round end">
+              {otherTurns
+                .filter((t) => t.kind === "round_end")
+                .map((t) => (
+                  <option key={t.turn_id} value={t.turn_id}>
+                    {turnOptionLabel(t, name)}
+                    {t.turn_id === liveTurnId ? " (latest)" : ""}
+                  </option>
+                ))}
+            </optgroup>
+          ) : null}
+        </select>
+      </label>
       {props.parent ? (
         <div className="timeline-parent">
           ← Earlier history is in the parent run <code>{props.parent.run_id}</code> at turn <code>{props.parent.turn_id}</code>.{" "}

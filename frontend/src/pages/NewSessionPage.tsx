@@ -1,7 +1,8 @@
 /**
  * New session (spec U10, U11, U16 and "Sessions and run controls"): usable
  * world and plant settings, editable run-default context settings, a model
- * choice, and eight prefilled agent cards (6–12).  "Validate setup" asks the
+ * choice, and eight prefilled agent cards (6–12) shown as a table with one
+ * row per agent; a row opens the full card in a dialog.  "Validate setup" asks the
  * backend for every problem at once (POST /runs/validate) and shows each one
  * next to its field and in a summary; "Create and open" saves the initial
  * checkpoint (POST /runs) and opens the run paused.
@@ -15,7 +16,9 @@ import { ContextSettingsEditor, MapView, PlantRulesEditor } from "../components/
 import { NumberField } from "../components/common/NumberField";
 import { PageHeader } from "../components/common/PageHeader";
 import { ErrorLine, FieldProblems, ProblemSummary } from "../components/common/Problems";
+import { AgentCardDialog } from "../components/setup/AgentCardDialog";
 import { AgentCardEditor } from "../components/setup/AgentCardEditor";
+import { AgentTable } from "../components/setup/AgentTable";
 import { ModelSelect, UnavailableModels } from "../components/setup/ModelSelect";
 import { WorldSettings } from "../components/setup/WorldSettings";
 import { useFetched } from "../hooks/useFetched";
@@ -34,6 +37,7 @@ import {
   speciesList,
   withSpecies,
 } from "../state/setupForm";
+import "../setup.css";
 
 type Validation = "never" | "valid" | "invalid" | "stale";
 
@@ -50,15 +54,19 @@ export function NewSessionPage() {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [rulesText, setRulesText] = useState("");
   const [rulesTextError, setRulesTextError] = useState<string | null>(null);
+  const [openCard, setOpenCard] = useState<number | null>(null);
 
   useEffect(() => {
     document.title = "New session · Empyrean";
     let cancelled = false;
-    Promise.all([getDefaults(8), getDefaults(MAX_AGENTS)])
+    // The MAX_AGENTS request only supplies templates for "Add agent"; if it
+    // fails (e.g. an older backend that caps agent_count lower) new rows copy
+    // the last card instead (setupForm.newCard).
+    Promise.all([getDefaults(8), getDefaults(MAX_AGENTS).catch(() => null)])
       .then(([defaults, full]) => {
         if (cancelled) return;
         setRequest(defaults);
-        setTemplates(full.agents);
+        setTemplates(full?.agents ?? defaults.agents);
         setRulesText(otherRulesText(defaults));
       })
       .catch((e) => {
@@ -92,6 +100,11 @@ export function NewSessionPage() {
     if (validation !== "never") setValidation("stale");
   };
   const setCard = (index: number, card: AgentCard) => update({ ...request, agents: request.agents.map((c, i) => (i === index ? card : c)) });
+  const removeCard = (index: number) => {
+    update({ ...request, agents: request.agents.filter((_, i) => i !== index) });
+    setOpenCard((open) => (open === null || open === index ? null : open > index ? open - 1 : open));
+  };
+  const shownCard = openCard !== null && openCard < request.agents.length ? openCard : null;
   const defaultModel = modelList.find((m) => m.key === request.default_model_key) ?? null;
   const at = (...paths: string[]) => problemsAt(problems, ...paths);
   const generalProblems = problemsOutside(problems, [
@@ -238,28 +251,24 @@ export function NewSessionPage() {
         </div>
       </section>
 
-      <section className="setup-section">
+      <section className="setup-section" aria-label="Agents">
         <h2>
-          Agent cards ({request.agents.length}; {MIN_AGENTS}–{MAX_AGENTS} allowed)
+          Agents ({request.agents.length}; {MIN_AGENTS}–{MAX_AGENTS} allowed)
         </h2>
-        <p className="hint">Each card becomes one agent. Values are prefilled from the defaults; change anything, then validate.</p>
+        <p className="hint">
+          One row per agent, prefilled from the defaults. Click a row or "Edit…" to open its full card: every stat, model, persona, notebook, context settings
+          and starting skills.
+        </p>
         <FieldProblems problems={at("agents")} />
-        <div className="card-grid">
-          {request.agents.map((card, index) => (
-            <AgentCardEditor
-              key={index}
-              card={card}
-              index={index}
-              problems={problems}
-              models={modelList}
-              defaultModelKey={request.default_model_key}
-              runContext={request.context}
-              canRemove={request.agents.length > MIN_AGENTS}
-              onChange={(next) => setCard(index, next)}
-              onRemove={() => update({ ...request, agents: request.agents.filter((_, i) => i !== index) })}
-            />
-          ))}
-        </div>
+        <AgentTable
+          cards={request.agents}
+          problems={problems}
+          defaultModelKey={request.default_model_key}
+          canRemove={request.agents.length > MIN_AGENTS}
+          openIndex={shownCard}
+          onEdit={setOpenCard}
+          onRemove={removeCard}
+        />
         <div className="action-row">
           <button
             type="button"
@@ -267,9 +276,13 @@ export function NewSessionPage() {
             disabled={request.agents.length >= MAX_AGENTS}
             onClick={() => update({ ...request, agents: [...request.agents, newCard(request.agents, templates)] })}
           >
-            Add agent card
+            Add agent
           </button>
-          {request.agents.length >= MAX_AGENTS ? <span className="hint">At most {MAX_AGENTS} agents.</span> : null}
+          {request.agents.length >= MAX_AGENTS ? (
+            <span className="hint">At most {MAX_AGENTS} agents.</span>
+          ) : request.agents.length <= MIN_AGENTS ? (
+            <span className="hint">A run needs at least {MIN_AGENTS} agents.</span>
+          ) : null}
         </div>
       </section>
 
@@ -360,6 +373,39 @@ export function NewSessionPage() {
         </button>
         <span className={`validation validation-${validation}`}>{validationText}</span>
       </div>
+
+      {shownCard !== null ? (
+        <AgentCardDialog
+          title={`Agent ${request.agents[shownCard].id || `card ${shownCard + 1}`} · ${request.agents[shownCard].name || "(no name)"}`}
+          subtitle={`Row ${shownCard + 1} of ${request.agents.length}. Changes apply to the table as you type.`}
+          onClose={() => setOpenCard(null)}
+          footer={
+            <>
+              <button type="button" className="btn" disabled={busy !== null} onClick={() => void validate()}>
+                {busy === "validate" ? "Validating…" : "Validate setup"}
+              </button>
+              <span className={`validation validation-${validation}`}>
+                {validation === "invalid"
+                  ? `${problemsUnder(problems, `agents[${shownCard}]`).length} problem(s) on this agent, ${problems.length} in total.`
+                  : validationText}
+              </span>
+            </>
+          }
+        >
+          <AgentCardEditor
+            card={request.agents[shownCard]}
+            index={shownCard}
+            problems={problems}
+            models={modelList}
+            defaultModelKey={request.default_model_key}
+            runContext={request.context}
+            canRemove={request.agents.length > MIN_AGENTS}
+            inDialog
+            onChange={(next) => setCard(shownCard, next)}
+            onRemove={() => removeCard(shownCard)}
+          />
+        </AgentCardDialog>
+      ) : null}
     </div>
   );
 }

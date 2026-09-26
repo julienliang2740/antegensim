@@ -1,12 +1,14 @@
 /**
  * Entry page (spec U10 "resume an old session" / "start a new session": the
- * two clear entry choices).
+ * two clear entry choices, plus the "How the world works" instructions).
  */
 
 import { useEffect } from "react";
 import { getHealth } from "../api/client";
 import { useFetched } from "../hooks/useFetched";
 import { navigate } from "../hooks/useHashRoute";
+import { openInstructions } from "./InstructionsPage";
+import "../setup.css";
 
 export function EntryPage() {
   const health = useFetched("health", () => getHealth());
@@ -19,20 +21,20 @@ export function EntryPage() {
         <h1>Empyrean</h1>
         <p>LLM artificial-life world — operator console (prototype)</p>
       </header>
-      <div className="entry-choices">
+      <div className="entry-choices entry-choices-three">
         <button type="button" className="choice" onClick={() => navigate({ name: "new" })}>
           <span className="choice-title">New session</span>
-          <span className="choice-text">Set up the world, plant rules, context settings and 6–12 agent cards (8 prefilled), then open the new run paused.</span>
+          <span className="choice-text">Set up a new world.</span>
         </button>
         <button type="button" className="choice" onClick={() => navigate({ name: "resume" })}>
           <span className="choice-title">Resume session</span>
-          <span className="choice-text">Pick a saved run and open it paused at its latest saved turn, ready to inspect or continue.</span>
+          <span className="choice-text">Open an old run to resume it or replay it.</span>
+        </button>
+        <button type="button" className="choice choice-secondary" onClick={openInstructions}>
+          <span className="choice-title">How the world works</span>
+          <span className="choice-text">The rules of the Empyrean: resources, plants, actions, skills, combat, and what you can do as the operator.</span>
         </button>
       </div>
-      <p className="entry-hint">
-        <strong>Continue from history:</strong> resume a run, go back to a recorded turn with the timeline arrows, then in <em>God mode</em> use "Create
-        continuation from turn …". The new run starts from that checkpoint; the original run and its future stay untouched.
-      </p>
       <p className="hint">
         Backend:{" "}
         {health.data ? (

@@ -29,9 +29,10 @@ export interface AgentViewOverlay {
 }
 
 /**
- * SVG grid of `map.region` with terrain, axes, occupant count badges, pan
- * (drag, arrow buttons, keyboard arrows), zoom buttons, "Go to (x, y)" and a
- * hover tooltip with up to 8 occupants.  Positions come from `entities`
+ * SVG grid of `map.region` with terrain, axes, one colour-coded dot per
+ * occupant (with "+N" when a cell is too small for every dot), pan (drag,
+ * arrow buttons, keyboard arrows), zoom buttons, "Go to (x, y)" and a hover
+ * tooltip with up to 8 occupants (the hovered dot's row highlighted).  Positions come from `entities`
  * (entity.position), so pass every entity of the viewed turn, dead included
  * (`flattenEntities(turn.entities)`).
  */
@@ -45,14 +46,18 @@ export interface MapViewProps {
   selectedEntityId: string | null;
   /** Called on a click (not a drag) inside the region and by "Go to". */
   onSelectPoint(p: Point): void;
-  /** Called after onSelectPoint when the clicked cell holds exactly one entity (one click opens it). */
+  /** Called after onSelectPoint when a dot is clicked, or the clicked cell holds exactly one entity (one click opens it). */
   onSelectEntity(id: string): void;
-  /** Ring drawn around this agent's cell (for example the acting agent). */
+  /** Ring drawn around this agent's dot (for example the acting agent). */
   highlightAgentId?: string | null;
   /** Optional: gives plant stage names in the tooltip (turn.rules). */
   rules?: RulesConfig | null;
-  /** Height of the map viewport in px (default 520); the width follows the container. */
+  /** Height of the map viewport in px (default 520); the width follows the container. Ignored with `fill`. */
   heightPx?: number;
+  /** Fill the container's height (the container must give the map a definite height); small regions open zoomed to fit. */
+  fill?: boolean;
+  /** Remember the legend's entity-kind toggles in localStorage under this key (not remembered when absent). */
+  persistKey?: string;
   /** True while the inspector's agent view is on (with no overlay the map says it is still omniscient). */
   agentView?: boolean;
   /** Agent view: draw only this agent's sightings (at their last observed positions) and the agent at its believed position. */

@@ -3,8 +3,10 @@
  * agent and status, including waiting for a model response or an error;
  * INTERFACES section 3 status machine and "Recover (pause)" in error).
  *
- * Layout rules (usability review):
+ * Layout rules (usability review; the bar lives in the run page's left rail):
  * - The run controls sit ABOVE this bar, so nothing here can move them.
+ * - Facts are "label  value" rows; long values (next step, usage) wrap under
+ *   their label.
  * - The model-call line has a fixed-height slot that is always present
  *   ("No model call in progress" when idle), so the page below does not jump
  *   every turn during Play.  It shows whenever a call is pending, including
@@ -66,10 +68,10 @@ export function StatusBar(props: StatusBarProps) {
     <section className={`status-bar status-${status.state}`} aria-label="Run status">
       <div className="status-headline">
         <span className={`state-badge state-${status.state}`}>{stateWord(status.state)}</span>
-        <span className={`status-sentence${active ? " status-sentence-oneline" : ""}`} title={stateSentence(status, name)}>
-          {stateSentence(status, name)}
-        </span>
       </div>
+      <p className={`status-sentence${active ? " status-sentence-active" : ""}`} title={stateSentence(status, name)}>
+        {stateSentence(status, name)}
+      </p>
       <dl className="status-facts">
         <Fact label="Round" value={String(status.round)} />
         <Fact label="Turn" value={turnText(status)} />
@@ -80,14 +82,14 @@ export function StatusBar(props: StatusBarProps) {
         <Fact label="Living agents" value={String(status.living_agent_count)} />
         <Fact label="Staged edits" value={String(status.staged_intervention_count)} />
         {/* Always its own full-width row, so the bar never grows by a line when the usage text lengthens during Play. */}
-        <Fact label={usageLabel} value={usageText} wide row />
+        <Fact label={usageLabel} value={usageText} wide row wrap />
       </dl>
       <div className={`status-slot${call ? " status-waiting" : ""}`}>
         {call ? (
           <>
-            <span className="status-slot-text">
-              Waiting for model: <strong>{name(call.agent_id)}</strong> asked <code>{call.model_key}</code> (call <code>{call.call_id}</code>) —{" "}
-              {secondsSince(call.started_at, props.now).toFixed(1)} s so far.
+            <span className="status-slot-text" title={`call ${call.call_id}`}>
+              Waiting for model: <strong>{name(call.agent_id)}</strong> asked <code>{call.model_key}</code> — {secondsSince(call.started_at, props.now).toFixed(1)} s
+              so far.
             </span>
             <button type="button" className="btn btn-small" onClick={props.onViewPending}>
               View request in progress

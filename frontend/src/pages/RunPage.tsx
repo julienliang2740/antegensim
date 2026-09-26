@@ -1,18 +1,22 @@
 /**
  * The run page (spec "Sessions and run controls" and "Display and historical
- * inspection"; INTERFACES sections 3, 7, 9, 10, 11).
+ * inspection"; INTERFACES sections 3, 7, 9, 10, 11).  The board is the hero.
  *
- * Top: run controls (first, so status changes never move them), the status
- * bar and the history timeline.  Left: tabs for the map with occupants and
- * inspector, the viewed turn's record, god mode and the read-only
- * rules/settings.  Right: the live activity log, which keeps running while an
- * older turn is viewed (a bottom drawer on narrow screens).
- *
- * Map tab (spec U1/U2 "selection opens a detailed inspector"): the map and the
- * always-visible roster / entity index on the left; on the right a column
- * that stays in view (sticky, scrolling on its own) with the occupants of the
- * selected point and the inspector.  When the tab is too narrow for two
- * columns the inspector follows the map and a selection scrolls it into view.
+ * Three columns from 1200 px wide, filling the window (each column scrolls on
+ * its own):
+ * - LEFT rail: run name, the run controls (first, so status changes never
+ *   move them), the status facts with the model-call slot and Recover, the
+ *   history timeline (round/turn arrows, turn selector, LIVE/HISTORY, Return
+ *   to live) and a compact agent roster.
+ * - CENTRE: the map at the full height of the window, its toolbar above and
+ *   the legend always visible below it.  Decision packets and model calls
+ *   open over the map (Close / Escape returns to it).
+ * - RIGHT: tabs (Inspector, Turn record, God mode, Rules & settings) and the
+ *   live activity log docked at the bottom (collapsible).  God mode and the
+ *   rules widen this column; "Wider panel" does it for any tab.
+ * Below 1200 px the rail and the map share the top row and the tabs follow
+ * below; below 900 px everything stacks with the map first.  On narrow
+ * screens the log is a drawer at the bottom of the window.
  *
  * Data flow: useRunFeed holds the run open and polls status + events;
  * everything that only changes at a commit (live checkpoint, settings, rules,
@@ -21,6 +25,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import {
   createContinuation,
   getAssumptions,
@@ -53,6 +58,7 @@ import type { RecordTarget } from "../state/records";
 import { discardedAttemptSeqs, latestFailedTurn } from "../state/feed";
 import { RulesTab } from "../components/run/RulesTab";
 import { RunControls } from "../components/run/RunControls";
+import { Splitter } from "../components/run/Splitter";
 import { SpeciesRulePanel } from "../components/run/SpeciesRulePanel";
 import { StatusBar } from "../components/run/StatusBar";
 import { Timeline } from "../components/run/Timeline";
@@ -63,17 +69,16 @@ import { useFetched } from "../hooks/useFetched";
 import { navigate } from "../hooks/useHashRoute";
 import { useHistoryView, useTurnIndex } from "../hooks/useRunData";
 import { useRunFeed } from "../hooks/useRunFeed";
+import { MIN_LOG_H, MIN_RAIL_W, MIN_SIDE_W, useRunLayout } from "../hooks/useRunLayout";
 import { useThrottledKey } from "../hooks/useThrottledKey";
 import { errorText, withReopen } from "../state/runSessions";
 import { allModelsFake, controlAvailability, isIdle } from "../state/statusText";
 
-type Tab = "map" | "turn" | "god" | "rules";
+type Tab = "inspect" | "turn" | "god" | "rules";
 
 /** Minimum time between commit-driven reloads while the run is busy. */
 const COMMIT_REFRESH_MS = 1000;
 
-/** Window width from which the map tab opens with the wide inspector column (usability review: no sideways scrolling at 1440 px). */
-const WIDE_INSPECTOR_MIN_WIDTH = 1360;
 
 /** Error carrying backend-style problems, understood by the inspect components (problemsFromError). */
 class ProblemsError extends Error {
@@ -112,11 +117,16 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
 
   // ------------------------------------------------------------------ view state
   const [viewTurnId, setViewTurnId] = useState<string | null>(props.initialTurnId);
-  const [tab, setTab] = useState<Tab>("map");
+  const [tab, setTab] = useState<Tab>("inspect");
   const [selectedPoint, setSelectedPoint] = useState<Point | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [agentView, setAgentView] = useState(false);
-  const [wideInspector, setWideInspector] = useState(() => typeof window !== "undefined" && window.innerWidth >= WIDE_INSPECTOR_MIN_WIDTH);
+  // "Wider panel": the right column takes more room from the map (God mode and the rules always do).
+  const [wideSide, setWideSide] = useState(false);
+  const [logCollapsed, setLogCollapsed] = useState(false);
+  const sideWideNow = wideSide || tab === "god" || tab === "rules";
+  // Splitter sizes (three-column layout only), remembered in localStorage.
+  const layout = useRunLayout(sideWideNow);
   // Lines of a discarded attempt of a saved turn (INTERFACES section 8): known once the saved turn's event range arrives.
   const [discardedSeqs, setDiscardedSeqs] = useState<ReadonlySet<number>>(() => new Set());
   const [record, setRecord] = useState<RecordTarget | null>(null);
@@ -141,7 +151,19 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     });
   }, [liveTurnRecord, feed.events]);
   const viewed: TurnView | null = viewTurnId === null ? live.data : ((history.dataKey === viewTurnId ? history.data : null) ?? history.data ?? live.data);
-  const shownTurnId = viewTurnId ?? liveTurnId ?? "";
+  // "Before" values for the turn record: the previous saved turn, loaded only while that tab is shown
+  // (a continuation's first turn has its previous turn in the parent run: not loaded).
+  const previousTurnId = tab === "turn" && viewed && !viewed.parent ? viewed.turn.previous_turn_id : null;
+  const previous = useHistoryView(runId, previousTurnId);
+  const previousView = previousTurnId !== null && previous.dataKey === previousTurnId ? previous.data : null;
+  const previousNote =
+    viewed?.parent && viewed.turn.previous_turn_id
+      ? `the previous turn is in the parent run ${viewed.parent.run_id}`
+      : previousTurnId === null
+        ? null
+        : previous.error
+          ? `could not load the previous turn ${previousTurnId}: ${previous.error}`
+          : `loading the previous turn ${previousTurnId}…`;
 
   useEffect(() => {
     document.title = `${summary.data?.name ?? runId} · Empyrean`;
@@ -212,7 +234,11 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   // Bring the inspector into view after a selection made by the operator (map, occupant row, roster, find).
   const inspectorRef = useRef<HTMLDivElement | null>(null);
   const [revealTick, setRevealTick] = useState(0);
-  const reveal = () => setRevealTick((n) => n + 1);
+  // An operator selection shows the inspector (God mode keeps its tab: its forms use the selection).
+  const reveal = () => {
+    setTab((current) => (current === "god" ? current : "inspect"));
+    setRevealTick((n) => n + 1);
+  };
   useEffect(() => {
     if (revealTick === 0) return;
     const frame = requestAnimationFrame(() => revealInspector(inspectorRef.current));
@@ -235,6 +261,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   /** A map click or "Select point": a selection that is not at the new point is cleared, so the column shows that point. */
   const selectPoint = (p: Point) => {
     setSelectedPoint(p);
+    setTab((current) => (current === "god" ? current : "inspect"));
     if (selectedEntity && (selectedEntity.position.x !== p.x || selectedEntity.position.y !== p.y)) setSelectedId(null);
   };
 
@@ -366,56 +393,110 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   const failedTurn = status.last_error ? latestFailedTurn(feed.events, committedSeq) : null;
   const allFake = allModelsFake(live.data?.settings ?? null, models.data);
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "map", label: "Map & inspector" },
-    { id: "turn", label: `Turn record (${shownTurnId})` },
-    { id: "god", label: `God mode${stagedList.length ? ` (${stagedList.length} staged)` : ""}` },
-    { id: "rules", label: "Rules & settings" },
+  const tabs: { id: Tab; label: string; title: string }[] = [
+    { id: "inspect", label: "Inspector", title: "Occupants of the selected cell and the selected entity" },
+    { id: "turn", label: "Turn record", title: `What happened in turn ${viewed.turn.turn_id}` },
+    { id: "god", label: `God mode${stagedList.length ? ` (${stagedList.length})` : ""}`, title: `God mode${stagedList.length ? `: ${stagedList.length} staged edit(s)` : ""}` },
+    { id: "rules", label: "Rules", title: "Rules & settings (read-only)" },
   ];
+  const layoutClass = ["run-layout", sideWideNow ? "run-side-wide" : "", logCollapsed ? "run-log-collapsed" : "", viewTurnId !== null ? "run-history" : ""]
+    .filter(Boolean)
+    .join(" ");
+
+  const layoutStyle = layout.threeColumn
+    ? ({ "--rail-w": `${layout.railW}px`, "--side-w": `${layout.sideW}px`, "--log-h": `${layout.logH}px` } as CSSProperties)
+    : undefined;
 
   return (
-    <div className="page run-page">
-      <div className="run-main">
-        <div className="run-left">
-          <PageHeader
-            title={runName}
-            subtitle={
+    <div className={layoutClass} style={layoutStyle}>
+      <aside className="run-rail" aria-label="Run">
+        <header className="rail-header">
+          <h1 className="rail-title" title={runName}>
+            {runName}
+          </h1>
+          <div className="rail-ids">
+            run <code>{runId}</code>
+            <br />
+            world <code>{status.world_id}</code>
+            {parentRun ? (
               <>
-                run <code>{runId}</code> · world <code>{status.world_id}</code>
-                {parentRun ? (
-                  <>
-                    {" "}
-                    · continuation of <code>{parentRun.run_id}</code> from turn <code>{parentRun.turn_id}</code>
-                  </>
-                ) : null}
+                <br />
+                continuation of <code>{parentRun.run_id}</code> from turn <code>{parentRun.turn_id}</code>
               </>
-            }
-          />
-          <RunControls allowed={allowed} inFlight={inFlight} error={commandError} onCommand={(c) => void send(c)} />
-          <StatusBar
-            status={status}
-            name={name}
-            realBudgetUsd={live.data?.settings.real_budget_usd ?? null}
-            now={now}
-            recoverEnabled={allowed.recover}
-            failedTurn={failedTurn}
-            allFake={allFake}
-            onRecover={() => void send("pause")}
-            onViewPending={() => openRecord({ kind: "pending" })}
-          />
-          <Timeline
-            turns={index.turns}
-            liveTurnId={status.current_turn_id}
-            viewTurnId={viewTurnId}
-            loading={viewTurnId !== null && history.loading}
-            loadError={viewTurnId !== null ? history.error : index.error}
-            name={name}
-            parent={viewed.parent}
-            onView={setViewTurnId}
-            onOpenParent={(parent) => navigate({ name: "run", runId: parent.run_id, turnId: parent.turn_id })}
-          />
-          <ErrorLine text={live.error} prefix="Live state:" />
-          {record ? (
+            ) : null}
+          </div>
+          <button type="button" className="btn btn-small rail-back" onClick={() => navigate({ name: "entry" })}>
+            Back to sessions
+          </button>
+        </header>
+        <RunControls allowed={allowed} inFlight={inFlight} error={commandError} onCommand={(c) => void send(c)} onResetLayout={layout.reset} />
+        <StatusBar
+          status={status}
+          name={name}
+          realBudgetUsd={live.data?.settings.real_budget_usd ?? null}
+          now={now}
+          recoverEnabled={allowed.recover}
+          failedTurn={failedTurn}
+          allFake={allFake}
+          onRecover={() => void send("pause")}
+          onViewPending={() => openRecord({ kind: "pending" })}
+        />
+        <Timeline
+          turns={index.turns}
+          liveTurnId={status.current_turn_id}
+          viewTurnId={viewTurnId}
+          loading={viewTurnId !== null && history.loading}
+          loadError={viewTurnId !== null ? history.error : index.error}
+          name={name}
+          parent={viewed.parent}
+          onView={setViewTurnId}
+          onOpenParent={(parent) => navigate({ name: "run", runId: parent.run_id, turnId: parent.turn_id })}
+        />
+        <ErrorLine text={live.error} prefix="Live state:" />
+        <AgentRoster agents={agents} selectedId={selectedId} actingId={highlightAgentId} onSelect={selectEntity} compact />
+      </aside>
+
+      <Splitter
+        orientation="vertical"
+        label="Resize the left panel"
+        className="splitter-rail"
+        value={layout.railW}
+        min={MIN_RAIL_W}
+        max={layout.railMax}
+        direction={1}
+        onChange={layout.setRailW}
+        onReset={() => layout.resetPart("rail")}
+      />
+
+      <main className="run-center" aria-label="World map">
+        {viewTurnId !== null ? (
+          <div className="map-history-strip" role="status">
+            <span className="mode-badge mode-history">HISTORY</span>
+            <span>
+              The map shows turn <code>{viewTurnId}</code> (round {viewed.turn.round}), not the live state.
+            </span>
+            <button type="button" className="btn btn-small" onClick={() => setViewTurnId(null)}>
+              Back to live
+            </button>
+          </div>
+        ) : null}
+        <MapView
+          map={viewed.map}
+          entities={entities}
+          removed={removed}
+          selectedPoint={selectedPoint}
+          selectedEntityId={selectedId}
+          onSelectPoint={selectPoint}
+          onSelectEntity={selectOccupant}
+          highlightAgentId={highlightAgentId}
+          rules={viewed.rules}
+          fill
+          persistKey="run"
+          agentView={agentView}
+          agentViewOverlay={agentViewOverlay}
+        />
+        {record ? (
+          <div className="record-overlay">
             <RecordViewer
               runId={runId}
               target={record}
@@ -426,7 +507,24 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
               onOpen={openRecord}
               onClose={closeRecord}
             />
-          ) : null}
+          </div>
+        ) : null}
+      </main>
+
+      <Splitter
+        orientation="vertical"
+        label="Resize the right panel"
+        className="splitter-side"
+        value={layout.sideW}
+        min={MIN_SIDE_W}
+        max={layout.sideMax}
+        direction={-1}
+        onChange={layout.setSideW}
+        onReset={() => layout.resetPart("side")}
+      />
+
+      <section className="run-side" aria-label="Inspector and records">
+        <div className="tabs-row">
           <div className="tabs" role="tablist" aria-label="Run views">
             {tabs.map((t) => (
               <button
@@ -436,6 +534,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
                 id={`tab-${t.id}`}
                 aria-selected={tab === t.id}
                 aria-controls={`panel-${t.id}`}
+                title={t.title}
                 className={`tab${tab === t.id ? " tab-active" : ""}`}
                 onClick={() => setTab(t.id)}
               >
@@ -443,147 +542,147 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            className="btn btn-small inspector-width-toggle"
+            aria-pressed={sideWideNow}
+            aria-label="Wider panel"
+            disabled={tab === "god" || tab === "rules"}
+            title={tab === "god" || tab === "rules" ? "This tab always uses the wide panel" : "Give this panel more room (the map gets narrower)"}
+            onClick={() => setWideSide((w) => !w)}
+          >
+            {sideWideNow ? "⇥" : "⇤"}
+          </button>
+        </div>
 
-          <div role="tabpanel" id="panel-map" aria-labelledby="tab-map" hidden={tab !== "map"} className={`map-tab${wideInspector ? " map-tab-wide-side" : ""}`}>
-            <div className="area-find">
-              <FindBar onFindEntity={findEntityById} onFindPoint={findPoint} />
-            </div>
-            <div className="area-map">
-              <MapView
-                map={viewed.map}
-                entities={entities}
-                removed={removed}
-                selectedPoint={selectedPoint}
-                selectedEntityId={selectedId}
-                onSelectPoint={selectPoint}
-                onSelectEntity={selectOccupant}
-                highlightAgentId={highlightAgentId}
-                rules={viewed.rules}
-                heightPx={480}
-                agentView={agentView}
-                agentViewOverlay={agentViewOverlay}
-              />
-            </div>
-            <div className="area-side">
-              <OccupantList
-                point={selectedPoint}
-                occupants={occupants}
-                selectedEntityId={selectedId}
-                onSelectEntity={selectOccupant}
-                rules={viewed.rules}
-                terrain={selectedTerrain}
-                agentView={agentView}
-                agentViewOverlay={agentViewOverlay}
-              />
-              <div className="area-inspector" ref={inspectorRef}>
-                {selectedEntity ? (
-                  <div className="inspector-nav">
-                    <button type="button" className="btn btn-small" onClick={() => setSelectedId(null)}>
-                      Clear selection
-                    </button>
-                    <span className="hint">
-                      Inspecting <code>{selectedEntity.id}</code>
-                    </span>
-                    <button type="button" className="btn btn-small inspector-width-toggle" aria-pressed={wideInspector} onClick={() => setWideInspector((w) => !w)}>
-                      {wideInspector ? "Narrower inspector" : "Wider inspector"}
-                    </button>
-                  </div>
-                ) : null}
-                {selectedAgentId ? (
-                  <AgentShortcuts
-                    agentId={selectedAgentId}
-                    agentLabel={name(selectedAgentId)}
-                    turns={index.turns}
-                    shownTurnId={viewed.turn.turn_id}
-                    onOpen={openRecord}
-                    onViewTurn={(turnId) => setViewTurnId(turnId === status.current_turn_id ? null : turnId)}
-                  />
-                ) : null}
-                <InspectorPanel
-                  entity={selectedEntity}
-                  turn={viewed}
-                  knowledge={knowledgeView}
-                  settings={settings.data}
-                  rules={rules.data ?? viewed.rules}
-                  onOpenModelCall={(callId) => openRecord({ kind: "call", turnId: viewed.turn.turn_id, callId })}
-                  onOpenPacket={(packetId) => openRecord({ kind: "packet", turnId: viewed.turn.turn_id, packetId })}
-                  agentView={agentView}
-                  onToggleAgentView={() => setAgentView((v) => !v)}
-                />
-                {knowledge.error && selectedAgentId ? <ErrorLine text={knowledge.error} prefix="Knowledge:" /> : null}
-                {selectedEntity?.kind === "plant" && live.data ? (
-                  <SpeciesRulePanel
-                    key={selectedEntity.species}
-                    species={selectedEntity.species}
-                    liveRule={(rules.data ?? live.data.rules).plant_species[selectedEntity.species] ?? null}
-                    stageIndex={selectedEntity.stage_index}
-                    onStage={onStage}
-                  />
-                ) : null}
+        <div role="tabpanel" id="panel-inspect" aria-labelledby="tab-inspect" hidden={tab !== "inspect"} className="side-panel area-side">
+          <FindBar onFindEntity={findEntityById} onFindPoint={findPoint} />
+          <OccupantList
+            point={selectedPoint}
+            occupants={occupants}
+            selectedEntityId={selectedId}
+            onSelectEntity={selectOccupant}
+            rules={viewed.rules}
+            terrain={selectedTerrain}
+            agentView={agentView}
+            agentViewOverlay={agentViewOverlay}
+          />
+          <div className="area-inspector" ref={inspectorRef}>
+            {selectedEntity ? (
+              <div className="inspector-nav">
+                <button type="button" className="btn btn-small" onClick={() => setSelectedId(null)}>
+                  Clear selection
+                </button>
+                <span className="hint">
+                  Inspecting <code>{selectedEntity.id}</code>
+                </span>
               </div>
-            </div>
-            <div className="area-lists">
-              <AgentRoster agents={agents} selectedId={selectedId} actingId={highlightAgentId} onSelect={selectEntity} />
-              <EntityIndex entities={others} selectedId={selectedId} onSelect={selectEntity} />
-            </div>
-          </div>
-
-          <div role="tabpanel" id="panel-turn" aria-labelledby="tab-turn" hidden={tab !== "turn"}>
-            {/* Mounted only while shown: its event lines would otherwise duplicate the live log's text in the page. */}
-            {tab === "turn" ? <TurnRecordTab view={viewed} name={name} onOpen={openRecord} /> : null}
-          </div>
-
-          <div role="tabpanel" id="panel-god" aria-labelledby="tab-god" hidden={tab !== "god"}>
-            {live.data ? (
-              <GodModeTab
-                live={live.data}
-                effective={settings.data}
-                models={models.data ?? []}
-                staged={stagedList}
-                viewTurnId={viewTurnId}
-                selectedPoint={selectedPoint}
-                selectedAgentId={selectedAgentId}
-                workingDir={workingDir}
-                onStage={onStage}
-                onDiscard={onDiscard}
-                onReloadWorking={onReloadWorking}
-                onCreateContinuation={onCreateContinuation}
+            ) : null}
+            {selectedAgentId ? (
+              <AgentShortcuts
+                agentId={selectedAgentId}
+                agentLabel={name(selectedAgentId)}
+                turns={index.turns}
+                shownTurnId={viewed.turn.turn_id}
+                onOpen={openRecord}
+                onViewTurn={(turnId) => setViewTurnId(turnId === status.current_turn_id ? null : turnId)}
               />
-            ) : (
-              <p className="hint">Waiting for the live state…</p>
-            )}
-            <ErrorLine text={staged.error} prefix="Staged edits:" />
-          </div>
-
-          <div role="tabpanel" id="panel-rules" aria-labelledby="tab-rules" hidden={tab !== "rules"}>
-            {tab === "rules" ? (
-              <RulesTab
-                rules={viewTurnId === null ? (rules.data ?? viewed.rules) : viewed.rules}
-                settings={viewTurnId === null ? (settings.data?.settings ?? viewed.settings) : viewed.settings}
-                effectiveContext={viewTurnId === null ? (settings.data?.effective_context ?? null) : null}
-                effectiveModel={viewTurnId === null ? (settings.data?.effective_model_key ?? null) : null}
-                limits={settings.data?.limits ?? null}
-                agentIds={Object.keys(viewed.entities.agents)}
-                name={name}
-                assumptions={assumptions.data?.entries ?? null}
-                assumptionsError={assumptions.error}
-                source={viewTurnId === null ? "live settings" : `as of turn ${viewTurnId}`}
+            ) : null}
+            <InspectorPanel
+              entity={selectedEntity}
+              turn={viewed}
+              knowledge={knowledgeView}
+              settings={settings.data}
+              rules={rules.data ?? viewed.rules}
+              onOpenModelCall={(callId) => openRecord({ kind: "call", turnId: viewed.turn.turn_id, callId })}
+              onOpenPacket={(packetId) => openRecord({ kind: "packet", turnId: viewed.turn.turn_id, packetId })}
+              agentView={agentView}
+              onToggleAgentView={() => setAgentView((v) => !v)}
+            />
+            {knowledge.error && selectedAgentId ? <ErrorLine text={knowledge.error} prefix="Knowledge:" /> : null}
+            {selectedEntity?.kind === "plant" && live.data ? (
+              <SpeciesRulePanel
+                key={selectedEntity.species}
+                species={selectedEntity.species}
+                liveRule={(rules.data ?? live.data.rules).plant_species[selectedEntity.species] ?? null}
+                stageIndex={selectedEntity.stage_index}
+                onStage={onStage}
               />
             ) : null}
           </div>
+          <EntityIndex entities={others} selectedId={selectedId} onSelect={selectEntity} />
         </div>
 
-        <aside className="run-right">
-          <ActivityLog
-            events={feed.events}
-            status={status}
-            committedSeq={committedSeq}
-            viewTurnId={viewTurnId}
-            discardedSeqs={discardedSeqs}
-            resets={feed.resets}
-            pollError={feed.pollError}
-          />
-        </aside>
+        <div role="tabpanel" id="panel-turn" aria-labelledby="tab-turn" hidden={tab !== "turn"} className="side-panel">
+          {/* Mounted only while shown: its event lines would otherwise duplicate the live log's text in the page. */}
+          {tab === "turn" ? <TurnRecordTab view={viewed} previous={previousView} previousNote={previousNote} name={name} onOpen={openRecord} /> : null}
+        </div>
+
+        <div role="tabpanel" id="panel-god" aria-labelledby="tab-god" hidden={tab !== "god"} className="side-panel">
+          {live.data ? (
+            <GodModeTab
+              live={live.data}
+              effective={settings.data}
+              models={models.data ?? []}
+              staged={stagedList}
+              viewTurnId={viewTurnId}
+              selectedPoint={selectedPoint}
+              selectedAgentId={selectedAgentId}
+              workingDir={workingDir}
+              onStage={onStage}
+              onDiscard={onDiscard}
+              onReloadWorking={onReloadWorking}
+              onCreateContinuation={onCreateContinuation}
+            />
+          ) : (
+            <p className="hint">Waiting for the live state…</p>
+          )}
+          <ErrorLine text={staged.error} prefix="Staged edits:" />
+        </div>
+
+        <div role="tabpanel" id="panel-rules" aria-labelledby="tab-rules" hidden={tab !== "rules"} className="side-panel">
+          {tab === "rules" ? (
+            <RulesTab
+              rules={viewTurnId === null ? (rules.data ?? viewed.rules) : viewed.rules}
+              settings={viewTurnId === null ? (settings.data?.settings ?? viewed.settings) : viewed.settings}
+              effectiveContext={viewTurnId === null ? (settings.data?.effective_context ?? null) : null}
+              effectiveModel={viewTurnId === null ? (settings.data?.effective_model_key ?? null) : null}
+              limits={settings.data?.limits ?? null}
+              agentIds={Object.keys(viewed.entities.agents)}
+              name={name}
+              assumptions={assumptions.data?.entries ?? null}
+              assumptionsError={assumptions.error}
+              source={viewTurnId === null ? "live settings" : `as of turn ${viewTurnId}`}
+            />
+          ) : null}
+        </div>
+      </section>
+
+      <Splitter
+        orientation="horizontal"
+        label="Resize the live activity log"
+        className="splitter-log"
+        value={layout.logH}
+        min={MIN_LOG_H}
+        max={layout.logMax}
+        direction={-1}
+        disabled={logCollapsed}
+        onChange={layout.setLogH}
+        onReset={() => layout.resetPart("log")}
+      />
+
+      <div className="run-log">
+        <ActivityLog
+          events={feed.events}
+          status={status}
+          committedSeq={committedSeq}
+          viewTurnId={viewTurnId}
+          discardedSeqs={discardedSeqs}
+          resets={feed.resets}
+          pollError={feed.pollError}
+          collapsed={logCollapsed}
+          onToggleCollapsed={() => setLogCollapsed((c) => !c)}
+        />
       </div>
     </div>
   );
@@ -591,20 +690,16 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
 
 /**
  * Scroll the inspector into view if its top is not comfortably visible.  In
- * the two-column map tab the side column scrolls on its own: it is reset to
- * its top (occupants, then the inspector) and, when needed, the page aligns
- * the column (and the map beside it) with the top of the window.  In the
- * one-column layout the page scrolls to the inspector itself.
+ * the three-column layout the right column's tab panel scrolls on its own;
+ * in the stacked layout the page does.
  */
 function revealInspector(block: HTMLElement | null): void {
   if (!block) return;
-  const column = block.closest<HTMLElement>(".area-side");
-  const ownScroll = column !== null && getComputedStyle(column).overflowY === "auto" && column.scrollHeight > column.clientHeight;
-  if (column && ownScroll) column.scrollTop = 0;
+  const panel = block.closest<HTMLElement>('[role="tabpanel"]');
+  const ownScroll = panel !== null && getComputedStyle(panel).overflowY === "auto" && panel.scrollHeight > panel.clientHeight;
+  const area = ownScroll && panel ? panel.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
   const top = block.getBoundingClientRect().top;
-  // "Visible" = the inspector starts in the upper part of the window, so its first facts can be read.
-  const visible = top >= 0 && top <= window.innerHeight * 0.62;
-  if (visible) return;
-  if (column && getComputedStyle(column).overflowY === "auto") column.scrollIntoView({ block: "start" });
-  else block.scrollIntoView({ block: "start" });
+  // "Visible" = the inspector starts in the upper part of its scroll area, so its first facts can be read.
+  const visible = top >= area.top && top <= area.top + (area.bottom - area.top) * 0.62;
+  if (!visible) block.scrollIntoView({ block: "start" });
 }

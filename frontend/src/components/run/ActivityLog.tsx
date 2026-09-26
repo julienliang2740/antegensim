@@ -12,8 +12,9 @@
  * A failed model call shows the provider's error, an invalid decision its
  * reason, and an operator edit what it changed.
  *
- * On narrow screens the page docks this log as a bottom drawer; "Hide log"
- * collapses it to its header line.
+ * The page docks this log at the bottom of its right column (a bottom drawer
+ * on narrow screens); "Hide log" collapses it to its header line, which then
+ * shows the newest line so live activity stays visible.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -32,12 +33,15 @@ export interface ActivityLogProps {
   discardedSeqs?: ReadonlySet<number>;
   resets: number;
   pollError: string | null;
+  /** Collapsed to its header (controlled by the page, which gives the space to the panels above). */
+  collapsed: boolean;
+  onToggleCollapsed(): void;
 }
 
 export function ActivityLog(props: ActivityLogProps) {
   const [follow, setFollow] = useState(true);
   const [hideRoutine, setHideRoutine] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const collapsed = props.collapsed;
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const resolved = useMemo(() => resolvedCallIds(props.events), [props.events]);
   const shown = useMemo(() => (hideRoutine ? props.events.filter((e) => !ROUTINE_KINDS.includes(e.kind)) : props.events), [props.events, hideRoutine]);
@@ -48,7 +52,8 @@ export function ActivityLog(props: ActivityLogProps) {
   }, [shown, follow, collapsed]);
 
   const first = props.events[0]?.seq;
-  const last = props.events[props.events.length - 1]?.seq;
+  const newest = props.events[props.events.length - 1];
+  const last = newest?.seq;
   const unsavedTag = unsavedLineTag(props.status);
 
   return (
@@ -56,36 +61,52 @@ export function ActivityLog(props: ActivityLogProps) {
       <div className="log-head">
         <strong>Live activity</strong>
         <span className="log-range">
-          {props.events.length} lines{first !== undefined ? ` (seq ${first}–${last})` : ""}
+          {props.events.length} lines
+          {first !== undefined ? ` (seq ${first}–${last})` : ""}
           {props.resets > 0 ? ` · feed restarted ${props.resets}×` : ""}
         </span>
-        <button type="button" className="btn btn-small log-collapse-toggle" aria-expanded={!collapsed} onClick={() => setCollapsed((c) => !c)}>
+        <button type="button" className="btn btn-small log-collapse-toggle" aria-expanded={!collapsed} onClick={props.onToggleCollapsed}>
           {collapsed ? "Show log" : "Hide log"}
         </button>
       </div>
-      <div className="log-controls">
-        <label>
-          <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> Auto-scroll (follow newest)
-        </label>
-        <label>
-          <input type="checkbox" checked={hideRoutine} onChange={(e) => setHideRoutine(e.target.checked)} /> Hide routine world events
-        </label>
-        <button
-          type="button"
-          className="btn btn-small"
-          onClick={() => {
-            const el = scrollRef.current;
-            if (el) el.scrollTop = el.scrollHeight;
-          }}
-        >
-          Jump to newest
-        </button>
-      </div>
-      <div className="log-legend">
-        <span className="log-legend-item cat-pending">pending model call</span>
-        <span className="log-legend-item cat-progress">not saved yet (turn in progress or failed attempt)</span>
-        <span className="log-legend-item cat-operator">operator (god mode)</span>
-        <span className="log-legend-item cat-error">failure / error</span>
+      {collapsed && newest ? (
+        <div className="log-newest" title={newest.summary}>
+          <span className="log-tag">{feedTag(newest)}</span> <span className="log-actor">{newest.actor}</span> {newest.summary}
+        </div>
+      ) : null}
+      <div className="log-bar">
+        <div className="log-controls">
+          <label title="Keep the newest line in view">
+            <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> Auto-scroll
+          </label>
+          <label title="Hide upkeep, plant growth, fruit, seed and germination lines">
+            <input type="checkbox" checked={hideRoutine} onChange={(e) => setHideRoutine(e.target.checked)} /> Hide routine world events
+          </label>
+          <button
+            type="button"
+            className="btn btn-small"
+            onClick={() => {
+              const el = scrollRef.current;
+              if (el) el.scrollTop = el.scrollHeight;
+            }}
+          >
+            Jump to newest
+          </button>
+        </div>
+        <div className="log-legend" aria-label="Log line colours">
+          <span className="log-legend-item cat-pending" title="A model call that has not answered yet">
+            pending call
+          </span>
+          <span className="log-legend-item cat-progress" title="Not saved yet: the turn in progress, or a failed attempt">
+            not saved yet
+          </span>
+          <span className="log-legend-item cat-operator" title="Operator edits (god mode)">
+            operator
+          </span>
+          <span className="log-legend-item cat-error" title="Failures and errors">
+            error
+          </span>
+        </div>
       </div>
       {props.pollError ? <div className="log-warning">Feed problem: {props.pollError}</div> : null}
       <div className="log-scroll" ref={scrollRef} role="log" aria-live="off">
@@ -105,7 +126,13 @@ export function ActivityLog(props: ActivityLogProps) {
   );
 }
 
-function LogLine(props: { event: Event; pending: ReturnType<typeof pendingStatus> | null; unsavedTag: string | null; discarded: boolean; highlighted: boolean }) {
+function LogLine(props: {
+  event: Event;
+  pending: ReturnType<typeof pendingStatus> | null;
+  unsavedTag: string | null;
+  discarded: boolean;
+  highlighted: boolean;
+}) {
   const { event } = props;
   const category = lineCategory(event);
   const cost = costText(event);
@@ -131,7 +158,7 @@ function LogLine(props: { event: Event; pending: ReturnType<typeof pendingStatus
     .filter(Boolean)
     .join(" ");
   return (
-    <div className={classes} title={event.timestamp}>
+    <div className={classes} title={`${event.turn_id} · ${event.timestamp}`}>
       <div className="log-meta">
         <span className="log-seq">#{event.seq}</span>
         <span className="log-tag">{feedTag(event)}</span>

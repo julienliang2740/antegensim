@@ -11,7 +11,8 @@ import { fmtNum } from "../inspect";
 /** Same display rounding as the occupant list, hover card and inspector (never rounds 197.96 up to "198.0"). */
 const fmt = fmtNum;
 
-export function AgentRoster(props: { agents: Agent[]; selectedId: string | null; actingId: string | null; onSelect(id: string): void }) {
+export function AgentRoster(props: { agents: Agent[]; selectedId: string | null; actingId: string | null; onSelect(id: string): void; compact?: boolean }) {
+  if (props.compact) return <CompactRoster {...props} />;
   return (
     <div className="roster">
       <div className="panel-title">
@@ -43,6 +44,58 @@ export function AgentRoster(props: { agents: Agent[]; selectedId: string | null;
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * The roster for the run page's left rail: one short row per agent (a dot in
+ * the map's agent colour, id and name, health / compute / essence); the full
+ * stats and last action are in the row's tooltip and the inspector.
+ */
+function CompactRoster(props: { agents: Agent[]; selectedId: string | null; actingId: string | null; onSelect(id: string): void }) {
+  return (
+    <section className="roster roster-compact" aria-label="Agents">
+      <div className="rail-label">
+        Agents ({props.agents.filter((a) => a.alive).length} living of {props.agents.length})
+      </div>
+      {props.agents.length === 0 ? <p className="hint">No agents.</p> : null}
+      <div className="roster-list">
+        {props.agents.map((agent) => {
+          const last = agent.last_action
+            ? `last: ${agent.last_action.name}${agent.last_result ? (agent.last_result.ok ? " ok" : ` ${agent.last_result.reason}`) : ""}`
+            : "no action yet";
+          const title =
+            `${agent.id} ${agent.name}${agent.alive ? "" : " (dead)"} at (${agent.position.x}, ${agent.position.y}) · health ${fmt(agent.stats.health)}/${fmt(agent.stats.max_health)} · ` +
+            `compute ${fmt(agent.stats.compute)} · essence ${fmt(agent.stats.essence)} · ${last}`;
+          return (
+            <button
+              key={agent.id}
+              type="button"
+              className={`roster-row${agent.id === props.selectedId ? " is-selected" : ""}${agent.alive ? "" : " is-dead"}${agent.id === props.actingId ? " is-acting" : ""}`}
+              aria-pressed={agent.id === props.selectedId}
+              title={title}
+              onClick={() => props.onSelect(agent.id)}
+            >
+              <span className={`roster-dot${agent.alive ? "" : " roster-dot-dead"}`} aria-hidden="true" />
+              <span className="roster-name">
+                {agent.id} {agent.name}
+                {agent.alive ? "" : " (dead)"}
+                {agent.id === props.actingId ? <span className="roster-acting"> acting</span> : null}
+              </span>
+              <span className="roster-mini">
+                {agent.alive ? (
+                  <>
+                    H {fmt(agent.stats.health)}/{fmt(agent.stats.max_health)} · C {fmt(agent.stats.compute)} · E {fmt(agent.stats.essence)}
+                  </>
+                ) : (
+                  <>died round {agent.died_round ?? "?"}</>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

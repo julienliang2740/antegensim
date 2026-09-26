@@ -4,9 +4,9 @@
  * selected memory ids, notebook version, token usage and omission reasons;
  * "Display and historical inspection": load historical details on demand).
  *
- * Shown inline above the tabs (not a blocking overlay) so the map, the
- * controls and the log stay usable; Escape or "Close" hides it (the page
- * then returns focus and scroll to the button that opened it).
+ * The run page shows it over the map (the controls, tabs and log stay
+ * usable beside it); Escape or "Close" hides it (the page then returns focus
+ * and scroll to the button that opened it).
  *
  * "Model call in progress" follows the run: once status.pending_model_call
  * no longer names the watched call, the viewer loads the call's saved record

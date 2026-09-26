@@ -384,7 +384,16 @@ async function runSteps(page) {
     "Edit the first card's name and starting coordinate",
     async (rec) => {
       const firstName = state.defaults.agents[0].name;
-      const index = await inputIndexWithValue(page, firstName);
+      let index = await inputIndexWithValue(page, firstName);
+      if (index < 0) {
+        // The New session page lists agents in a table; "Edit…" (aria-label "Edit agent <id> <name>") opens the full card in a dialog.
+        const edit = await tryFind(rec, "open the first agent card", clickables(page, new RegExp(`edit\\b.*\\b${escapeRe(firstName)}\\b`, "i")));
+        if (edit) {
+          await edit.click();
+          await sleep(300);
+          index = await inputIndexWithValue(page, firstName);
+        }
+      }
       if (index < 0) throw new Error(`no input holds the first card name '${firstName}'`);
       const nameInput = page.locator("input, textarea").nth(index);
       state.editedName = `${firstName} QA`;
@@ -421,7 +430,10 @@ async function runSteps(page) {
       }
       if (!invalidField) throw new Error("no numeric card field found to make invalid");
       await fillField(invalidField, invalidValue);
-      const validate = await findOne(clickables(page, RE.validate), 1500);
+      // With the card open in a modal dialog, only the dialog's own Validate button is clickable.
+      const dialog = page.getByRole("dialog");
+      const validateScope = (await dialog.count()) > 0 ? dialog : page;
+      const validate = await findOne(clickables(validateScope, RE.validate), 1500);
       if (validate) {
         await validate.locator.click();
         rec.found.validate = validate.how;
@@ -444,6 +456,11 @@ async function runSteps(page) {
         if (await textVisible(page, /agents\[0\]\.stats\.health|agents\[0\]\.position/, 1000)) {
           throw new Error("the problem is still shown after fixing the value");
         }
+      }
+      // Close the card dialog (if any) so the rest of the page is usable again.
+      if ((await page.getByRole("dialog").count()) > 0) {
+        const done = await findOne([["button Done", page.getByRole("dialog").getByRole("button", { name: /^done$/i })]], 1500);
+        if (done) await done.locator.click();
       }
     },
     { needs: ["defaults"] },

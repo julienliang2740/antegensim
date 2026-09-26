@@ -109,9 +109,6 @@ export function ResumePage() {
           </tbody>
         </table>
       ) : null}
-      <p className="entry-hint">
-        <strong>Continue from history:</strong> open a run, choose an earlier turn with the timeline, then use God mode → "Create continuation from turn …".
-      </p>
     </div>
   );
 }

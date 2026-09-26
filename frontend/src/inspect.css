@@ -597,8 +597,49 @@
 .insp-map-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 12px;
+  gap: 4px 10px;
   align-items: center;
+}
+
+.insp-map-toolbar .insp-btn {
+  padding: 2px 8px;
+  min-height: 26px;
+}
+
+.insp-map-toolbar .insp-num-short {
+  width: 46px;
+}
+
+.insp-map-toolbar .insp-btn-icon {
+  min-width: 28px;
+  padding: 2px 4px;
+  text-align: center;
+}
+
+.insp-zoom-level {
+  display: inline-block;
+  min-width: 48px;
+  text-align: center;
+  font-size: 12px;
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--insp-muted);
+}
+
+/* Fill mode (run page): the map takes the height its container gives it. */
+.insp-mapview-fill {
+  height: 100%;
+  min-height: 0;
+}
+
+.insp-mapview-fill .insp-map-viewport {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.insp-mapview-fill .insp-map-svg {
+  position: absolute;
+  left: 0;
+  top: 0;
 }
 
 .insp-goto {
@@ -748,40 +789,101 @@
   pointer-events: none;
 }
 
-.insp-badge-agent {
+/* One dot per entity (mapDots.ts): colour by kind, white outline so touching dots stay distinct. */
+.insp-dot {
+  stroke: #ffffff;
+  stroke-width: 1.2;
+}
+
+.insp-dot-agent {
   fill: var(--insp-agent);
 }
 
-.insp-badge-dead {
+.insp-dot-dead {
   fill: var(--insp-dead);
 }
 
-.insp-badge-plant {
+.insp-dot-plant {
   fill: var(--insp-plant);
 }
 
-.insp-badge-other {
+.insp-dot-fruit {
   fill: var(--insp-other);
 }
 
-.insp-badge-total {
+.insp-dot-seed {
+  fill: var(--insp-seed);
+}
+
+.insp-dot-residue {
+  fill: var(--insp-residue);
+}
+
+.insp-dot-mixed {
   fill: #333333;
 }
 
-.insp-badge-agent,
-.insp-badge-dead,
-.insp-badge-plant,
-.insp-badge-other,
-.insp-badge-total {
-  stroke: #ffffff;
-  stroke-width: 1;
+.insp-dot-hover {
+  stroke: var(--insp-fg);
+  stroke-width: 2.5;
 }
 
-.insp-badge-text {
+.insp-dot-cross {
+  stroke: #ffffff;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.insp-dot-ring-acting {
+  fill: none;
+  stroke: var(--insp-highlight);
+  stroke-width: 2.5;
+  stroke-dasharray: 3 2;
+}
+
+.insp-dot-ring-selected {
+  fill: none;
+  stroke: var(--insp-entity-sel);
+  stroke-width: 3.5;
+}
+
+.insp-dot-label {
   fill: #ffffff;
   font-weight: 700;
   font-family: system-ui, "Segoe UI", Roboto, sans-serif;
   pointer-events: none;
+}
+
+.insp-dot-label-below {
+  fill: var(--insp-fg);
+  font-weight: 600;
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  pointer-events: none;
+}
+
+.insp-dot-more {
+  fill: var(--insp-fg);
+  font-weight: 800;
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  paint-order: stroke;
+  stroke: var(--insp-bg);
+  stroke-width: 3px;
+  pointer-events: none;
+}
+
+.insp-map-svg.insp-map-svg-dot {
+  cursor: pointer;
+}
+
+.insp-map-kindhint {
+  color: var(--insp-bad);
+  font-weight: 600;
+}
+
+.insp-map-zoomhint {
+  color: var(--insp-accent);
+  font-weight: 600;
 }
 
 /* The tooltip lives in a fixed layer on document.body (a portal), so the map viewport's
@@ -825,6 +927,83 @@
 
 .insp-tooltip-head {
   font-size: 13px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  position: sticky;
+  top: -6px;
+  margin: -6px -8px 0;
+  padding: 6px 8px 4px;
+  background: var(--insp-bg);
+  z-index: 1;
+}
+
+/* Interactive: the pointer can move in, scroll the rows and click them. */
+.insp-tooltip.insp-tooltip-interactive {
+  pointer-events: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.insp-tooltip-close {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  line-height: 18px;
+  padding: 0;
+  border: 1px solid var(--insp-border-strong);
+  border-radius: 4px;
+  background: var(--insp-panel);
+  color: var(--insp-fg);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.insp-tooltip-close:hover {
+  background: var(--insp-bad-bg);
+}
+
+.insp-tooltip-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 2px 3px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.insp-tooltip-row:hover {
+  background: var(--insp-row-hover);
+}
+
+.insp-tooltip-row .insp-tooltip-stats {
+  display: block;
+}
+
+.insp-tooltip-focus-head {
+  margin-top: 4px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: var(--insp-accent-bg);
+  border: 1px solid var(--insp-accent);
+}
+
+.insp-tooltip-hint {
+  color: var(--insp-muted);
+  font-size: 11.5px;
+}
+
+.insp-tooltip li.insp-tooltip-focus {
+  background: var(--insp-accent-bg);
+  outline: 2px solid var(--insp-accent);
+  outline-offset: -1px;
+  border-radius: 3px;
+  padding-left: 3px;
 }
 
 .insp-tooltip-stats {
@@ -852,19 +1031,46 @@
   margin: 0;
 }
 
+/* Fixed height, one line each: hover text must never change the layout (the map would move). */
 .insp-map-status {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px 18px;
+  flex-direction: column;
+  flex: none;
   font-size: 12.5px;
+}
+
+.insp-map-status-line {
+  height: 19px;
+  line-height: 19px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.insp-map-status-row {
+  display: flex;
+  gap: 18px;
+}
+
+.insp-map-status-item {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.insp-map-status-row label.insp-map-status-item {
+  flex: none;
 }
 
 .insp-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
+  align-items: center;
+  gap: 3px 12px;
   font-size: 12.5px;
-  padding: 5px 7px;
+  padding: 4px 7px;
   border: 1px solid var(--insp-border);
   border-radius: 4px;
   background: var(--insp-panel);
@@ -873,7 +1079,55 @@
 .insp-legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.insp-legend-title {
+  font-weight: 700;
+}
+
+/* Kind toggles: same box in both states (border colour and background change only), so a toggle never moves anything. */
+.insp-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px 1px 4px;
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--insp-muted);
+  font: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.insp-legend-chip.is-on {
+  border-color: var(--insp-accent);
+  background: var(--insp-accent-bg);
+  color: var(--insp-fg);
+  opacity: 1;
+}
+
+.insp-legend-chip:hover {
+  opacity: 1;
+}
+
+.insp-legend-chip:focus-visible {
+  outline: 2px solid var(--insp-accent);
+  outline-offset: 1px;
+}
+
+.insp-legend-dot {
+  flex: none;
+  overflow: visible;
+}
+
+.insp-legend-more {
+  font-weight: 800;
+  font-size: 12px;
 }
 
 .insp-legend-sep {
