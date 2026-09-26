@@ -350,15 +350,34 @@ fixed in advance: the cheapest tier with factual accuracy ≥ 90% and within 5 p
 post-salvage format failures < 2%, and p90 latency within the target (p50 ≤ 12 s for help,
 p90 ≤ 25 s for run analysis).
 
+Measured on 2026-09-26 (Claude Code CLI 2.1.283, served models `claude-haiku-4-5-20251001`,
+`claude-sonnet-5`, `claude-opus-5-5`; thinking off; 80 ground-truthed questions per chat arm, 12 per
+category, paired across tiers; total spend USD 10.93 of the USD 22 cap). Latency is the wall time of
+a whole message (all steps); cost is the CLI-reported price per question or entry.
+
 | Capability | Haiku | Sonnet | Opus | Chosen default | Evidence |
 | --- | --- | --- | --- | --- | --- |
-| Help and controls questions | pending | pending | n/a | Sonnet (initial) | pending |
-| Run analysis (state, entity, turns, trends) | pending | pending | n/a | Sonnet (initial) | pending |
-| Log interpretation (errors, rejected replies) | pending | pending | n/a | Sonnet (initial) | pending |
-| Execution briefs | pending | pending | pending | Sonnet (initial) | pending |
-| Storybook narration | pending | pending | n/a | Haiku (initial) | pending |
-| Story brief | pending | pending | pending | Sonnet (initial) | pending |
-| Story chapters | pending | pending | n/a | Sonnet (initial) | pending |
-| Summaries (memory, story-so-far) | pending | n/a | n/a | Haiku (initial) | pending |
+| Help and controls questions | 8/8 correct, p50 4.9 s, $0.013/q | 8/8, p50 6.4 s, $0.033/q | n/a | Sonnet (chat profile; see note) | both pass the rule; haiku is the cheapest passing tier |
+| Run analysis (state, entity, turns, trends) | 58/60 (97%), p90 7.8 s, $0.029/q, 0 format failures | 58/60 (97%), p90 18.3 s, $0.081/q, 1 repair step | n/a | Sonnet (chat profile; see note) | equal accuracy; haiku 2.3x faster and 2.8x cheaper. Sonnet's two misses stated a wrong count first and corrected itself in the same answer (thinking off); haiku's two misses were a truncated turn list and a "plan" emitted as an answer |
+| Log interpretation (errors, rejected replies) | 8/12 (67%), p90 17.6 s, 1 unrecovered malformed reply | 7/12 (58%), p90 37.3 s | n/a | Sonnet (chat profile; see note) | **no tier passes**: counting malformed decisions over a round range fails on both because `search_events` output is capped at 6,000 characters without a match count; fix the tool (return the total count; the round digest's `lost_turns` already has it) and re-test |
+| Execution briefs | 4/6 (create_run overlay had unknown keys; `set_stat` field `health`) | 5/6 (`set_stat` field `health`) | 2/3 (`set_stat` field `health`) | **Sonnet** | every tier writes `field: "health"` instead of the dotted path `stats.health`, so the prompt, not the tier, needs the fix; sonnet alone produced a valid arena overlay (one `get_defaults` tool step, $0.14); opus adds nothing at 2.3x the cost. All cards rendered deterministically from the typed action (`qa/render_brief.mjs`) and the approved ones executed |
+| Storybook narration | 13/13 entries, 12/13 faithful, $0.0011/entry, 2.4-8.9 s per call | 13/13, 11/13 faithful, $0.0039/entry, 6.5-9.4 s | n/a | **Haiku** | faithfulness equal; **both tiers invented names for the survivors of round 19** ("Verdant, Sage, Cascade" / "Nyx, Iris, Thalos") because the round-end digest lists the living agents as ids only: a digest defect to fix (names in `living`), not a tier difference. Style: blind A/B 8:2 for sonnet (past tense kept, less template-like). Sonnet narration is 3.5x the cost; a settable option, not the default |
+| Story brief | valid first try, 8.7 s, $0.006 | valid first try, 18.8 s, $0.037 | 2/2 valid first try (brief and a "Change" revision), 11-14 s, $0.045 each | **Sonnet** | all tiers valid; n is too small to separate them, sonnet kept (its premise and style guide were the most specific); opus no measurable gain |
+| Story chapters | 3/3 written (opening 284 words, two interludes), 1 soft flag ("kill" vocabulary from the personas in the opening) | 3/3 written, 1 soft flag (a cast name from the brief in an interlude) | n/a | **Sonnet** | both faithful to the digests; $0.008 vs $0.039 for the three; chapter prose quality was not A/B judged (interludes only), so the default stays |
+| Summaries (memory, story-so-far) | not exercised (no conversation exceeded the 3k-token memory budget; 3 chapters do not reach the 5-chapter refresh) | n/a | n/a | Haiku (initial) | not measured |
 
-Per-call cost, latency, cache reads and format outcome: pending (WP8).
+Note on the chat profile: one model key serves help, analysis, log interpretation and briefs. The
+rule picks Haiku for help and analysis (equal accuracy, faster, cheaper) but Sonnet for briefs, and
+briefs are the capability where a wrong action costs the operator the most (an invalid `create_run`
+overlay cannot be approved and needs another round trip). The default therefore stays
+`claude-cli-sonnet-assistant`; the measured case for a cheaper tier on plain questions is a sub-profile
+(answers on Haiku, briefs on Sonnet), not a default change. `config.py` defaults are unchanged.
+
+Format reliability (pooled): chat JSON steps 3/139 CLI `malformed` on Sonnet (1 salvaged, 2 repaired
+in one step, 0 message errors), 1/132 on Haiku (the restricted last step, not recoverable: 1 message
+error); post-salvage failure 1.4% and 0.8%, both under the 2% gate. Text mode (narrator, chapters,
+summaries): 0 failures in 20 calls. Story-brief JSON: 0 failures in 4 calls. Every step after the
+first read the byte-stable system prompt from the CLI cache (minimum 7,561 cache-read tokens on
+Haiku, 9,882 on Sonnet). Offline replay of the 83 stored malformed decision envelopes: the current
+salvage recovers 28 (34%); a same-key unwrap rule would recover 77 (93%); see
+`docs/evidence/assistant_playtest.md`.

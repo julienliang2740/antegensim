@@ -13,7 +13,9 @@
 //
 // Usage (from qa/):  BASE_URL=http://127.0.0.1:5173 API_URL=http://127.0.0.1:8000 node browser_check.mjs
 // Env: BASE_URL, API_URL, HEADED=1 (show the browser), STEP_TIMEOUT_MS (default 8000),
-//      QA_RUN_NAME (default "qa browser <timestamp>"), QA_SKIP_ERROR_STEP=1.
+//      QA_RUN_NAME (default "qa browser <timestamp>"), QA_SKIP_ERROR_STEP=1,
+//      QA_ASSISTANT=auto|0|1 (assistant steps; see runAssistantSteps), QA_ONLY_ASSISTANT=1 with
+//      QA_RUN_ID=<run> (assistant steps only), QA_INSECURE_HOST (default qa-insecure.test).
 // Exit status: 0 when every attempted step passed, 1 otherwise (the log is always written).
 
 import { chromium } from "playwright";
@@ -31,6 +33,8 @@ const STAMP = new Date().toISOString().replace(/[:.]/g, "-").replace("T", "_").s
 const RUN_NAME = process.env.QA_RUN_NAME ?? `qa browser ${STAMP}`;
 const OUT_DIR = path.join(QA_DIR, "out", STAMP);
 const VOICE_TEXT = `QA browser voice ${STAMP}`;
+const ASSISTANT_MODE = process.env.QA_ASSISTANT ?? "auto"; // auto | 0 | 1 (see runAssistantSteps)
+const INSECURE_HOST = process.env.QA_INSECURE_HOST ?? "qa-insecure.test";
 
 const log = {
   base_url: BASE_URL,
@@ -331,6 +335,13 @@ async function main() {
 }
 
 async function runSteps(page) {
+  if (process.env.QA_ONLY_ASSISTANT === "1") {
+    // Iterate on the assistant steps against an existing run with committed model turns.
+    state.runId = process.env.QA_RUN_ID ?? null;
+    log.run_id = state.runId;
+    await runAssistantSteps(page);
+    return;
+  }
   await step(page, "preflight", "Backend health and defaults reachable", async (rec) => {
     const health = await api("GET", "/health");
     rec.notes.push(`health ${JSON.stringify(health)}`);
@@ -908,6 +919,782 @@ async function runSteps(page) {
       { needs: ["defaults"] },
     );
   }
+
+  if (ASSISTANT_MODE !== "0") await runAssistantSteps(page);
+}
+
+// ---------------------------------------------------------------------------
+// Assistant, Storybook, Story Mode and Dictate steps (rev 4)
+// ---------------------------------------------------------------------------
+//
+// Mode (QA_ASSISTANT): "auto" (default) runs the free steps whenever the backend has the
+// assistant (opening the drawer, layout, tabs, Dictate state and reading the Storybook spend
+// nothing) and the steps that call a model ONLY when every assistant profile is on a fake key.
+// Against a backend with live assistant models those steps are skipped, so this script never
+// spends money.  Brief cards need a scripted fake chat reply: the QA launcher
+// qa/assistant_fake_server.py exposes PUT /api/_qa/fake_metadata for that; without it the
+// brief steps are skipped (the plain server's fake only returns its default answer).
+// "0" skips every assistant step.  QA_INSECURE_HOST (default qa-insecure.test) is mapped to
+// 127.0.0.1 in a second browser to check Dictate on a non-secure origin; the Vite server must
+// allow that Host (server.allowedHosts), otherwise that sub-check is recorded as not run.
+
+const ASSISTANT_VIEW = { width: 1440, height: 900 };
+const ASSISTANT_Q = "What is happening in this run right now?";
+const FIRST_QUESTION = "What is Empyrean and how do I start?";
+const BRIEF_RUN_NAME = `QA brief arena ${STAMP}`;
+
+const drawerLoc = (page) => page.locator('aside[aria-label="Assistant"]');
+
+function overlaps(a, b) {
+  return !!(a && b && a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5);
+}
+
+function roundBox(b) {
+  return b ? { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) } : null;
+}
+
+async function boxOf(locator) {
+  return (await locator.count()) ? locator.first().boundingBox().catch(() => null) : null;
+}
+
+async function hScroll(page) {
+  return page.evaluate(() => ({ scrollW: document.documentElement.scrollWidth, clientW: document.documentElement.clientWidth, overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth }));
+}
+
+async function setFake(meta) {
+  await api("PUT", "/_qa/fake_metadata", meta);
+}
+
+async function waitVisible(locator, what, timeout = STEP_TIMEOUT_MS) {
+  try {
+    await locator.first().waitFor({ state: "visible", timeout });
+  } catch {
+    throw new Error(`${what} did not become visible within ${timeout} ms`);
+  }
+  return locator.first();
+}
+
+async function gotoRun(page, runId, turnId = null) {
+  await page.goto(`${BASE_URL}/#/run/${runId}${turnId ? `?turn=${turnId}` : ""}`, { waitUntil: "domcontentloaded" });
+  await waitVisible(page.locator("main.run-center"), "the run page map");
+  await sleep(800);
+}
+
+async function openRailDrawer(page) {
+  const drawer = drawerLoc(page);
+  if (await drawer.isVisible().catch(() => false)) return drawer;
+  await page.locator('.run-rail [data-control="assistant-launcher"]').first().click();
+  return waitVisible(drawer, "the assistant drawer");
+}
+
+async function openDrawerAnywhere(page) {
+  const drawer = drawerLoc(page);
+  if (await drawer.isVisible().catch(() => false)) return drawer;
+  const launcher = await findOne([["assistant launcher", page.locator('[data-control="assistant-launcher"]')]], 3000);
+  if (!launcher) throw new Error("no assistant launcher on this page");
+  await launcher.locator.click();
+  return waitVisible(drawer, "the assistant drawer");
+}
+
+async function closeDrawer(page) {
+  const drawer = drawerLoc(page);
+  if (!(await drawer.isVisible().catch(() => false))) return;
+  await drawer.getByRole("button", { name: /close the assistant/i }).click();
+  await drawer.waitFor({ state: "hidden", timeout: 3000 }).catch(() => {});
+}
+
+/** Type into the drawer composer, send, and wait until a new assistant message is final.
+ * Samples the progress line every 400 ms while it runs (returned as `progress`). */
+async function askDrawer(page, text, timeout = 30_000, shot = null) {
+  const drawer = drawerLoc(page);
+  const box = drawer.locator("#assistant-composer-text");
+  await box.fill(text);
+  const all = drawer.locator("article.assistant-msg-assistant");
+  const before = await all.count();
+  await drawer.getByRole("button", { name: /^send$/i }).click();
+  const progress = [];
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const line = drawer.locator(".assistant-progress-line");
+    if (await line.count()) {
+      const t = (await line.first().innerText().catch(() => "")).replace(/\s+/g, " ").trim();
+      const hint = (await drawer.locator("article.assistant-msg-progress .hint").first().innerText().catch(() => "")).replace(/\s+/g, " ").trim();
+      if (t && progress.at(-1)?.text !== t) progress.push({ t_ms: timeout - (deadline - Date.now()), text: t, hint });
+      if (shot && !shot.done && timeout - (deadline - Date.now()) > shot.afterMs) {
+        shot.done = true;
+        await page.screenshot({ path: shot.path }).catch(() => {});
+      }
+    }
+    const n = await all.count();
+    const running = await drawer.locator("article.assistant-msg-progress").count();
+    if (n > before && running === 0) {
+      const last = all.nth(n - 1);
+      return { article: last, text: (await last.innerText()).trim(), progress };
+    }
+    await sleep(400);
+  }
+  throw new Error(`no final assistant reply within ${timeout} ms (progress seen: ${JSON.stringify(progress)})`);
+}
+
+async function latestConversation() {
+  const list = await api("GET", "/assistant/conversations?all=1");
+  return list.sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1))[0] ?? null;
+}
+
+function briefStep(title, summary, type, args) {
+  return { kind: "brief", brief: { title, summary, steps: [], warnings: [], action: { type, args } } };
+}
+
+async function runAssistantSteps(page) {
+  const A = { mode: ASSISTANT_MODE, fake: false, hook: false, capabilities: null };
+  log.assistant = A;
+
+  await step(page, "assistant-preflight", "Assistant capabilities: models, fake or live, speech, storybook auto default", async (rec) => {
+    const cap = await api("GET", "/assistant/capabilities");
+    A.capabilities = { available: cap.available, models: cap.models.map((m) => `${m.profile}=${m.model_key}${m.fake ? " (fake)" : ""}${m.available ? "" : " UNAVAILABLE"}`), speech: cap.speech?.status };
+    A.fake = cap.models.length > 0 && cap.models.every((m) => m.fake);
+    if (ASSISTANT_MODE === "1" && !A.fake) throw new Error("QA_ASSISTANT=1 but the assistant models are not all fake");
+    try {
+      await api("GET", "/_qa/fake_metadata");
+      A.hook = A.fake;
+    } catch {
+      A.hook = false;
+    }
+    state.assistantReady = cap.available ? true : null;
+    state.assistantFake = A.fake ? true : null;
+    state.assistantHook = A.hook ? true : null;
+    rec.found.capabilities = A.capabilities;
+    rec.found.fake_scripting_hook = A.hook;
+    if (!A.fake) rec.notes.push("assistant models are live here: steps that call a model are skipped (no spend)");
+    if (A.fake && !A.hook) rec.notes.push("no /api/_qa/fake_metadata hook: brief steps are skipped (the plain fake only returns its default answer)");
+    if (state.runId) {
+      const settings = await api("GET", `/runs/${state.runId}/assistant/settings`);
+      const narrator = cap.models.find((m) => m.profile === "narrator");
+      rec.found.qa_run_storybook_auto = settings.storybook_auto ?? settings.settings?.storybook_auto ?? settings;
+      const auto = typeof rec.found.qa_run_storybook_auto === "boolean" ? rec.found.qa_run_storybook_auto : null;
+      const expected = narrator?.fake ? true : false; // the QA run's agents are all fake-heuristic
+      rec.found.storybook_auto_expected = expected;
+      if (auto !== null && auto !== expected) throw new Error(`storybook auto for an all-fake-agent run is ${auto}, expected ${expected} (narrator ${narrator?.model_key})`);
+    }
+    if (!cap.available) throw new Error("the assistant reports available=false");
+  });
+
+  await step(
+    page,
+    "assistant-entry-drawer",
+    "Entry page: the Assistant pill opens a floating drawer (focus in the composer), hides while open, closes back to the pill",
+    async (rec) => {
+      await page.setViewportSize(ASSISTANT_VIEW);
+      await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
+      await closeDrawer(page);
+      const pill = await waitVisible(page.getByRole("button", { name: /open the assistant/i }), "the Assistant pill");
+      rec.found.pill_title = await pill.getAttribute("title");
+      rec.found.pill_status = await pill.locator(".assistant-dot").getAttribute("aria-label").catch(() => null);
+      rec.found.new_here_link = await textVisible(page, /new here\?/i, 1500);
+      await pill.click();
+      const drawer = await waitVisible(drawerLoc(page), "the assistant drawer");
+      await sleep(300);
+      rec.found.drawer_class = await drawer.getAttribute("class");
+      rec.found.focus_in_composer = await page.evaluate(() => document.activeElement?.id === "assistant-composer-text");
+      rec.found.pill_hidden_while_open = (await page.getByRole("button", { name: /open the assistant/i }).count()) === 0;
+      rec.found.suggestions = await drawer.locator(".assistant-suggestion").allInnerTexts();
+      rec.found.scroll = await hScroll(page);
+      rec.found.drawer_box = roundBox(await drawer.boundingBox());
+      if (!/assistant-drawer-floating/.test(rec.found.drawer_class)) throw new Error(`drawer on the entry page is not floating: ${rec.found.drawer_class}`);
+      if (!rec.found.pill_hidden_while_open) throw new Error("the pill is still shown while the drawer is open");
+      if (rec.found.scroll.overflow) throw new Error(`horizontal scroll with the drawer open: ${JSON.stringify(rec.found.scroll)}`);
+      if (!rec.found.focus_in_composer) rec.notes.push("focus did not move to the composer on open");
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-entry-drawer-open.png`) }).catch(() => {});
+      await closeDrawer(page);
+      await waitVisible(page.getByRole("button", { name: /open the assistant/i }), "the Assistant pill after close");
+      rec.found.focus_back_on_launcher = await page.evaluate(() => document.activeElement?.getAttribute("data-control") === "assistant-launcher");
+      await page.keyboard.press("Alt+a");
+      rec.found.alt_a_opens = await drawerLoc(page).isVisible().catch(() => false);
+      await page.keyboard.press("Alt+a");
+      await sleep(300);
+      rec.found.alt_a_closes = !(await drawerLoc(page).isVisible().catch(() => false));
+      if (!rec.found.alt_a_opens || !rec.found.alt_a_closes) rec.notes.push(`Alt+A toggle: opens ${rec.found.alt_a_opens}, closes ${rec.found.alt_a_closes}`);
+    },
+    { needs: ["assistantReady"] },
+  );
+
+  await step(
+    page,
+    "assistant-run-docked",
+    "Run page at 1440x900: the rail-header Assistant button docks the drawer; it covers neither the map nor the side column; no horizontal scroll",
+    async (rec) => {
+      await page.setViewportSize(ASSISTANT_VIEW);
+      await gotoRun(page, state.runId);
+      await closeDrawer(page);
+      await sleep(400);
+      const map = page.locator("main.run-center");
+      const side = page.locator("section.run-side");
+      const mapClosed = await map.boundingBox();
+      const sideClosed = await side.boundingBox();
+      state.mapClosed = mapClosed;
+      const drawer = await openRailDrawer(page);
+      await sleep(600);
+      const mapOpen = await map.boundingBox();
+      const sideOpen = await side.boundingBox();
+      const dBox = await drawer.boundingBox();
+      rec.found.map_closed = roundBox(mapClosed);
+      rec.found.map_docked = roundBox(mapOpen);
+      rec.found.side_closed = roundBox(sideClosed);
+      rec.found.side_docked = roundBox(sideOpen);
+      rec.found.drawer = roundBox(dBox);
+      rec.found.drawer_class = await drawer.getAttribute("class");
+      rec.found.map_bbox_unchanged = JSON.stringify(roundBox(mapClosed)) === JSON.stringify(roundBox(mapOpen));
+      rec.found.scroll = await hScroll(page);
+      rec.found.rail_button_pressed = await page.locator('.run-rail [data-control="assistant-launcher"]').getAttribute("aria-pressed");
+      if (!/assistant-drawer-docked/.test(rec.found.drawer_class)) throw new Error(`drawer is not docked at 1440 px: ${rec.found.drawer_class}`);
+      if (overlaps(dBox, mapOpen)) throw new Error(`the docked drawer overlaps the map: drawer ${JSON.stringify(roundBox(dBox))} map ${JSON.stringify(roundBox(mapOpen))}`);
+      if (overlaps(dBox, sideOpen)) throw new Error("the docked drawer overlaps the side column");
+      if (mapOpen.width < 360) throw new Error(`the map is ${Math.round(mapOpen.width)} px wide beside the docked drawer (< MIN_MAP_W 360)`);
+      if (rec.found.scroll.overflow) throw new Error(`horizontal scroll with the docked drawer: ${JSON.stringify(rec.found.scroll)}`);
+      if (!rec.found.map_bbox_unchanged) rec.notes.push(`docked reserve reflows the page: the map changes from ${Math.round(mapClosed.width)} to ${Math.round(mapOpen.width)} px wide (by design: useRunLayout subtracts the drawer width); it is never covered`);
+    },
+    { needs: ["assistantReady", "runId"] },
+  );
+
+  await step(
+    page,
+    "assistant-run-floating",
+    "Float: the drawer overlays and the map box is exactly the closed-drawer box; Dock again; 1280 px docks at 360 px, 1200 px floats",
+    async (rec) => {
+      const drawer = await openRailDrawer(page);
+      const float = drawer.getByRole("button", { name: /^float$/i });
+      await float.click();
+      await sleep(600);
+      const mapFloat = await page.locator("main.run-center").boundingBox();
+      rec.found.drawer_class_float = await drawer.getAttribute("class");
+      rec.found.map_floating = roundBox(mapFloat);
+      rec.found.map_unchanged_when_floating = JSON.stringify(roundBox(mapFloat)) === JSON.stringify(roundBox(state.mapClosed));
+      rec.found.scroll_float = await hScroll(page);
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-run-floating.png`) }).catch(() => {});
+      if (!/assistant-drawer-floating/.test(rec.found.drawer_class_float)) throw new Error("Float did not float the drawer");
+      if (!rec.found.map_unchanged_when_floating) throw new Error(`floating drawer changed the map box: ${JSON.stringify(roundBox(state.mapClosed))} -> ${JSON.stringify(roundBox(mapFloat))}`);
+      await drawer.getByRole("button", { name: /^dock$/i }).click();
+      await sleep(500);
+      rec.found.drawer_class_redock = await drawer.getAttribute("class");
+      if (!/assistant-drawer-docked/.test(rec.found.drawer_class_redock)) throw new Error("Dock did not dock the drawer again");
+      const widths = {};
+      for (const w of [1280, 1200]) {
+        await page.setViewportSize({ width: w, height: 900 });
+        await sleep(600);
+        const d = await drawerLoc(page).boundingBox();
+        const m = await page.locator("main.run-center").boundingBox();
+        widths[w] = { drawer_class: await drawerLoc(page).getAttribute("class"), drawer: roundBox(d), map: roundBox(m), overlap: overlaps(d, m), scroll: await hScroll(page) };
+      }
+      rec.found.widths = widths;
+      await page.setViewportSize(ASSISTANT_VIEW);
+      await sleep(400);
+      if (!/docked/.test(widths[1280].drawer_class) || widths[1280].overlap || widths[1280].map.w < 360 || widths[1280].scroll.overflow) throw new Error(`1280 px docked arithmetic failed: ${JSON.stringify(widths[1280])}`);
+      if (!/floating/.test(widths[1200].drawer_class)) throw new Error(`1200 px should float: ${widths[1200].drawer_class}`);
+      if (widths[1200].scroll.overflow) throw new Error(`horizontal scroll at 1200 px: ${JSON.stringify(widths[1200].scroll)}`);
+    },
+    { needs: ["assistantReady", "runId", "mapClosed"] },
+  );
+
+  await step(
+    page,
+    "assistant-tabs-row",
+    "Tabs row: five tabs on one line under 34 px at 1280/1440/1920 with 'God mode (3)', drawer closed and docked",
+    async (rec) => {
+      const staged = [];
+      for (let i = 1; i <= 3; i += 1) {
+        const r = await api("POST", `/runs/${state.runId}/interventions`, { type: "voice", recipients: { mode: "broadcast_all" }, text: `QA tabs ${i}`, origin: "ui" });
+        staged.push(r.staged.at(-1).id);
+      }
+      try {
+        await gotoRun(page, state.runId);
+        await waitVisible(page.getByRole("tab", { name: /god mode \(3\)/i }), "the 'God mode (3)' tab");
+        const results = {};
+        let bad = [];
+        for (const w of [1280, 1440, 1920]) {
+          for (const open of [false, true]) {
+            await page.setViewportSize({ width: w, height: 900 });
+            if (open) await openRailDrawer(page);
+            else await closeDrawer(page);
+            await sleep(500);
+            const m = await page.evaluate(() => {
+              const tabs = document.querySelector(".tabs");
+              if (!tabs) return null;
+              const items = [...tabs.querySelectorAll('[role="tab"]')];
+              const tops = [...new Set(items.map((t) => Math.round(t.getBoundingClientRect().top)))];
+              const tr = tabs.getBoundingClientRect();
+              const hidden = items.filter((t) => t.getBoundingClientRect().right > tr.right + 1).map((t) => `${t.innerText.replace(/\s+/g, " ").trim()} (${Math.round(t.getBoundingClientRect().right - tr.right)} px hidden)`);
+              return { height: Math.round(tr.height * 10) / 10, count: items.length, lines: tops.length, labels: items.map((t) => t.innerText.replace(/\s+/g, " ").trim()), overflowX: tabs.scrollWidth > tabs.clientWidth, width: Math.round(tabs.clientWidth), scrollWidth: tabs.scrollWidth, clipped: hidden };
+            });
+            const key = `${w}${open ? "-docked" : ""}`;
+            results[key] = m;
+            if (!m || m.height >= 34 || m.count !== 5 || m.lines !== 1) bad.push(key);
+            if (m?.overflowX) rec.notes.push(`${key}: tabs row scrolls horizontally (${m.width} of ${m.scrollWidth} px visible; clipped: ${m.clipped.join(", ") || "none"})`);
+          }
+        }
+        rec.found.tabs = results;
+        await page.setViewportSize(ASSISTANT_VIEW);
+        await page.locator(".tabs").screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-tabs-1440-docked.png`) }).catch(() => {});
+        await openRailDrawer(page);
+        await sleep(400);
+        if (bad.length) throw new Error(`tabs row not a single line under 34 px with 5 tabs at: ${bad.join(", ")} (${JSON.stringify(Object.fromEntries(bad.map((k) => [k, results[k]])))})`);
+      } finally {
+        for (const id of staged) await api("DELETE", `/runs/${state.runId}/interventions/${id}`).catch(() => {});
+      }
+    },
+    { needs: ["assistantReady", "runId"] },
+  );
+
+  await step(
+    page,
+    "assistant-ask-answer",
+    "Ask on the run page: the fake answer arrives; the question carries its context chip ('Looking at: run … · turn …')",
+    async (rec) => {
+      await setFake({}).catch(() => {});
+      await page.setViewportSize(ASSISTANT_VIEW);
+      await gotoRun(page, state.runId);
+      const drawer = await openRailDrawer(page);
+      const chip = drawer.locator(".assistant-context-chip");
+      rec.found.context_chip_title = await chip.getAttribute("title");
+      rec.found.context_chip_checked = await chip.locator("input").isChecked();
+      const reply = await askDrawer(page, ASSISTANT_Q);
+      rec.found.answer = reply.text.slice(0, 300);
+      rec.found.progress_seen = reply.progress;
+      const user = drawer.locator("article.assistant-msg-user").last();
+      rec.found.user_context_line = (await user.locator(".assistant-msg-ctx").innerText().catch(() => "")).trim();
+      if (!/fake assistant/i.test(reply.text)) throw new Error(`unexpected answer: ${reply.text.slice(0, 200)}`);
+      if (!/Looking at: run .*turn /i.test(rec.found.user_context_line)) throw new Error(`the question shows no run/turn context chip: '${rec.found.user_context_line}'`);
+      const conv = await latestConversation();
+      rec.found.conversation = { id: conv?.conversation_id, run_id: conv?.run_id, title: conv?.title };
+      if (conv?.run_id !== state.runId) rec.notes.push(`conversation scope is ${conv?.run_id}, expected ${state.runId}`);
+    },
+    { needs: ["assistantFake", "runId"] },
+  );
+
+  await step(
+    page,
+    "assistant-progress-and-refs",
+    "Scripted slow answer: progress line 'step k/4 · Ns · $x' ticks; ref chips (entity, turn, doc) act on the run page",
+    async (rec) => {
+      const turns = await api("GET", `/runs/${state.runId}/turns`);
+      const someTurn = turns[Math.min(3, turns.length - 1)].turn_id;
+      await setFake({ chat: { fake_script: [{ kind: "answer", text: `a01 is near the centre; see turn ${someTurn}.`, refs: [{ kind: "entity", id: "a01", label: "a01" }, { kind: "turn", id: someTurn, label: someTurn }, { kind: "doc", id: "SYSTEM.md#overview", label: "System overview" }] }], fake_options: { sleep_ms: 4500 } } });
+      const drawer = await openRailDrawer(page);
+      // Sample the API job's elapsed_s alongside the UI line.
+      const apiElapsed = [];
+      let sampling = true;
+      const sampler = (async () => {
+        while (sampling) {
+          const conv = await latestConversation().catch(() => null);
+          if (conv) {
+            const v = await api("GET", `/assistant/conversations/${conv.conversation_id}`).catch(() => null);
+            if (v?.job && ["queued", "running"].includes(v.job.status)) apiElapsed.push({ elapsed_s: v.job.elapsed_s, step: v.job.step, progress: v.job.progress });
+          }
+          await sleep(700);
+        }
+      })();
+      const reply = await askDrawer(page, "Where is a01 and what did it do?", 30_000, { afterMs: 2500, path: path.join(OUT_DIR, `${pad(stepCounter)}-progress-midway.png`) }).finally(() => {
+        sampling = false;
+      });
+      await sampler;
+      rec.found.progress_ui = reply.progress;
+      rec.found.progress_api = apiElapsed;
+      const uiSeconds = reply.progress.map((p) => Number((p.text.match(/·\s*(\d+)\s*s/) ?? [])[1] ?? NaN)).filter((n) => !Number.isNaN(n));
+      rec.found.ui_seconds = uiSeconds;
+      if (!reply.progress.length) rec.notes.push("no progress line was seen during a 4.5 s fake call");
+      else if (Math.max(...uiSeconds) === 0) rec.notes.push("the progress line stayed at 0 s for the whole 4.5 s first step");
+      const staleHints = reply.progress.filter((p) => /·\s*0 s\s*·/.test(p.hint ?? "") && !/·\s*0 s\s*·/.test(p.text));
+      if (staleHints.length) rec.notes.push(`the line under the ticking progress shows the backend's stale '${staleHints[0].hint}' while the line above ticks ('${staleHints.at(-1).text}')`);
+      const apiSecs = apiElapsed.map((e) => e.elapsed_s).filter((n) => typeof n === "number");
+      if (apiSecs.length && Math.max(...apiSecs) === 0) rec.notes.push("API job.elapsed_s stayed 0 while the first step ran (elapsed is written per step)");
+      const refs = reply.article.locator(".assistant-refs button");
+      rec.found.ref_chips = (await refs.allInnerTexts()).map((t) => t.replace(/\s+/g, " "));
+      if (rec.found.ref_chips.some((t) => /^turn turn /i.test(t))) rec.notes.push("the engine-added 'as of' turn chip reads 'TURN turn <id>' (label repeats the kind)");
+      if ((await refs.count()) < 3) throw new Error(`expected 3 ref chips, got ${JSON.stringify(rec.found.ref_chips)}`);
+      await reply.article.locator(".assistant-ref-entity").click();
+      await sleep(700);
+      rec.found.entity_ref_selects = await page.locator("section.run-side").innerText().then((t) => /\ba01\b/.test(t)).catch(() => false);
+      await reply.article.locator(`.assistant-ref-turn[title="turn ${someTurn}"]`).click();
+      await sleep(900);
+      rec.found.turn_ref_history = await textVisible(page, new RegExp(escapeRe(someTurn)), 2000);
+      rec.found.history_strip = await page.locator(".map-history-strip").isVisible().catch(() => false);
+      if (!rec.found.entity_ref_selects) throw new Error("clicking the entity ref did not show a01 in the side column");
+      if (!rec.found.history_strip) rec.notes.push("the turn ref did not show the history strip");
+      const back = page.locator(".map-history-strip").getByRole("button", { name: /back to live/i });
+      if (await back.count()) await back.click();
+      await setFake({});
+    },
+    { needs: ["assistantHook", "runId"] },
+  );
+
+  await step(
+    page,
+    "assistant-first-time-user",
+    "First-time user: 'New here? Ask the assistant' prefills the question; the answer links a docs section",
+    async (rec) => {
+      await closeDrawer(page);
+      await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
+      await closeDrawer(page);
+      await page.getByRole("button", { name: /ask the assistant: "what is empyrean/i }).click();
+      const drawer = await waitVisible(drawerLoc(page), "the drawer from 'New here?'");
+      await sleep(400);
+      rec.found.prefilled = await drawer.locator("#assistant-composer-text").inputValue();
+      if (rec.found.prefilled !== FIRST_QUESTION) throw new Error(`composer prefilled with '${rec.found.prefilled}'`);
+      // A fresh global conversation for the scripted flow.
+      const picker = drawer.locator("select").first();
+      if ((await picker.locator('option[value="__new"]').count()) > 0) await picker.selectOption("__new");
+      await setFake({ chat: { fake_script: [{ kind: "answer", text: "Empyrean is a grid world where LLM agents survive on compute. Start with New session: the defaults create a paused run you step with Run turn.", refs: [{ kind: "doc", id: "SYSTEM.md#overview", label: "System overview" }, { kind: "control", id: "assistant-launcher", label: "Assistant" }] }] } });
+      const reply = await askDrawer(page, FIRST_QUESTION);
+      rec.found.answer = reply.text.slice(0, 200);
+      rec.found.doc_chip = await reply.article.locator(".assistant-ref-doc").count();
+      const ctx = (await drawer.locator("article.assistant-msg-user").last().locator(".assistant-msg-ctx").innerText().catch(() => "")).trim();
+      rec.found.user_context_line = ctx;
+      if (!rec.found.doc_chip) throw new Error("no docs ref chip in the answer");
+      await setFake({});
+    },
+    { needs: ["assistantHook"] },
+  );
+
+  await step(
+    page,
+    "assistant-create-run-brief",
+    "Fake create_run brief: the card's deterministic 'What will happen', setup diff and the assistant's description; Approve creates the run and navigates",
+    async (rec) => {
+      await setFake({ chat: { fake_script: [briefStep(BRIEF_RUN_NAME, "Six fighters in a small arena; Ash hits harder and moving costs less.", "create_run", { name: BRIEF_RUN_NAME, agent_count: 6, overlay: { agents: [{ name: "Ash", stats: { attack: 3 } }], rules: { prices: { move: 2 } }, play_delay_seconds: 0 } })] } });
+      const drawer = await openDrawerAnywhere(page);
+      const reply = await askDrawer(page, "Set up a small fight arena with six agents");
+      const card = reply.article.locator("section.assistant-brief");
+      await waitVisible(card, "the brief card");
+      const primary = card.locator(".assistant-brief-primary");
+      rec.found.what_will_happen = (await primary.locator(".assistant-brief-label").innerText()).trim();
+      rec.found.lines = await primary.locator(".assistant-brief-lines > li").allInnerTexts();
+      rec.found.diff_summary = (await card.locator(".assistant-brief-diff summary").innerText().catch(() => "")).trim();
+      rec.found.diff = await card.locator(".assistant-brief-difflist li").allInnerTexts();
+      rec.found.prose_label = (await card.locator(".assistant-brief-prose .assistant-brief-label").innerText().catch(() => "")).trim();
+      rec.found.in_reply_to = (await card.locator(".assistant-brief-reply").innerText().catch(() => "")).trim();
+      rec.found.status_badge = (await card.locator(".assistant-brief-head .assistant-badge").innerText()).trim();
+      if (!/what will happen/i.test(rec.found.what_will_happen)) throw new Error("no 'What will happen' section");
+      if (!rec.found.lines.some((l) => l.includes(`Creates a paused run "${BRIEF_RUN_NAME}" with 6 agents`))) throw new Error(`deterministic line missing: ${JSON.stringify(rec.found.lines)}`);
+      if (!rec.found.diff.some((d) => d.includes("rules.prices.move"))) throw new Error(`setup diff lacks rules.prices.move: ${JSON.stringify(rec.found.diff)}`);
+      if (!/assistant's description/i.test(rec.found.prose_label)) throw new Error("no \"Assistant's description\" section");
+      await card.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-create-run-brief-card.png`) }).catch(() => {});
+      const approve = card.getByRole("button", { name: /^approve: create run$/i });
+      if (await approve.isDisabled()) throw new Error("Approve: create run is disabled");
+      const before = new Set((await api("GET", "/runs")).map((r) => r.run_id));
+      await approve.click();
+      const runs = await waitApi("the brief's run", () => api("GET", "/runs"), (list) => list.some((r) => !before.has(r.run_id) && r.name === BRIEF_RUN_NAME), 20_000);
+      const created = runs.find((r) => !before.has(r.run_id) && r.name === BRIEF_RUN_NAME);
+      state.briefRunId = created.run_id;
+      rec.found.run = created.run_id;
+      await waitApi("navigation to the new run", async () => page.url(), (u) => u.includes(`#/run/${created.run_id}`), 10_000);
+      await waitVisible(page.locator("main.run-center"), "the new run page");
+      await sleep(800);
+      rec.found.now_about = (await drawerLoc(page).locator(".assistant-banner-info").innerText().catch(() => "")).trim();
+      const conv = await latestConversation();
+      rec.found.conversation_run_id = conv?.run_id;
+      rec.found.brief_status_after = (await drawerLoc(page).locator("section.assistant-brief .assistant-brief-head .assistant-badge").last().innerText().catch(() => "")).trim();
+      const s = await status(created.run_id);
+      rec.found.new_run_state = s.state;
+      const init = await api("GET", `/runs/${created.run_id}/turns/r00000_init`);
+      rec.found.a01 = { name: init.entities.agents.a01?.name, attack: init.entities.agents.a01?.stats?.attack };
+      if (s.state !== "paused") throw new Error(`new run state ${s.state}`);
+      if (conv?.run_id !== created.run_id) throw new Error(`conversation not rebound: ${conv?.run_id}`);
+      if (!/now about/i.test(rec.found.now_about)) rec.notes.push("no 'Now about: <run>' banner after approval");
+      await setFake({});
+    },
+    { needs: ["assistantHook"] },
+  );
+
+  await step(
+    page,
+    "assistant-interventions-brief",
+    "Fake stage_interventions brief with an unknown entity shows its validation problem (Approve disabled); Ask for changes -> corrected brief -> Approve stages it",
+    async (rec) => {
+      const drawer = await openRailDrawer(page);
+      await setFake({ chat: { fake_script: [briefStep("Boost", "Set compute of the selected agent to 50.", "stage_interventions", { interventions: [{ type: "set_stat", entity_id: "zz99", field: "stats.compute", value: 50 }] })] } });
+      const reply = await askDrawer(page, "Give the selected agent 50 compute");
+      const card = reply.article.locator("section.assistant-brief");
+      await waitVisible(card, "the interventions brief card");
+      rec.found.problems = await card.locator(".assistant-brief-problems li").allInnerTexts();
+      rec.found.lines = await card.locator(".assistant-brief-primary .assistant-brief-lines > li").allInnerTexts();
+      const approve = card.getByRole("button", { name: /^approve: stage 1 edit$/i });
+      rec.found.approve_disabled = await approve.isDisabled();
+      await card.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-interventions-brief-problem.png`) }).catch(() => {});
+      if (!rec.found.problems.some((p) => /interventions\[0\]\.entity_id/.test(p) && /zz99/.test(p))) throw new Error(`validation problem not shown: ${JSON.stringify(rec.found.problems)}`);
+      if (!rec.found.approve_disabled) throw new Error("Approve is enabled on an invalid brief");
+      await card.getByRole("button", { name: /^ask for changes$/i }).click();
+      await sleep(300);
+      rec.found.composer_quote = await drawer.locator("#assistant-composer-text").inputValue();
+      rec.found.waiting = await card.locator(".assistant-brief-waiting").isVisible().catch(() => false);
+      await setFake({ chat: { fake_script: [briefStep("Boost", "Set compute of a01 to 50.", "stage_interventions", { interventions: [{ type: "set_stat", entity_id: "a01", field: "stats.compute", value: 50 }] })] } });
+      const fixed = await askDrawer(page, `${rec.found.composer_quote}\nI meant a01`);
+      const card2 = fixed.article.locator("section.assistant-brief");
+      await waitVisible(card2, "the corrected brief card");
+      rec.found.old_status = (await card.locator(".assistant-brief-head .assistant-badge").innerText()).trim();
+      rec.found.new_lines = await card2.locator(".assistant-brief-primary .assistant-brief-lines > li").allInnerTexts();
+      const approve2 = card2.getByRole("button", { name: /^approve: stage 1 edit$/i });
+      if (await approve2.isDisabled()) throw new Error("Approve is disabled on the corrected brief");
+      await approve2.click();
+      await waitVisible(card2.locator(".assistant-brief-result"), "the executed result");
+      rec.found.result = (await card2.locator(".assistant-brief-result").innerText()).replace(/\s+/g, " ").trim();
+      const staged = (await api("GET", `/runs/${state.briefRunId}/interventions`)).staged;
+      rec.found.staged = staged.map((iv) => ({ id: iv.id, type: iv.type, origin: iv.origin, note: iv.note }));
+      if (!staged.some((iv) => iv.origin === "assistant" && iv.type === "set_stat")) throw new Error("no assistant-origin set_stat staged");
+      if (!/replaced/i.test(rec.found.old_status)) rec.notes.push(`old brief status '${rec.found.old_status}' (expected 'replaced by a newer proposal')`);
+      await setFake({});
+    },
+    { needs: ["assistantHook", "briefRunId"] },
+  );
+
+  await step(
+    page,
+    "assistant-godmode-badge",
+    "'Open God mode (1 staged)' opens God mode; the staged list shows the assistant origin badge",
+    async (rec) => {
+      const drawer = drawerLoc(page);
+      const open = drawer.getByRole("button", { name: /open god mode \(1 staged\)/i });
+      await open.click();
+      await sleep(700);
+      rec.found.god_tab_selected = await page.getByRole("tab", { name: /god mode/i }).getAttribute("aria-selected");
+      const t0 = Date.now();
+      let badges = [];
+      while (Date.now() - t0 < 8000) {
+        badges = await page.locator("section.run-side .insp-badge").allInnerTexts();
+        if (badges.some((b) => /^assistant$/i.test(b.trim()))) break;
+        await sleep(500);
+      }
+      rec.found.god_tab_label = (await page.getByRole("tab", { name: /god mode/i }).innerText()).trim();
+      rec.found.rail_staged_edits = (await page.locator(".run-rail").innerText()).match(/STAGED EDITS\s*(\d+)/i)?.[1] ?? null;
+      if (!badges.some((b) => /^assistant$/i.test(b.trim()))) {
+        await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-godmode-before-reload.png`) }).catch(() => {});
+        rec.notes.push(`the staged edit did not show within 8 s of approval (tab '${rec.found.god_tab_label}', rail staged edits ${rec.found.rail_staged_edits}); reloading the page`);
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await waitVisible(page.locator("main.run-center"), "the run page after reload");
+        await page.getByRole("tab", { name: /god mode/i }).click();
+        await sleep(800);
+        badges = await page.locator("section.run-side .insp-badge").allInnerTexts();
+        rec.found.after_reload = { tab: (await page.getByRole("tab", { name: /god mode/i }).innerText()).trim(), badges };
+        if (badges.some((b) => /^assistant$/i.test(b.trim()))) throw new Error(`the assistant-staged edit only appears after a page reload (before: tab '${rec.found.god_tab_label}', rail staged edits ${rec.found.rail_staged_edits})`);
+      }
+      rec.found.badge_ms = Date.now() - t0;
+      rec.found.badges = badges;
+      if (!badges.some((b) => /^assistant$/i.test(b.trim()))) throw new Error(`no 'assistant' badge in the staged list: ${JSON.stringify(badges)}`);
+      const badge = page.locator("section.run-side .insp-badge", { hasText: /^assistant$/i }).first();
+      rec.found.staged_row = (await badge.locator("xpath=..").innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 200);
+    },
+    { needs: ["assistantHook", "briefRunId"] },
+  );
+
+  await step(
+    page,
+    "assistant-storybook-readonly",
+    "Storybook tab on the QA run (read-only, never presses Write missing): label, Auto on/off per the default rule, status line",
+    async (rec) => {
+      await gotoRun(page, state.runId);
+      const cap = await api("GET", "/assistant/capabilities");
+      const narratorFake = cap.models.find((m) => m.profile === "narrator")?.fake ?? false;
+      await page.getByRole("tab", { name: /storybook|^story$/i }).click();
+      await waitVisible(page.locator(".storybook-status"), "the storybook status line");
+      await sleep(1200);
+      rec.found.narrator_fake = narratorFake;
+      rec.found.label = await textVisible(page, /AI-written narrative; the Turn record has the facts/, 2000);
+      rec.found.auto_button = (await page.locator(".storybook-auto").innerText()).trim();
+      rec.found.status_line = (await page.locator(".storybook-status-parts").innerText()).trim();
+      const missingBtn = page.locator(".storybook-status").getByRole("button", { name: /write missing/i });
+      rec.found.write_missing = (await missingBtn.count()) ? (await missingBtn.first().innerText()).trim() : null;
+      const hint = page.locator(".storybook-list > .hint");
+      rec.found.empty_hint = (await hint.count()) ? (await hint.first().innerText()).trim() : null;
+      rec.found.entries_listed = await page.locator(".storybook-entry-heading").count();
+      const expectAuto = narratorFake; // QA run agents are all fake: a paid narrator keeps auto off
+      if (!rec.found.label) throw new Error("the 'AI-written narrative' label is missing");
+      if (/auto on/i.test(rec.found.auto_button) !== expectAuto) throw new Error(`storybook shows '${rec.found.auto_button}', expected Auto ${expectAuto ? "on" : "off"} (narrator fake: ${narratorFake})`);
+    },
+    { needs: ["assistantReady", "runId"] },
+  );
+
+  await step(
+    page,
+    "assistant-storybook",
+    "Storybook tab on a fake run (auto on): status line and entries appear as turns commit",
+    async (rec) => {
+      const runId = state.briefRunId ?? state.runId;
+      await gotoRun(page, runId);
+      const settings = await api("GET", `/runs/${runId}/assistant/settings`);
+      rec.found.settings = settings;
+      for (let i = 0; i < 2; i += 1) {
+        const before = (await status(runId)).current_turn_id;
+        await clickRunControl(page, rec, "Run turn", RE.runTurn);
+        await waitApi("a committed turn", () => status(runId), (s) => s.state === "paused" && s.current_turn_id !== before, 30_000);
+      }
+      await page.getByRole("tab", { name: /storybook|^story$/i }).click();
+      const sb = await waitApi("storybook entries", () => api("GET", `/runs/${runId}/assistant/storybook`), (v) => (v.entries?.length ?? 0) >= 2, 30_000);
+      rec.found.api = { entries: sb.entries.length, opening: !!sb.opening, status: sb.status ? { auto: sb.status.auto, auto_state: sb.status.auto_state, pending: sb.status.pending_count, missing: sb.status.missing_count, spent: sb.status.spend?.spent_usd } : null };
+      await sleep(3000);
+      rec.found.label = await textVisible(page, /AI-written narrative; the Turn record has the facts/, 2000);
+      rec.found.auto_button = (await page.locator(".storybook-auto").innerText().catch(() => "")).trim();
+      rec.found.status_line = (await page.locator(".storybook-status-parts").innerText().catch(() => "")).trim();
+      rec.found.entry_headings = (await page.locator(".storybook-entry-heading").allInnerTexts()).slice(0, 6).map((t) => t.replace(/\s+/g, " "));
+      rec.found.first_entry = (await page.locator(".storybook-text").first().innerText().catch(() => "")).slice(0, 200);
+      rec.found.story_link = await page.locator(".storybook").getByRole("button", { name: /make a story of this run/i }).count();
+      if (!/auto on/i.test(rec.found.auto_button)) throw new Error(`auto is '${rec.found.auto_button}' on a fake-narrator run`);
+      if (!/entr(y|ies)/.test(rec.found.status_line)) throw new Error(`no status line: '${rec.found.status_line}'`);
+      if (rec.found.entry_headings.length < 2) throw new Error(`only ${rec.found.entry_headings.length} entries rendered`);
+    },
+    { needs: ["assistantFake"] },
+  );
+
+  await step(
+    page,
+    "assistant-escape-record-viewer",
+    "Escape inside the drawer closes the drawer but not the record viewer underneath",
+    async (rec) => {
+      const turns = await api("GET", `/runs/${state.runId}/turns`);
+      const modelTurn = [...turns].reverse().find((t) => t.kind === "agent_turn" && t.decision_source === "model");
+      if (!modelTurn) throw new Error("no model turn to open a record for");
+      await gotoRun(page, state.runId, modelTurn.turn_id);
+      await closeDrawer(page);
+      await page.getByRole("tab", { name: /turn record/i }).click();
+      await sleep(600);
+      const opener = await findOne(clickables(page.locator("section.run-side"), /decision packet|model call|mc_r\d+|pk_r\d+/i), 3000);
+      if (!opener) throw new Error("no record link (decision packet / model call) in the Turn record tab");
+      rec.found.record_opener = opener.how;
+      await opener.locator.click();
+      const viewer = await waitVisible(page.locator("section.record-viewer"), "the record viewer");
+      rec.found.record_title = await viewer.getAttribute("aria-label");
+      await openRailDrawer(page);
+      await sleep(400);
+      rec.found.focus_in_drawer = await page.evaluate(() => !!document.activeElement?.closest('aside[aria-label="Assistant"]'));
+      await page.keyboard.press("Escape");
+      await sleep(500);
+      rec.found.drawer_closed = !(await drawerLoc(page).isVisible().catch(() => false));
+      rec.found.record_viewer_still_open = await page.locator("section.record-viewer").isVisible().catch(() => false);
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-after-escape.png`) }).catch(() => {});
+      if (!rec.found.focus_in_drawer) rec.notes.push("focus was not inside the drawer when Escape was pressed");
+      if (!rec.found.drawer_closed) throw new Error("Escape inside the drawer did not close it");
+      if (!rec.found.record_viewer_still_open) throw new Error("Escape inside the drawer also closed the record viewer");
+      await page.keyboard.press("Escape");
+      await sleep(400);
+      rec.found.second_escape_closes_viewer = !(await page.locator("section.record-viewer").isVisible().catch(() => false));
+    },
+    { needs: ["assistantReady", "runId"] },
+  );
+
+  await step(
+    page,
+    "story-mode",
+    "Story Mode: run picker, step-0 run card with chips, brief with both estimates, Accept, first chapters, Export Markdown",
+    async (rec) => {
+      await closeDrawer(page);
+      await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
+      await page.getByRole("button", { name: /story mode/i }).first().click();
+      await waitApi("#/story", async () => page.url(), (u) => /#\/story\/?$/.test(u), 5000);
+      const summary = (await api("GET", "/runs")).find((r) => r.run_id === state.runId);
+      const row = page.getByRole("row").filter({ has: page.getByText(summary.name, { exact: true }) });
+      await waitVisible(row, `the run '${summary.name}' in the picker`);
+      rec.found.picker_rows = await page.getByRole("row").count();
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-story-picker.png`) }).catch(() => {});
+      await row.getByRole("button", { name: /^story$/i }).click();
+      await page.getByRole("button", { name: /^new story$/i }).click();
+      await waitVisible(page.getByRole("heading", { name: /^cast$/i }), "the step-0 run card");
+      rec.found.card_headings = await page.locator(".storymode-card h2, .storymode-card h3").allInnerTexts();
+      rec.found.chip_groups = await page.locator('.storymode-chips[role="group"]').evaluateAll((els) => els.map((e) => `${e.getAttribute("aria-label")}: ${[...e.querySelectorAll("button")].filter((b) => b.getAttribute("aria-pressed") === "true").map((b) => b.innerText.trim()).join("/")}`));
+      rec.found.story_dictate = await page.getByRole("button", { name: /dictate to the story author/i }).count();
+      rec.found.step0_model_calls = null;
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-story-step0.png`) }).catch(() => {});
+      if (rec.found.chip_groups.length < 4) throw new Error(`expected quick-pick chip groups, got ${JSON.stringify(rec.found.chip_groups)}`);
+      await page.getByRole("button", { name: /^write the story brief$/i }).click();
+      const brief = await waitVisible(page.locator("section.storymode-brief"), "the story brief", 30_000);
+      await sleep(500);
+      rec.found.estimates = (await brief.locator('[role="radio"]').allInnerTexts()).map((t) => t.replace(/\s+/g, " "));
+      if (rec.found.estimates.length !== 2 || !/per turn/i.test(rec.found.estimates[0]) || !/per round/i.test(rec.found.estimates[1])) throw new Error(`expected per-turn and per-round estimates: ${JSON.stringify(rec.found.estimates)}`);
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-story-brief.png`), fullPage: true }).catch(() => {});
+      const accept = brief.getByRole("button", { name: /^accept: write/i });
+      rec.found.accept_label = (await accept.innerText()).trim();
+      await accept.click();
+      await waitVisible(page.locator(".storymode-progress"), "the reader", 20_000);
+      await waitApi("chapter 1 text", async () => (await page.locator(".storymode-chapter-text, .storymode-reader article, .storymode-reader").first().innerText().catch(() => "")).length, (n) => n > 80, 30_000).catch(() => {});
+      await sleep(2500);
+      rec.found.progress = (await page.locator(".storymode-progress").innerText()).replace(/\s+/g, " ").trim();
+      rec.found.chapter_heading = (await page.locator(".storymode-reader h2, main h2").last().innerText().catch(() => "")).trim();
+      const url = page.url();
+      const m = url.match(/#\/story\/([^/]+)\/([^/?]+)/);
+      if (m) {
+        const v = await api("GET", `/runs/${m[1]}/assistant/stories/${m[2]}`);
+        rec.found.api = { status: v.session.status, chapters_done: v.session.chapters_done, chapters_total: v.session.chapters_total, chapters: v.chapters.map((c) => `${c.number}:${c.kind}`) };
+        state.storyId = m[2];
+      }
+      if (!rec.found.api || rec.found.api.chapters_done < 1) throw new Error(`no chapter written: ${JSON.stringify(rec.found.api)}`);
+      const exportBtn = page.getByRole("button", { name: /^export markdown$/i });
+      if (await exportBtn.isDisabled()) throw new Error("Export Markdown is disabled after chapter 1");
+      const [download] = await Promise.all([page.waitForEvent("download", { timeout: 10_000 }), exportBtn.click()]);
+      const file = path.join(OUT_DIR, `story-export-${download.suggestedFilename()}`);
+      await download.saveAs(file);
+      const md = await fs.readFile(file, "utf8");
+      rec.found.export = { file: path.basename(file), bytes: md.length, first_line: md.split("\n")[0].slice(0, 120) };
+      if (!md.startsWith("# ")) throw new Error(`export does not start with a Markdown title: ${md.slice(0, 80)}`);
+    },
+    { needs: ["assistantFake", "runId"] },
+  );
+
+  await step(
+    page,
+    "assistant-dictate",
+    "Dictate: present in the composer; enabled on a secure origin only when speech is ready; disabled with its reason on a non-secure origin",
+    async (rec) => {
+      await page.setViewportSize(ASSISTANT_VIEW);
+      const cap = await api("GET", "/assistant/capabilities");
+      rec.found.speech = cap.speech;
+      const probe = async (p) => {
+        const drawer = await waitVisible(drawerLoc(p), "the drawer");
+        const b = drawer.locator('[data-control="dictate"]');
+        await waitVisible(b, "the Dictate button");
+        return { secure: await p.evaluate(() => window.isSecureContext), aria_disabled: await b.getAttribute("aria-disabled"), title: await b.getAttribute("title"), label: await b.getAttribute("aria-label") };
+      };
+      const origins = {};
+      for (const base of [BASE_URL, BASE_URL.replace("127.0.0.1", "localhost")]) {
+        await page.goto(base, { waitUntil: "domcontentloaded" });
+        await page.keyboard.press("Alt+a");
+        if (!(await drawerLoc(page).isVisible().catch(() => false))) await page.getByRole("button", { name: /open the assistant/i }).click();
+        origins[base] = await probe(page);
+        await closeDrawer(page);
+      }
+      const insecureUrl = BASE_URL.replace(/\/\/[^/:]+/, `//${INSECURE_HOST}`);
+      const browser2 = await chromium.launch({ headless: HEADLESS, args: [`--host-resolver-rules=MAP ${INSECURE_HOST} 127.0.0.1`] });
+      try {
+        const p2 = await (await browser2.newContext({ viewport: ASSISTANT_VIEW })).newPage();
+        const resp = await p2.goto(insecureUrl, { waitUntil: "domcontentloaded" });
+        if (!resp || resp.status() >= 400) {
+          origins[insecureUrl] = { skipped: `HTTP ${resp?.status()} (the dev server does not allow Host ${INSECURE_HOST}; add it to server.allowedHosts)` };
+        } else {
+          await p2.getByRole("button", { name: /open the assistant/i }).click();
+          const r = await probe(p2);
+          await drawerLoc(p2).locator('[data-control="dictate"]').click({ force: true });
+          await sleep(300);
+          r.message_after_click = (await drawerLoc(p2).locator(".dictate-message").innerText().catch(() => "")).trim();
+          r.phase_after_click = await drawerLoc(p2).locator('[data-control="dictate"]').getAttribute("data-phase");
+          origins[insecureUrl] = r;
+          await p2.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-dictate-insecure.png`) }).catch(() => {});
+        }
+      } finally {
+        await browser2.close();
+      }
+      rec.found.origins = origins;
+      const ready = cap.speech?.status === "ready";
+      for (const [url, r] of Object.entries(origins)) {
+        if (r.skipped) {
+          rec.notes.push(`${url}: not checked: ${r.skipped}`);
+          continue;
+        }
+        const disabled = r.aria_disabled === "true";
+        const shouldBe = !(r.secure && ready);
+        if (disabled !== shouldBe) throw new Error(`${url}: secure=${r.secure}, speech ${cap.speech?.status}: Dictate aria-disabled=${r.aria_disabled}, expected ${shouldBe}`);
+        if (!r.secure && !/secure page/i.test(r.title ?? "")) throw new Error(`${url}: non-secure origin without the 'secure page' reason: ${r.title}`);
+        if (!r.secure && r.phase_after_click !== "idle") throw new Error(`${url}: clicking the blocked Dictate started ${r.phase_after_click}`);
+      }
+      const on127 = origins[BASE_URL];
+      if (on127?.secure) rec.notes.push("http://127.0.0.1 IS a secure context in Chromium (loopback is potentially trustworthy); only a non-loopback host such as the machine's IP is insecure");
+    },
+    { needs: ["assistantReady"] },
+  );
 }
 
 main()

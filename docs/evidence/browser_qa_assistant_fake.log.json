@@ -1,0 +1,1188 @@
+{
+  "base_url": "http://127.0.0.1:5180",
+  "api_url": "http://127.0.0.1:8020",
+  "run_name": "qa browser 2026-09-26_08-34-16",
+  "started_at": "2026-09-26T08:34:16.018Z",
+  "finished_at": "2026-09-26T08:36:04.835Z",
+  "run_id": "run_20260926_083419_9d3e",
+  "error_run_id": "run_20260926_083511_af6f",
+  "console_errors": [],
+  "page_errors": [],
+  "steps": [
+    {
+      "n": 1,
+      "id": "preflight",
+      "title": "Backend health and defaults reachable",
+      "ok": true,
+      "skipped": null,
+      "notes": [
+        "health {\"ok\":true,\"version\":\"0.1.0\"}"
+      ],
+      "found": {
+        "default_names": [
+          "Aster",
+          "Boreas",
+          "Cyrene",
+          "Damaris",
+          "Eos",
+          "Ferrin",
+          "Galene",
+          "Halcyon"
+        ]
+      },
+      "error": null,
+      "screenshot": "01-preflight.png",
+      "ms": 38
+    },
+    {
+      "n": 2,
+      "id": "entry",
+      "title": "Entry page shows New session and Resume session (U10)",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "New session": "button /new session/i",
+        "Resume session": "button /resume session/i"
+      },
+      "error": null,
+      "screenshot": "02-entry.png",
+      "ms": 215
+    },
+    {
+      "n": 3,
+      "id": "new-session-cards",
+      "title": "New session shows 8 prefilled agent cards (U11)",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "New session": "button /new session/i",
+        "card_names": [
+          "Aster",
+          "Boreas",
+          "Cyrene",
+          "Damaris",
+          "Eos",
+          "Ferrin",
+          "Galene",
+          "Halcyon"
+        ],
+        "add card control": "button /add (agent|card)|\\+ ?agent|new card/i",
+        "remove card control": "button /remove|delete/i",
+        "context settings in setup (U16)": "label /input token cap|token cap|generation allowance/i",
+        "model choice in setup": "label /model/i"
+      },
+      "error": null,
+      "screenshot": "03-new-session-cards.png",
+      "ms": 335
+    },
+    {
+      "n": 4,
+      "id": "edit-card",
+      "title": "Edit the first card's name and starting coordinate",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "open the first agent card": "button /edit\\b.*\\bAster\\b/i",
+        "card name input": "input #69 (value 'Aster')",
+        "card x coordinate": "label /^\\s*x\\s*:?\\s*$/i"
+      },
+      "error": null,
+      "screenshot": "04-edit-card.png",
+      "ms": 564
+    },
+    {
+      "n": 5,
+      "id": "invalid-value",
+      "title": "An invalid card value shows a problem by path, then is fixed",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "card health field": "label /^\\s*health\\s*:?\\s*$/i",
+        "validate": "button /validate|check setup/i",
+        "problem_shown": true,
+        "problem_shown_with_path": true
+      },
+      "error": null,
+      "screenshot": "05-invalid-value.png",
+      "ms": 2246
+    },
+    {
+      "n": 6,
+      "id": "create-run",
+      "title": "Create the run; it opens paused with a status line (U12, U14)",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "run name field": "label /run name|session name|^name of the run/i",
+        "create button": "button /create( run| session)?|start( run| session| simulation)?|launch|begin/i",
+        "run": {
+          "run_id": "run_20260926_083419_9d3e",
+          "name": "qa browser 2026-09-26_08-34-16"
+        },
+        "a01": {
+          "name": "Aster QA",
+          "position": {
+            "x": 3,
+            "y": 0
+          }
+        },
+        "round_label": true,
+        "turn_label": true
+      },
+      "error": null,
+      "screenshot": "06-create-run.png",
+      "ms": 533
+    },
+    {
+      "n": 7,
+      "id": "run-turn",
+      "title": "Run turn advances exactly one agent turn; the live feed shows it (U12, U13)",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "Run turn": "button /run turn/i",
+        "turn": "r00001_t01_a02",
+        "feed_line": true,
+        "turn_or_agent_shown": true
+      },
+      "error": null,
+      "screenshot": "07-run-turn.png",
+      "ms": 1851
+    },
+    {
+      "n": 8,
+      "id": "play-pause",
+      "title": "Play then Pause: 'Pause requested' while a turn finishes, then 'Paused' (U12)",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "Play": "button /^\\s*(▶\\s*)?play\\b/i",
+        "Pause": "button /^\\s*(⏸\\s*)?pause\\b/i",
+        "observed": {
+          "pause_requested_ui": true,
+          "states": [
+            "pause_requested",
+            "paused"
+          ]
+        }
+      },
+      "error": null,
+      "screenshot": "08-play-pause.png",
+      "ms": 897
+    },
+    {
+      "n": 9,
+      "id": "step-round",
+      "title": "Step round finishes the current round and pauses (U12)",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "Step round": "button /step round/i",
+        "turn": "r00001_end",
+        "round_end_visible": true
+      },
+      "error": null,
+      "screenshot": "09-step-round.png",
+      "ms": 2607
+    },
+    {
+      "n": 10,
+      "id": "timeline",
+      "title": "History: left/right arrows, turn selection, return to live (U6)",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "previous arrow": "button /^(?!.*\\bpan\\b).*(previous|prev\\b|earlier|◀|←|‹)/i",
+        "history_indicator": true,
+        "next arrow": "button /^(?!.*\\bpan\\b).*(\\bnext\\b|later|▶|→|›)/i",
+        "turn_selected": "r00001_t02_a01",
+        "return to live": "button /return to live|back to live|go live|^live$|live view/i",
+        "live_indicator": true
+      },
+      "error": null,
+      "screenshot": "10-timeline.png",
+      "ms": 32659
+    },
+    {
+      "n": 11,
+      "id": "crowded-coordinate",
+      "title": "Click and hover the most crowded coordinate; every occupant is listed (U1)",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "coordinate": {
+          "key": "-1,-1",
+          "occupants": [
+            "a07",
+            "p0007",
+            "f0007"
+          ]
+        },
+        "cell": "[data-coord=\"-1,-1\"]",
+        "hover_shows_something": true,
+        "occupants_listed": [
+          "a07",
+          "p0007",
+          "f0007"
+        ]
+      },
+      "error": null,
+      "screenshot": "11-crowded-coordinate.png",
+      "ms": 1431
+    },
+    {
+      "n": 12,
+      "id": "select-occupants",
+      "title": "Select each occupant of that coordinate and see its inspector (U1, U2)",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "occupants": {
+          "a07": "selected via button a07",
+          "p0007": "selected via button p0007",
+          "f0007": "selected via button f0007"
+        }
+      },
+      "error": null,
+      "screenshot": "12-select-occupants.png",
+      "ms": 1334
+    },
+    {
+      "n": 13,
+      "id": "agent-inspector",
+      "title": "Agent inspector: stats, skills, knowledge, decision packet and model call (U2)",
+      "ok": true,
+      "skipped": null,
+      "notes": [
+        "selected a05 via button a05"
+      ],
+      "found": {
+        "agent": "a05",
+        "section stats": true,
+        "section compute balance": true,
+        "section skills": true,
+        "section knowledge": true,
+        "section model assignment": true,
+        "decision packet control": "button /decision packet|packet/i",
+        "packet_content": true,
+        "model_call_content": true
+      },
+      "error": null,
+      "screenshot": "13-agent-inspector.png",
+      "ms": 2705
+    },
+    {
+      "n": 14,
+      "id": "plant-rules",
+      "title": "Plant inspector shows the instance and its species rule; the rule editor stages a species change (U3)",
+      "ok": true,
+      "skipped": null,
+      "notes": [
+        "selected p0001 via button p0001"
+      ],
+      "found": {
+        "plant": "p0001",
+        "species_shown": true,
+        "stage_shown": true,
+        "instance_vs_rule_labels": true,
+        "fruit energy field": "label /fruit energy/i",
+        "stage plant rule": "button /stage|apply|save/i",
+        "staged_rule": {
+          "species": "fruit_tree",
+          "fruit_energy": 70
+        }
+      },
+      "error": null,
+      "screenshot": "14-plant-rules.png",
+      "ms": 951
+    },
+    {
+      "n": 15,
+      "id": "god-mode",
+      "title": "God mode: change a context setting and send a voice; staged, then applied after a turn (U7, U8, U16)",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "God mode": "tab /god mode/i",
+        "recent history length field": "label /recent history/i",
+        "stage context settings": "button /stage|apply|queue|save/i",
+        "voice text": "label /what the agents hear|voice|message/i",
+        "voice_recipients": "radio /broadcast|all agents|everyone/i",
+        "send voice": "button /send voice|stage voice|send|stage/i",
+        "staged_types": [
+          "update_plant_rules",
+          "update_context_settings",
+          "voice"
+        ],
+        "staged_list_in_ui": true,
+        "Run turn": "button /run turn/i",
+        "applied_in_turn": {
+          "turn": "r00002_t01_a04",
+          "applied": [
+            "update_plant_rules:true",
+            "update_context_settings:true",
+            "voice:true"
+          ]
+        },
+        "voice_in_feed": true
+      },
+      "error": null,
+      "screenshot": "15-god-mode.png",
+      "ms": 3304
+    },
+    {
+      "n": 16,
+      "id": "resume",
+      "title": "Resume flow: back to the entry page, Resume session, open the run paused (U10)",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "back": "button /back to (sessions|start|entry)|sessions|leave|exit|close run|home|entry/i",
+        "Resume session": "button /resume session/i",
+        "the run in the list": "button qa browser 2026-09-26_08-34-16",
+        "list_shows_round": true,
+        "status": {
+          "state": "paused",
+          "current_turn_id": "r00002_t01_a04"
+        }
+      },
+      "error": null,
+      "screenshot": "16-resume.png",
+      "ms": 2039
+    },
+    {
+      "n": 17,
+      "id": "error-recovery",
+      "title": "Error state is shown and 'Recover (pause)' returns to paused (A-COG-5)",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "Resume session": "button /resume session/i",
+        "the error run in the list": "text qa browser 2026-09-26_08-34-16 error",
+        "Run turn": "button /run turn/i",
+        "backend_state": "error",
+        "last_error": "provider failure: timeout",
+        "Recover (pause)": "button pause",
+        "after_recover": "paused"
+      },
+      "error": null,
+      "screenshot": "17-error-recovery.png",
+      "ms": 5652
+    },
+    {
+      "n": 18,
+      "id": "assistant-preflight",
+      "title": "Assistant capabilities: models, fake or live, speech, storybook auto default",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "capabilities": {
+          "available": true,
+          "models": [
+            "chat=fake-assistant (fake)",
+            "narrator=fake-assistant (fake)",
+            "author=fake-assistant (fake)",
+            "summarizer=fake-assistant (fake)"
+          ],
+          "speech": "ready"
+        },
+        "fake_scripting_hook": true,
+        "qa_run_storybook_auto": true,
+        "storybook_auto_expected": true
+      },
+      "error": null,
+      "screenshot": "18-assistant-preflight.png",
+      "ms": 19
+    },
+    {
+      "n": 19,
+      "id": "assistant-entry-drawer",
+      "title": "Entry page: the Assistant pill opens a floating drawer (focus in the composer), hides while open, closes back to the pill",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "pill_title": "Ask about the world, the controls, or what is happening; it can also set up and run things for you (with your approval). Alt+A",
+        "pill_status": "assistant ready (fake model: free, canned answers)",
+        "new_here_link": true,
+        "drawer_class": "assistant-drawer assistant-drawer-floating",
+        "focus_in_composer": true,
+        "pill_hidden_while_open": true,
+        "suggestions": [
+          "What is Empyrean and how do I start?",
+          "Set up a fight arena",
+          "Explain the controls"
+        ],
+        "scroll": {
+          "scrollW": 1440,
+          "clientW": 1440,
+          "overflow": false
+        },
+        "drawer_box": {
+          "x": 1040,
+          "y": 0,
+          "w": 400,
+          "h": 900
+        },
+        "focus_back_on_launcher": true,
+        "alt_a_opens": true,
+        "alt_a_closes": true
+      },
+      "error": null,
+      "screenshot": "19-assistant-entry-drawer.png",
+      "ms": 938
+    },
+    {
+      "n": 20,
+      "id": "assistant-run-docked",
+      "title": "Run page at 1440x900: the rail-header Assistant button docks the drawer; it covers neither the map nor the side column; no horizontal scroll",
+      "ok": true,
+      "skipped": null,
+      "notes": [
+        "docked reserve reflows the page: the map changes from 762 to 362 px wide (by design: useRunLayout subtracts the drawer width); it is never covered"
+      ],
+      "found": {
+        "map_closed": {
+          "x": 270,
+          "y": 8,
+          "w": 762,
+          "h": 884
+        },
+        "map_docked": {
+          "x": 270,
+          "y": 8,
+          "w": 362,
+          "h": 884
+        },
+        "side_closed": {
+          "x": 1040,
+          "y": 8,
+          "w": 390,
+          "h": 552
+        },
+        "side_docked": {
+          "x": 640,
+          "y": 8,
+          "w": 390,
+          "h": 552
+        },
+        "drawer": {
+          "x": 1040,
+          "y": 0,
+          "w": 400,
+          "h": 900
+        },
+        "drawer_class": "assistant-drawer assistant-drawer-docked",
+        "map_bbox_unchanged": false,
+        "scroll": {
+          "scrollW": 1440,
+          "clientW": 1440,
+          "overflow": false
+        },
+        "rail_button_pressed": "true"
+      },
+      "error": null,
+      "screenshot": "20-assistant-run-docked.png",
+      "ms": 2232
+    },
+    {
+      "n": 21,
+      "id": "assistant-run-floating",
+      "title": "Float: the drawer overlays and the map box is exactly the closed-drawer box; Dock again; 1280 px docks at 360 px, 1200 px floats",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "drawer_class_float": "assistant-drawer assistant-drawer-floating",
+        "map_floating": {
+          "x": 270,
+          "y": 8,
+          "w": 762,
+          "h": 884
+        },
+        "map_unchanged_when_floating": true,
+        "scroll_float": {
+          "scrollW": 1440,
+          "clientW": 1440,
+          "overflow": false
+        },
+        "drawer_class_redock": "assistant-drawer assistant-drawer-docked",
+        "widths": {
+          "1200": {
+            "drawer_class": "assistant-drawer assistant-drawer-floating",
+            "drawer": {
+              "x": 800,
+              "y": 0,
+              "w": 400,
+              "h": 900
+            },
+            "map": {
+              "x": 270,
+              "y": 8,
+              "w": 522,
+              "h": 884
+            },
+            "overlap": false,
+            "scroll": {
+              "scrollW": 1200,
+              "clientW": 1200,
+              "overflow": false
+            }
+          },
+          "1280": {
+            "drawer_class": "assistant-drawer assistant-drawer-docked",
+            "drawer": {
+              "x": 920,
+              "y": 0,
+              "w": 360,
+              "h": 900
+            },
+            "map": {
+              "x": 242,
+              "y": 8,
+              "w": 360,
+              "h": 884
+            },
+            "overlap": false,
+            "scroll": {
+              "scrollW": 1280,
+              "clientW": 1280,
+              "overflow": false
+            }
+          }
+        }
+      },
+      "error": null,
+      "screenshot": "21-assistant-run-floating.png",
+      "ms": 3207
+    },
+    {
+      "n": 22,
+      "id": "assistant-tabs-row",
+      "title": "Tabs row: five tabs on one line under 34 px at 1280/1440/1920 with 'God mode (3)', drawer closed and docked",
+      "ok": true,
+      "skipped": null,
+      "notes": [
+        "1280: tabs row scrolls horizontally (390 of 451 px visible; clipped: Storybook (61 px hidden))",
+        "1280-docked: tabs row scrolls horizontally (300 of 451 px visible; clipped: God mode (3) (1 px hidden), Rules (58 px hidden), Storybook (151 px hidden))",
+        "1440: tabs row scrolls horizontally (390 of 451 px visible; clipped: Storybook (61 px hidden))",
+        "1440-docked: tabs row scrolls horizontally (390 of 451 px visible; clipped: Storybook (61 px hidden))",
+        "1920: tabs row scrolls horizontally (440 of 451 px visible; clipped: Storybook (11 px hidden))",
+        "1920-docked: tabs row scrolls horizontally (390 of 451 px visible; clipped: Storybook (61 px hidden))"
+      ],
+      "found": {
+        "tabs": {
+          "1280": {
+            "height": 29.2,
+            "count": 5,
+            "lines": 1,
+            "labels": [
+              "Inspector",
+              "Turn record",
+              "God mode (3)",
+              "Rules",
+              "Storybook"
+            ],
+            "overflowX": true,
+            "width": 390,
+            "scrollWidth": 451,
+            "clipped": [
+              "Storybook (61 px hidden)"
+            ]
+          },
+          "1440": {
+            "height": 29.2,
+            "count": 5,
+            "lines": 1,
+            "labels": [
+              "Inspector",
+              "Turn record",
+              "God mode (3)",
+              "Rules",
+              "Storybook"
+            ],
+            "overflowX": true,
+            "width": 390,
+            "scrollWidth": 451,
+            "clipped": [
+              "Storybook (61 px hidden)"
+            ]
+          },
+          "1920": {
+            "height": 29.2,
+            "count": 5,
+            "lines": 1,
+            "labels": [
+              "Inspector",
+              "Turn record",
+              "God mode (3)",
+              "Rules",
+              "Storybook"
+            ],
+            "overflowX": true,
+            "width": 440,
+            "scrollWidth": 451,
+            "clipped": [
+              "Storybook (11 px hidden)"
+            ]
+          },
+          "1280-docked": {
+            "height": 29.2,
+            "count": 5,
+            "lines": 1,
+            "labels": [
+              "Inspector",
+              "Turn record",
+              "God mode (3)",
+              "Rules",
+              "Storybook"
+            ],
+            "overflowX": true,
+            "width": 300,
+            "scrollWidth": 451,
+            "clipped": [
+              "God mode (3) (1 px hidden)",
+              "Rules (58 px hidden)",
+              "Storybook (151 px hidden)"
+            ]
+          },
+          "1440-docked": {
+            "height": 29.2,
+            "count": 5,
+            "lines": 1,
+            "labels": [
+              "Inspector",
+              "Turn record",
+              "God mode (3)",
+              "Rules",
+              "Storybook"
+            ],
+            "overflowX": true,
+            "width": 390,
+            "scrollWidth": 451,
+            "clipped": [
+              "Storybook (61 px hidden)"
+            ]
+          },
+          "1920-docked": {
+            "height": 29.2,
+            "count": 5,
+            "lines": 1,
+            "labels": [
+              "Inspector",
+              "Turn record",
+              "God mode (3)",
+              "Rules",
+              "Storybook"
+            ],
+            "overflowX": true,
+            "width": 390,
+            "scrollWidth": 451,
+            "clipped": [
+              "Storybook (61 px hidden)"
+            ]
+          }
+        }
+      },
+      "error": null,
+      "screenshot": "22-assistant-tabs-row.png",
+      "ms": 6751
+    },
+    {
+      "n": 23,
+      "id": "assistant-ask-answer",
+      "title": "Ask on the run page: the fake answer arrives; the question carries its context chip ('Looking at: run … · turn …')",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "context_chip_title": "Sent with the question: Run qa browser 2026-09-26_08-34-16 · turn r00002_t01_a04",
+        "context_chip_checked": true,
+        "answer": "(fake assistant) I read the context you sent and have nothing further to add.\n\nAs of turn r00002_t01_a04.\n\nTURN\nturn r00002_t01_a04\nas of turn r00002_t01_a04",
+        "progress_seen": [
+          {
+            "t_ms": 417,
+            "text": "step 1/4 · 0 s · $0.00 Cancel",
+            "hint": "step 1/4 · 0 s · $0.00"
+          }
+        ],
+        "user_context_line": "Looking at: run qa browser 2026-09-26_08-34-16 · turn r00002_t01_a04",
+        "conversation": {
+          "id": "ccd6421dde574865940a09ef14ecac85",
+          "run_id": "run_20260926_083419_9d3e",
+          "title": "What is happening in this run right now?"
+        }
+      },
+      "error": null,
+      "screenshot": "23-assistant-ask-answer.png",
+      "ms": 1719
+    },
+    {
+      "n": 24,
+      "id": "assistant-progress-and-refs",
+      "title": "Scripted slow answer: progress line 'step k/4 · Ns · $x' ticks; ref chips (entity, turn, doc) act on the run page",
+      "ok": true,
+      "skipped": null,
+      "notes": [
+        "the line under the ticking progress shows the backend's stale 'step 1/4 · 0 s · $0.00' while the line above ticks ('step 1/4 · 4 s · $0.00 Cancel')",
+        "API job.elapsed_s stayed 0 while the first step ran (elapsed is written per step)",
+        "the engine-added 'as of' turn chip reads 'TURN turn <id>' (label repeats the kind)"
+      ],
+      "found": {
+        "progress_ui": [
+          {
+            "t_ms": 416,
+            "text": "step 1/4 · 0 s · $0.00 Cancel",
+            "hint": "step 1/4 · 0 s · $0.00"
+          },
+          {
+            "t_ms": 1239,
+            "text": "step 1/4 · 1 s · $0.00 Cancel",
+            "hint": "step 1/4 · 0 s · $0.00"
+          },
+          {
+            "t_ms": 2067,
+            "text": "step 1/4 · 2 s · $0.00 Cancel",
+            "hint": "step 1/4 · 0 s · $0.00"
+          },
+          {
+            "t_ms": 3406,
+            "text": "step 1/4 · 3 s · $0.00 Cancel",
+            "hint": "step 1/4 · 0 s · $0.00"
+          },
+          {
+            "t_ms": 4238,
+            "text": "step 1/4 · 4 s · $0.00 Cancel",
+            "hint": "step 1/4 · 0 s · $0.00"
+          }
+        ],
+        "progress_api": [
+          {
+            "elapsed_s": 0,
+            "step": 1,
+            "progress": "step 1/4 · 0 s · $0.00"
+          },
+          {
+            "elapsed_s": 0,
+            "step": 1,
+            "progress": "step 1/4 · 0 s · $0.00"
+          },
+          {
+            "elapsed_s": 0,
+            "step": 1,
+            "progress": "step 1/4 · 0 s · $0.00"
+          },
+          {
+            "elapsed_s": 0,
+            "step": 1,
+            "progress": "step 1/4 · 0 s · $0.00"
+          },
+          {
+            "elapsed_s": 0,
+            "step": 1,
+            "progress": "step 1/4 · 0 s · $0.00"
+          },
+          {
+            "elapsed_s": 0,
+            "step": 1,
+            "progress": "step 1/4 · 0 s · $0.00"
+          }
+        ],
+        "ui_seconds": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "ref_chips": [
+          "ENTITY a01",
+          "TURN r00001_t03_a03",
+          "DOCS System overview",
+          "TURN turn r00002_t01_a04"
+        ],
+        "entity_ref_selects": true,
+        "turn_ref_history": true,
+        "history_strip": true
+      },
+      "error": null,
+      "screenshot": "24-assistant-progress-and-refs.png",
+      "ms": 7631
+    },
+    {
+      "n": 25,
+      "id": "assistant-first-time-user",
+      "title": "First-time user: 'New here? Ask the assistant' prefills the question; the answer links a docs section",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "prefilled": "What is Empyrean and how do I start?",
+        "answer": "Empyrean is a grid world where LLM agents survive on compute. Start with New session: the defaults create a paused run you step with Run turn.\n\nDOCS\nSystem overview\nCONTROL\nAssistant",
+        "doc_chip": 1,
+        "user_context_line": "Looking at: Home"
+      },
+      "error": null,
+      "screenshot": "25-assistant-first-time-user.png",
+      "ms": 1140
+    },
+    {
+      "n": 26,
+      "id": "assistant-create-run-brief",
+      "title": "Fake create_run brief: the card's deterministic 'What will happen', setup diff and the assistant's description; Approve creates the run and navigates",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "what_will_happen": "WHAT WILL HAPPEN",
+        "lines": [
+          "Creates a paused run \"QA brief arena 2026-09-26_08-34-16\" with 6 agents.",
+          "Nothing is spent until you play it.",
+          "agents[0].name: Aster → Ash",
+          "agents[0].stats.attack: 1 → 3",
+          "name: New run → QA brief arena 2026-09-26_08-34-16",
+          "play_delay_seconds: 0.2 → 0",
+          "rules.prices.move: 5 → 2"
+        ],
+        "diff_summary": "5 settings differ from the defaults",
+        "diff": [
+          "agents[0].name: Aster → Ash",
+          "agents[0].stats.attack: 1 → 3",
+          "name: New run → QA brief arena 2026-09-26_08-34-16",
+          "play_delay_seconds: 0.2 → 0",
+          "rules.prices.move: 5 → 2"
+        ],
+        "prose_label": "ASSISTANT'S DESCRIPTION",
+        "in_reply_to": "Proposed in reply to: Set up a small fight arena with six agents",
+        "status_badge": "awaiting your approval",
+        "run": "run_20260926_083542_c5d1",
+        "now_about": "Now about: QA brief arena 2026-09-26_08-34-16. This conversation followed you into the new run.",
+        "conversation_run_id": "run_20260926_083542_c5d1",
+        "brief_status_after": "done",
+        "new_run_state": "paused",
+        "a01": {
+          "name": "Ash",
+          "attack": 3
+        }
+      },
+      "error": null,
+      "screenshot": "26-assistant-create-run-brief.png",
+      "ms": 2160
+    },
+    {
+      "n": 27,
+      "id": "assistant-interventions-brief",
+      "title": "Fake stage_interventions brief with an unknown entity shows its validation problem (Approve disabled); Ask for changes -> corrected brief -> Approve stages it",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "problems": [
+          "interventions[0].entity_id: unknown entity 'zz99'"
+        ],
+        "lines": [
+          "Stages 1 god-mode edit on run \"QA brief arena 2026-09-26_08-34-16\" (run_20260926_083542_c5d1) (origin: assistant). They apply when the next turn starts.",
+          "• set zz99.stats.compute = 50"
+        ],
+        "approve_disabled": true,
+        "composer_quote": "> Boost\nChange this: ",
+        "waiting": true,
+        "old_status": "replaced by a newer proposal",
+        "new_lines": [
+          "Stages 1 god-mode edit on run \"QA brief arena 2026-09-26_08-34-16\" (run_20260926_083542_c5d1) (origin: assistant). They apply when the next turn starts.",
+          "• set a01.stats.compute = 50"
+        ],
+        "result": "Done. Staged 1 edit(s) (origin assistant). They apply when the next turn starts. Open run run_20260926_083542_c5d1 Open God mode (1 staged) Run state now: paused, saved turn r00000_init · agents' spend $0.00",
+        "staged": [
+          {
+            "id": "iv_0001",
+            "type": "set_stat",
+            "origin": "assistant",
+            "note": "assistant: Set compute of a01 to 50."
+          }
+        ]
+      },
+      "error": null,
+      "screenshot": "27-assistant-interventions-brief.png",
+      "ms": 1983
+    },
+    {
+      "n": 28,
+      "id": "assistant-godmode-badge",
+      "title": "'Open God mode (1 staged)' opens God mode; the staged list shows the assistant origin badge",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "god_tab_selected": "true",
+        "god_tab_label": "God mode (1)",
+        "rail_staged_edits": "1",
+        "badge_ms": 1527,
+        "badges": [
+          "set_stat",
+          "assistant"
+        ],
+        "staged_row": "iv_0001 set_statassistant set a01.stats.compute = 50"
+      },
+      "error": null,
+      "screenshot": "28-assistant-godmode-badge.png",
+      "ms": 2357
+    },
+    {
+      "n": 29,
+      "id": "assistant-storybook-readonly",
+      "title": "Storybook tab on the QA run (read-only, never presses Write missing): label, Auto on/off per the default rule, status line",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "narrator_fake": true,
+        "label": true,
+        "auto_button": "Auto on",
+        "status_line": "10 entries · spent $0.00 of $2.00",
+        "write_missing": null,
+        "empty_hint": null,
+        "entries_listed": 10
+      },
+      "error": null,
+      "screenshot": "29-assistant-storybook-readonly.png",
+      "ms": 2375
+    },
+    {
+      "n": 30,
+      "id": "assistant-storybook",
+      "title": "Storybook tab on a fake run (auto on): status line and entries appear as turns commit",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "settings": {
+          "run_id": "run_20260926_083542_c5d1",
+          "exists": true,
+          "settings": {
+            "storybook_auto": true,
+            "auto_since_turn_id": "r00000_init",
+            "storybook_budget_usd": 2,
+            "chat_budget_usd": 5,
+            "updated_at": "2026-09-26T08:35:42.376856+00:00"
+          },
+          "spend": {
+            "chat": {
+              "scope": "run_20260926_083542_c5d1",
+              "kind": "chat",
+              "limit_usd": 5,
+              "spent_usd": 0,
+              "remaining_usd": 5,
+              "exhausted": false
+            },
+            "storybook": {
+              "scope": "run_20260926_083542_c5d1",
+              "kind": "storybook",
+              "limit_usd": 2,
+              "spent_usd": 0,
+              "remaining_usd": 2,
+              "exhausted": false
+            },
+            "overall": {
+              "scope": "global",
+              "kind": "global",
+              "limit_usd": 20,
+              "spent_usd": 0,
+              "remaining_usd": 20,
+              "exhausted": false
+            },
+            "by_profile": {
+              "chat": {
+                "calls": 30,
+                "cost_usd": 0
+              },
+              "narrator": {
+                "calls": 61,
+                "cost_usd": 0
+              },
+              "author": {
+                "calls": 15,
+                "cost_usd": 0
+              }
+            }
+          }
+        },
+        "Run turn": "button /run turn/i",
+        "api": {
+          "entries": 2,
+          "opening": true,
+          "status": {
+            "auto": true,
+            "auto_state": "on",
+            "pending": 0,
+            "missing": 0,
+            "spent": 0
+          }
+        },
+        "label": true,
+        "auto_button": "Auto on",
+        "status_line": "2 entries · spent $0.00 of $2.00",
+        "entry_headings": [
+          "Round 1 · turn 1 · a02 Boreas",
+          "Round 1 · turn 2 · a01 Ash VIEWED"
+        ],
+        "first_entry": "“QA brief arena 2026-09-26_08-34-16”: 6 agents (6 alive) on a map of 441 cells (412 land, 16 mountain, 13 water), 12 plants, 12 fruits.",
+        "story_link": 1
+      },
+      "error": null,
+      "screenshot": "30-assistant-storybook.png",
+      "ms": 5462
+    },
+    {
+      "n": 31,
+      "id": "assistant-escape-record-viewer",
+      "title": "Escape inside the drawer closes the drawer but not the record viewer underneath",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "record_opener": "button /decision packet|model call|mc_r\\d+|pk_r\\d+/i",
+        "record_title": "Decision packet pk_r00002_t01_a04",
+        "focus_in_drawer": true,
+        "drawer_closed": true,
+        "record_viewer_still_open": true,
+        "second_escape_closes_viewer": true
+      },
+      "error": null,
+      "screenshot": "31-assistant-escape-record-viewer.png",
+      "ms": 3433
+    },
+    {
+      "n": 32,
+      "id": "story-mode",
+      "title": "Story Mode: run picker, step-0 run card with chips, brief with both estimates, Accept, first chapters, Export Markdown",
+      "ok": true,
+      "skipped": null,
+      "notes": [],
+      "found": {
+        "picker_rows": 14,
+        "card_headings": [
+          "qa browser 2026-09-26_08-34-16",
+          "Cast",
+          "Your choices"
+        ],
+        "chip_groups": [
+          "Genre: Chronicle",
+          "Tone: Measured",
+          "Vividness: 3 · Balanced",
+          "Point of view: Chronicler",
+          "Chapters: One chapter per turn"
+        ],
+        "story_dictate": 1,
+        "step0_model_calls": null,
+        "estimates": [
+          "One chapter per turn 11 chapters ≈$0.00 · ~1 s for the whole story Quiet turns become short interludes.",
+          "One chapter per round 3 chapters ≈$0.00 · ~0 s for the whole story Fewer, longer chapters."
+        ],
+        "accept_label": "Accept: write 11 chapters per turn, 3 at a time as you read",
+        "progress": "1 of 11 chapters written · Writing chapters writing chapter 2 of 11 spent $0.00 of $5.00",
+        "chapter_heading": "1. Opening",
+        "api": {
+          "status": "generating",
+          "chapters_done": 4,
+          "chapters_total": 11,
+          "chapters": [
+            "1:opening",
+            "2:interlude",
+            "3:interlude",
+            "4:interlude"
+          ]
+        },
+        "export": {
+          "file": "story-export-the-chronicle-of-qa-browser-2026-09-26-08-34-16.md",
+          "bytes": 866,
+          "first_line": "# The Chronicle of qa browser 2026-09-26_08-34-16"
+        }
+      },
+      "error": null,
+      "screenshot": "32-story-mode.png",
+      "ms": 3859
+    },
+    {
+      "n": 33,
+      "id": "assistant-dictate",
+      "title": "Dictate: present in the composer; enabled on a secure origin only when speech is ready; disabled with its reason on a non-secure origin",
+      "ok": true,
+      "skipped": null,
+      "notes": [
+        "http://127.0.0.1 IS a secure context in Chromium (loopback is potentially trustworthy); only a non-loopback host such as the machine's IP is insecure"
+      ],
+      "found": {
+        "speech": {
+          "status": "ready",
+          "model": "large-v3-turbo",
+          "reason": "the speech model loads on first use: the first dictation takes about 15 s longer",
+          "max_seconds": 60,
+          "max_bytes": 10000000,
+          "language_default": "en"
+        },
+        "origins": {
+          "http://127.0.0.1:5180": {
+            "secure": true,
+            "aria_disabled": null,
+            "title": "Dictate: press to record (up to 60 s), press again to stop. The text is inserted into the message box; you send it yourself. Note: the speech model loads on first use: the first dictation takes about 15 s longer.",
+            "label": "Dictate to the assistant"
+          },
+          "http://localhost:5180": {
+            "secure": true,
+            "aria_disabled": null,
+            "title": "Dictate: press to record (up to 60 s), press again to stop. The text is inserted into the message box; you send it yourself. Note: the speech model loads on first use: the first dictation takes about 15 s longer.",
+            "label": "Dictate to the assistant"
+          },
+          "http://qa-insecure.test:5180": {
+            "secure": false,
+            "aria_disabled": "true",
+            "title": "Dictate needs a secure page: open via localhost (for example http://localhost:5173) or HTTPS. The browser only allows the microphone there.",
+            "label": "Dictate to the assistant",
+            "message_after_click": "Dictate needs a secure page: open via localhost (for example http://localhost:5173) or HTTPS. The browser only allows the microphone there.",
+            "phase_after_click": "idle"
+          }
+        }
+      },
+      "error": null,
+      "screenshot": "33-assistant-dictate.png",
+      "ms": 1282
+    }
+  ],
+  "summary": {
+    "passed": 33,
+    "failed": 0,
+    "skipped": 0,
+    "failed_steps": []
+  },
+  "assistant": {
+    "mode": "auto",
+    "fake": true,
+    "hook": true,
+    "capabilities": {
+      "available": true,
+      "models": [
+        "chat=fake-assistant (fake)",
+        "narrator=fake-assistant (fake)",
+        "author=fake-assistant (fake)",
+        "summarizer=fake-assistant (fake)"
+      ],
+      "speech": "ready"
+    }
+  }
+}
