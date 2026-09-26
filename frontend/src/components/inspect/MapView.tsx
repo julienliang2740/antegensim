@@ -879,7 +879,9 @@ function HoverTooltip(props: HoverTooltipProps) {
           ×
         </button>
       </div>
-      {focus ? (
+      {/* The hovered dot's summary line is only useful when there are other rows to tell it apart
+          from; with a single occupant the highlighted row already says the same thing. */}
+      {focus && occupants.length > 1 ? (
         <div className="insp-tooltip-focus-head">
           <KindTag kind={focus.kind} dead={focus.dead} /> <strong>{focus.title}</strong>: {focus.line}
         </div>
