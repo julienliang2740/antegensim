@@ -387,10 +387,10 @@ ASSISTANT_SYSTEM_PROMPT_MAX_BYTES = 96 * 1024  # asserted before every call (CLI
 ASSISTANT_SCHEMA_MAX_BYTES = 16 * 1024  # compact per-profile JSON schema
 # Output caps per profile (R6): generous relative to the expected output; the prompt asks for brevity.
 ASSISTANT_OUTPUT_TOKENS: dict[str, int] = {
-    "chat": 2000,
+    "chat": 6000,  # a create-run brief with 12 agent cards needs well over 2000 output tokens
     "narrator": 600,
     "narrator_batched": 2400,
-    "chapter": 2000,
+    "chapter": 3000,
     "summarizer": 1000,
 }
 # Request settings per profile (R6): (timeout_seconds per attempt, max_retries).

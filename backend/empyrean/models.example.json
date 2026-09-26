@@ -6,7 +6,7 @@
       "provider": "fake",
       "model_id": "fake-heuristic",
       "credential_env": [],
-      "capabilities": {"supports_json_schema": true, "supports_json_mode": true, "context_window": 100000, "max_output_tokens": 4000, "reports_usage": false},
+      "capabilities": {"supports_json_schema": true, "supports_json_mode": true, "context_window": 100000, "max_output_tokens": 8000, "reports_usage": false},
       "mind_multiplier": 1.0,
       "description": "Deterministic seeded survival policy; no network."
     },
@@ -15,7 +15,7 @@
       "provider": "fake",
       "model_id": "fake-scripted",
       "credential_env": [],
-      "capabilities": {"supports_json_schema": true, "supports_json_mode": true, "context_window": 100000, "max_output_tokens": 4000, "reports_usage": false},
+      "capabilities": {"supports_json_schema": true, "supports_json_mode": true, "context_window": 100000, "max_output_tokens": 8000, "reports_usage": false},
       "mind_multiplier": 1.0,
       "description": "Replays per-agent decision scripts from request.metadata['fake_script']."
     },
@@ -24,7 +24,7 @@
       "provider": "fake",
       "model_id": "fake-malformed",
       "credential_env": [],
-      "capabilities": {"supports_json_schema": true, "supports_json_mode": true, "context_window": 100000, "max_output_tokens": 4000, "reports_usage": false},
+      "capabilities": {"supports_json_schema": true, "supports_json_mode": true, "context_window": 100000, "max_output_tokens": 8000, "reports_usage": false},
       "mind_multiplier": 1.0,
       "description": "Returns invalid JSON / illegal actions on a schedule to test validation gates."
     },

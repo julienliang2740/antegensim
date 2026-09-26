@@ -359,7 +359,7 @@ def _default_fake_refs() -> list[ModelRef]:
                 supports_json_schema=True,
                 supports_json_mode=True,
                 context_window=100000,
-                max_output_tokens=4000,
+                max_output_tokens=8000,
                 reports_usage=False,
             ),
             mind_multiplier=1.0,

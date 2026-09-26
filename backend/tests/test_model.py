@@ -292,7 +292,7 @@ def test_missing_credentials_and_output_limit_are_invalid_config(clean_env, regi
     result = call_model(make_request("anthropic-haiku"), registry)
     assert result.status == "invalid_config" and result.attempts == 0
     assert "ANTHROPIC_API_KEY" in (result.error or "")
-    too_big = call_model(make_request("fake-heuristic", max_output_tokens=4001), registry)
+    too_big = call_model(make_request("fake-heuristic", max_output_tokens=8001), registry)
     assert too_big.status == "invalid_config" and "max_output_tokens" in (too_big.error or "")
 
 

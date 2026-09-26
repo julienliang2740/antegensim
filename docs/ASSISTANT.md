@@ -29,9 +29,9 @@ One engine, four profiles that differ in prompt, tools, output format, model and
 
 | Profile | Used for | Default model key (env override) | Output | Output cap | Timeout / retries |
 | --- | --- | --- | --- | --- | --- |
-| `chat` | the drawer: answers, tool steps, questions, briefs | `claude-cli-sonnet-assistant` (`EMPYREAN_ASSISTANT_MODEL_CHAT`) | constrained JSON step | 2,000 tokens | 90 s / 0 |
+| `chat` | the drawer: answers, tool steps, questions, briefs | `claude-cli-sonnet-assistant` (`EMPYREAN_ASSISTANT_MODEL_CHAT`) | constrained JSON step | 6,000 tokens | 90 s / 0 |
 | `narrator` | storybook entries | `claude-cli-haiku-assistant` (`EMPYREAN_ASSISTANT_MODEL_NARRATOR`) | text | 600 (2,400 batched) | 60 s / 1 |
-| `author` | Story Mode interview, story brief, chapters | `claude-cli-sonnet-assistant` (`EMPYREAN_ASSISTANT_MODEL_AUTHOR`) | JSON (brief) / text (chapters, 2,000) | 2,000 | 90 s / 0 |
+| `author` | Story Mode interview, story brief, chapters | `claude-cli-sonnet-assistant` (`EMPYREAN_ASSISTANT_MODEL_AUTHOR`) | JSON (brief) / text (chapters, 3,000) | 3,000 | 90 s / 0 |
 | `summarizer` | conversation memory, story-so-far and cast updates | `claude-cli-haiku-assistant` (`EMPYREAN_ASSISTANT_MODEL_SUMMARIZER`) | text | 1,000 | 60 s / 1 |
 
 Assistant-only registry keys (`options.assistant_only: true`; hidden from `GET /api/models`
