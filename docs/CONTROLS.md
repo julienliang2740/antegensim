@@ -28,7 +28,7 @@ Pages (hash routes): `#/` entry, `#/new` New session, `#/resume` Resume session,
 | **Inspector** / **Turn record** / **God mode** / **Rules** / **Storybook** (*new*) | Run page, right tabs | Inspect entities / the facts of the viewed turn / stage edits / read the rules / read the AI narrative |
 | **Create continuation from turn <id>** | God mode tab | New run from the viewed checkpoint; the original is untouched |
 | **Reload working/ files** | God mode tab | Stage the edits made to the run's `working/` JSON files |
-| **Assistant** (*new*) | Rail header on the run page, bottom-right pill elsewhere, Alt+A | Open the assistant drawer |
+| **Assistant** (*new*) | Bottom-right pill on every page (hidden while the drawer is open) plus a rail-header button on the run page, Alt+A | Open the assistant drawer |
 | **Approve** / **Ask for changes** / **Cancel** (*new*) | Brief card in the drawer | Execute the proposed action once / reply with changes / reject it |
 | **Dictate** (*new*) | Assistant and Story Mode composers | Record speech and insert the transcript (never sends) |
 | **Write missing** (*new*) | Storybook tab | Narrate the turns that have no storybook entry yet (costs money with a paid narrator) |

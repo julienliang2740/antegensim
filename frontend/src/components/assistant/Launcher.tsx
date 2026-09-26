@@ -27,7 +27,7 @@ export function StatusDot(props: { status: AssistantStatus }) {
   return <span className={`assistant-dot assistant-dot-${props.status}`} title={STATUS_TEXT[props.status]} aria-label={STATUS_TEXT[props.status]} role="img" />;
 }
 
-/** Fixed pill (bottom-right) for pages without a rail; renders nothing while the drawer is open. */
+/** Fixed pill (bottom-right) on every page, the run page included (its rail also has a button, which was easy to miss); renders nothing while the drawer is open. */
 export function LauncherPill() {
   const drawer = useSyncExternalStore(subscribeDrawer, getDrawerState, getDrawerState);
   if (drawer.open) return null;

@@ -691,7 +691,7 @@ export function AssistantDrawer(props: AssistantDrawerProps) {
 
   return (
     <>
-      {props.route.name !== "run" ? <LauncherPill /> : null}
+      <LauncherPill />
       <div className="assistant-sr-only" aria-live="polite" aria-atomic="true">
         {drawer.open ? announce : ""}
       </div>
