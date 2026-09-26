@@ -134,7 +134,7 @@ export function getHealth(): Promise<HealthResponse> {
   return request("GET", "/api/health");
 }
 
-/** Default RunCreateRequest with `agentCount` (6..11, default 8) prefilled agent cards. */
+/** Default RunCreateRequest with `agentCount` (6..12, default 8) prefilled agent cards. */
 export function getDefaults(agentCount = 8): Promise<RunCreateRequest> {
   return request("GET", `/api/defaults?agent_count=${agentCount}`);
 }

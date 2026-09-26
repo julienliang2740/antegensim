@@ -32,6 +32,7 @@ itself (``empyrean.config`` loads it).
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -56,11 +57,13 @@ IDLE_STATES = ("paused", "error", "finished")
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run an Empyrean simulation headless and print a summary.")
     parser.add_argument("--model", default="fake-heuristic", help="registry model key for every agent (default fake-heuristic)")
-    parser.add_argument("--agents", type=int, default=8, help="number of agent cards, 6-11 (default 8)")
+    parser.add_argument("--agents", type=int, default=8, help="number of agent cards, 6-12 (default 8)")
     parser.add_argument("--rounds", type=int, default=3, help="rounds to run with step_round (default 3)")
     parser.add_argument("--seed", type=int, default=1, help="world seed (default 1)")
     parser.add_argument("--worlds-dir", default=None, help="where run folders are written (default: EMPYREAN_WORLDS_DIR or repo worlds/)")
     parser.add_argument("--name", default=None, help="run name (default 'headless <model> seed <seed>')")
+    parser.add_argument("--request", help="JSON file overlaid on GET /defaults: world/rules/context are deep-merged, "
+                        "other keys (agents, name, seed, ...) replace the default")
     parser.add_argument(
         "--live-check",
         action="store_true",
@@ -126,6 +129,17 @@ class Api:
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
+
+
+def deep_merge(base: dict, overlay: dict) -> dict:
+    """Recursively merge overlay into a copy of base (dicts merge, everything else replaces)."""
+    merged = dict(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def fmt(value: Optional[float], digits: int = 3) -> str:
@@ -329,6 +343,14 @@ def run(args: argparse.Namespace) -> int:
             api = Api(client)
             request = api.get("/defaults", agent_count=args.agents)
             request.update(name=name, seed=args.seed, default_model_key=args.model, play_delay_seconds=0.0)
+            if args.request:
+                overlay = json.loads(Path(args.request).read_text(encoding="utf-8"))
+                for key, value in overlay.items():
+                    if key in ("world", "rules", "context") and isinstance(value, dict):
+                        request[key] = deep_merge(request.get(key) or {}, value)
+                    else:
+                        request[key] = value
+                print(f"scenario overlay {args.request}: {len(request['agents'])} agents")
             summary = api.post("/runs", request, expect=201)
             run_id = summary["run_id"]
             api.post(f"/runs/{run_id}/open")

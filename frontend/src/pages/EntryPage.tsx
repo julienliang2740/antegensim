@@ -22,7 +22,7 @@ export function EntryPage() {
       <div className="entry-choices">
         <button type="button" className="choice" onClick={() => navigate({ name: "new" })}>
           <span className="choice-title">New session</span>
-          <span className="choice-text">Set up the world, plant rules, context settings and 6–11 agent cards (8 prefilled), then open the new run paused.</span>
+          <span className="choice-text">Set up the world, plant rules, context settings and 6–12 agent cards (8 prefilled), then open the new run paused.</span>
         </button>
         <button type="button" className="choice" onClick={() => navigate({ name: "resume" })}>
           <span className="choice-title">Resume session</span>

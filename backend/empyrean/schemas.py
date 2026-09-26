@@ -1915,7 +1915,7 @@ class RunCreateRequest(StrictModel):
     max_rounds: Optional[int] = Field(default=None, ge=1)
     play_delay_seconds: float = Field(default=0.2, ge=0, le=60)
     real_budget_usd: Optional[float] = Field(default=None, ge=0)
-    agents: list[AgentCard] = Field(min_length=6, max_length=11)
+    agents: list[AgentCard] = Field(min_length=6, max_length=12)
 
 
 class ApiProblem(StrictModel):

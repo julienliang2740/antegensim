@@ -223,6 +223,7 @@ DEFAULT_AGENT_POSITIONS: list[Point] = [
     Point(x=0, y=2),
     Point(x=-2, y=0),
     Point(x=0, y=-2),
+    Point(x=1, y=-1),
 ]
 
 DEFAULT_AGENT_NAMES: list[str] = [
@@ -237,9 +238,10 @@ DEFAULT_AGENT_NAMES: list[str] = [
     "Iole",
     "Jarek",
     "Kallias",
+    "Lysandra",
 ]
 
-MAX_AGENTS = 11
+MAX_AGENTS = 12  # spec suggests 6-11 initially; 12 allowed for arena-style experiments
 MIN_AGENTS = 6
 
 # ---------------------------------------------------------------------------
