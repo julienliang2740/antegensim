@@ -1,4 +1,4 @@
-/** A small badge for a story's status (colour by outcome; the words come from storyStatusText).  OWNER: WP6. */
+/** A small badge for a story's status (colour by outcome; the words come from storyStatusText); it pulses while a model works for the story.  OWNER: WP6. */
 
 import type { StoryStatus } from "../../api/storyTypes";
 
@@ -31,6 +31,6 @@ function tone(status: StoryStatus): string {
   }
 }
 
-export function StatusBadge(props: { status: StoryStatus }) {
-  return <span className={`storymode-badge${tone(props.status)}`}>{LABEL[props.status] ?? props.status}</span>;
+export function StatusBadge(props: { status: StoryStatus; working?: boolean }) {
+  return <span className={`storymode-badge${props.working ? " is-live working-pulse" : tone(props.status)}`}>{LABEL[props.status] ?? props.status}</span>;
 }

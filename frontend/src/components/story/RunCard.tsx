@@ -29,6 +29,7 @@ import {
   type StoryChoices,
 } from "../../state/storyMode";
 import { DictateButton } from "../assistant/DictateButton";
+import { WorkingSpinner } from "../common/Working";
 import { ChipGroup } from "./Chips";
 
 export interface RunCardProps {
@@ -45,6 +46,8 @@ export interface RunCardProps {
   busy: boolean;
   /** "Write the story brief" (step 0) or "Send the changes" (Change on a brief). */
   submitLabel: string;
+  /** The submit button's text while busy, next to a spinner ("Writing the brief…"). */
+  busyLabel?: string;
   heading: string;
   /** Shown when the composer is for a change request (what the author will redo). */
   note?: string | null;
@@ -170,7 +173,7 @@ export function RunCard(props: RunCardProps) {
         </div>
       </div>
 
-      <div className="storymode-composer">
+      <div className={`storymode-composer${busy ? " is-busy" : ""}`} aria-busy={busy || undefined}>
         <label htmlFor={textId}>
           <strong>Story author</strong> <span className="hint">— anything else the author should know (a theme, whom to root for, what to leave out). Optional.</span>
         </label>
@@ -198,7 +201,14 @@ export function RunCard(props: RunCardProps) {
             </button>
           ) : null}
           <button type="button" className="btn btn-primary" disabled={busy || (range !== null && !range.ok)} onClick={props.onSubmit} title="Ctrl/Cmd+Enter">
-            {busy ? "Working…" : props.submitLabel}
+            {busy ? (
+              <>
+                <WorkingSpinner />
+                {props.busyLabel ?? "Working…"}
+              </>
+            ) : (
+              props.submitLabel
+            )}
           </button>
         </div>
       </div>

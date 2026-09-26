@@ -54,6 +54,8 @@ from ..schemas import utc_now_iso
 from . import calls, digest
 from .ledger import BudgetExceeded
 from .models import (
+    UNFINISHED_STORY_STATUSES,
+    StoryListFilter,
     BudgetView,
     ChapterPlanEntry,
     ChapterUnit,
@@ -366,9 +368,7 @@ class StoryService:
                 card = None
         return StoryView(session=session, chapters=self._done_chapters(session.run_id, session.story_id), job=self._job_view(session.story_id), run_card=card)
 
-    def list(self, run_id: str) -> list[StorySessionSummary]:
-        """The run's stories, newest first."""
-        storage.find_run_dir(run_id)
+    def _summaries(self, run_id: str, run_name: str = "") -> list[StorySessionSummary]:
         folder = self.service.paths.stories_dir(run_id)
         out: list[StorySessionSummary] = []
         if folder.is_dir():
@@ -381,11 +381,34 @@ class StoryService:
                     continue
                 out.append(
                     StorySessionSummary(
-                        story_id=s.story_id, run_id=s.run_id, title=s.title, status=s.status, unit=s.unit,
+                        story_id=s.story_id, run_id=s.run_id, run_name=run_name, title=s.title, status=s.status, unit=s.unit,
                         chapters_done=s.chapters_done, chapters_total=s.chapters_total, spent_usd=s.spent_usd,
                         created_at=s.created_at, updated_at=s.updated_at,
                     )
                 )
+        return out
+
+    def list(self, run_id: str) -> list[StorySessionSummary]:
+        """The run's stories, newest first."""
+        storage.find_run_dir(run_id)
+        out = self._summaries(run_id)
+        out.sort(key=lambda s: (s.updated_at, s.story_id), reverse=True)
+        return out
+
+    def list_all(self, status: StoryListFilter = "all") -> list[StorySessionSummary]:
+        """Every run's stories (``run_name`` filled), most recently updated first.  ``unfinished``
+        keeps the statuses in ``UNFINISHED_STORY_STATUSES`` (interviewing, brief ready, writing,
+        paused, interrupted); ``finished`` keeps ``complete``.  Reads storage only; opens nothing."""
+        out: list[StorySessionSummary] = []
+        for run in storage.list_runs():
+            try:
+                out.extend(self._summaries(run.run_id, run.name))
+            except Exception:  # noqa: BLE001 - one unreadable run never hides the others
+                log.exception("story listing failed for %s", run.run_id)
+        if status == "unfinished":
+            out = [s for s in out if s.status in UNFINISHED_STORY_STATUSES]
+        elif status == "finished":
+            out = [s for s in out if s.status == "complete"]
         out.sort(key=lambda s: (s.updated_at, s.story_id), reverse=True)
         return out
 

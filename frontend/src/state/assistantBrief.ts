@@ -18,6 +18,7 @@ import type { ApiErrorCode, Intervention, RunCommand, RunStatus } from "../api/t
 import type { BriefAction, BriefEffect, ContextChip, SetupDiffEntry } from "../api/assistantTypes";
 import { describeIntervention } from "../components/inspect/logic";
 import type { AssistantContext } from "./assistantContext";
+import { formatElapsed } from "./working";
 
 // ---------------------------------------------------------------------------
 // Formatting
@@ -31,13 +32,8 @@ export function formatUsd(value: number | null | undefined): string {
   return `$${value.toFixed(2)}`;
 }
 
-/** "18 s", "1 min 05 s". */
-export function formatElapsed(seconds: number): string {
-  const s = Math.max(0, Math.round(seconds));
-  if (s < 60) return `${s} s`;
-  const m = Math.floor(s / 60);
-  return `${m} min ${String(s % 60).padStart(2, "0")} s`;
-}
+/** "18 s", "1 min 05 s" (shared with the working indicator, state/working.ts). */
+export { formatElapsed };
 
 /** The job progress line: "step 2/4 · 18 s · $0.03". */
 export function progressLine(step: number, maxSteps: number, elapsedS: number, costUsd: number): string {

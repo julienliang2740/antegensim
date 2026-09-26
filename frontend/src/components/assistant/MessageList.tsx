@@ -2,16 +2,18 @@
  * The conversation transcript: user messages (with the context chip they were
  * sent with), assistant answers (formatted blocks, linkified refs, sources,
  * "as of turn", cost, the offline "Docs search" label), clarifying questions
- * with option chips, in-progress cards ("step k/4 · Ns · $x" with Cancel,
- * elapsed ticking locally from job.started_at, the backend's per-step note
- * under it, never its stale "N s" text; the step list numbers steps as the
- * engine does, from 1) and
+ * with option chips, in-progress cards (the shared working indicator,
+ * components/common/Working.tsx: "Thinking…" or the backend's per-step note as
+ * its label, the ticking "step k/4 · Ns · $x" line as its note with elapsed
+ * computed locally from job.started_at, never the backend's stale "N s" text,
+ * and Cancel; the step list numbers steps as the engine does, from 1) and
  * failed messages rendered through the fixed error table with a Retry/other
  * action.  Brief messages render a BriefCard.
  *
- * DOCS: progress lines are not announced (aria-live covers final answers only,
- * in the drawer); the list auto-scrolls to the bottom when a new message
- * arrives while the user is already near the bottom.
+ * DOCS: the indicator's label is announced (role="status"); the ticking step
+ * line is aria-hidden, so it is not read out every second; the list
+ * auto-scrolls to the bottom when a new message arrives while the user is
+ * already near the bottom.
  */
 
 import { useEffect, useRef } from "react";
@@ -21,6 +23,7 @@ import type { ErrorAction, DescribeOptions } from "../../state/assistantBrief";
 import { AnswerBlocks, RefChips } from "./AnswerBlocks";
 import type { RefAction } from "./AnswerBlocks";
 import { BriefCard } from "./BriefCard";
+import { Working } from "../common/Working";
 
 export interface MessageListProps {
   view: ConversationView | null;
@@ -120,16 +123,17 @@ export function MessageList(props: MessageListProps) {
           const stopping = props.cancelling || !!job?.cancel_requested;
           return (
             <article key={message.message_id} className="assistant-msg assistant-msg-assistant assistant-msg-progress" aria-busy="true">
-              <div className="assistant-progress-line">
-                <span className="assistant-spinner" aria-hidden="true" />
-                <span className="mono">{line}</span>
-                {job && !stopping ? (
-                  <button type="button" className="btn btn-small" onClick={() => props.onCancelJob(job)}>
-                    Cancel
-                  </button>
-                ) : null}
-              </div>
-              <div className="hint">{stopping ? "Stopping after the current step…" : job?.queue_position ? `Queued (${job.queue_position} ahead)…` : (progressNote(message.progress ?? job?.progress) ?? "Thinking…")}</div>
+              <Working
+                className="assistant-working"
+                label={stopping ? "Stopping after the current step…" : job?.queue_position ? `Queued (${job.queue_position} ahead)…` : (progressNote(message.progress ?? job?.progress) ?? "Thinking…")}
+                showElapsed={false}
+                note={
+                  <span className="mono" aria-hidden="true">
+                    {line}
+                  </span>
+                }
+                onCancel={job && !stopping ? () => props.onCancelJob(job) : undefined}
+              />
               {message.steps.length > 0 ? (
                 <ul className="assistant-steps">
                   {message.steps.map((step) => (

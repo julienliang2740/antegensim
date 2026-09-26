@@ -305,9 +305,12 @@ export interface StorySession {
   error: string | null;
 }
 
+export type StoryListFilter = "all" | "unfinished" | "finished";
+
 export interface StorySessionSummary {
   story_id: string;
   run_id: string;
+  run_name: string; // the run's display name (filled by the cross-run listing; "" per run)
   title: string;
   status: StoryStatus;
   unit: ChapterUnit;

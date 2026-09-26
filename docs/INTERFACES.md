@@ -1262,6 +1262,7 @@ approved brief that executes a run action.
 | GET | `/runs/{run_id}/assistant/storybook?last_n=` | | `StorybookView` (read-only; never generates) |
 | POST | `/runs/{run_id}/assistant/storybook/generate` | `StorybookGenerateRequest` | `StorybookGenerateResponse` (202) |
 | POST | `/runs/{run_id}/assistant/storybook/entries/{turn_id}/regenerate` | | `StorybookGenerateResponse` (202) |
+| GET | `/assistant/stories?status=all\|unfinished\|finished` | | `StorySessionSummary[]` (every run, most recently updated first, `run_name` filled; `unfinished` = interviewing, brief ready, writing, paused, interrupted; `finished` = complete) |
 | GET | `/runs/{run_id}/assistant/stories` | | `StorySessionSummary[]` |
 | POST | `/runs/{run_id}/assistant/stories` | `StoryCreateRequest` | `StoryView` (201; deterministic run card, no model call) |
 | GET | `/runs/{run_id}/assistant/stories/{story_id}` | | `StoryView` |

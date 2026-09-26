@@ -55,8 +55,10 @@ labelled "Docs search (AI offline)".
 ## How a chat message is answered
 
 1. `POST .../conversations/{conv_id}/messages` stores the message and answers 202 with a job id;
-   the drawer polls the conversation every 700 ms and shows progress ("step 2/4 · 18 s · $0.03");
-   the backend refreshes the job's elapsed time and that line every second while a model call
+   the drawer polls the conversation every 700 ms and shows the working indicator: a spinner,
+   "Thinking…" (or the step's note) and the progress line ("step 2/4 · 18 s · $0.03", elapsed
+   ticking in the browser from the job's start), with Cancel; Send reads "Thinking…" meanwhile.
+   The backend refreshes the job's elapsed time and that line every second while a model call
    runs, not only when a step starts.
 2. **Step 1 is prefetched** with deterministic context: run status, the viewed turn's digest, the
    selected entity's dossier, the last round's digest and highlights. Most questions need one call.
@@ -231,6 +233,8 @@ Statuses: `pending`, `executing`, `executed`, `failed`, `rejected`, `superseded`
   `EMPYREAN_STORYBOOK_AUTO` = `on` / `off` / `auto` (the rule). Runs created before the assistant
   existed have no `settings.json` and are off. Auto covers only turns committed after it was
   switched on (`auto_since_turn_id`).
+* While entries are queued or being written the tab's status line shows the working indicator
+  "Narrating N turns…" with an elapsed counter.
 * **Catch-up is never automatic**: opening an old run spends nothing. The Storybook tab offers
   "Write missing (N entries, ≈$X, ~Y min)"; `POST .../storybook/generate` does the same.
 * One narration job per run at a time. A backlog of more than 2 turns is narrated in batched calls
@@ -264,6 +268,15 @@ Statuses: `pending`, `executing`, `executed`, `failed`, `rejected`, `superseded`
    `chapters/<NNNN>.json`; an interrupted job resumes from the first missing chapter.
 
 Only one story job runs at a time (others show "Queued behind ..."); chat has its own workers.
+
+While a model works for a story, a working banner sits under the page header (it stays in view
+while the page scrolls): "Sending your choices to the story author…", "Story author is
+thinking…" (the interview reply or the story brief; the author's reply is not a stored message
+until it lands, so the interview shows a pending "Story author" row), "Writing chapter k of N…"
+(the counter restarts per chapter, from the previous chapter's time), "Queued behind ..." or
+"Stopping after the current chapter…", with an elapsed counter ticking in the browser and
+**Cancel** (`POST .../cancel`). The header badge pulses, the composer's button reads "Writing the
+brief…" with a spinner, and the reader's current chapter shows the same indicator.
 
 ## Dictate (speech input)
 
@@ -321,6 +334,7 @@ response models: `docs/INTERFACES.md` section 9.
 | GET | `/api/runs/{run_id}/assistant/storybook?last_n=` | entries and status (read-only, spends nothing) |
 | POST | `/api/runs/{run_id}/assistant/storybook/generate` | write missing entries (202) |
 | POST | `/api/runs/{run_id}/assistant/storybook/entries/{turn_id}/regenerate` | rewrite one entry (202) |
+| GET | `/api/assistant/stories?status=all\|unfinished\|finished` | every run's stories, most recently updated first, `run_name` filled (the run picker's ordering and its Finished stories panel) |
 | GET / POST | `/api/runs/{run_id}/assistant/stories` | list stories / start one (run card, no model call) |
 | GET | `/api/runs/{run_id}/assistant/stories/{story_id}` | a story session with chapters and job |
 | POST | `/api/runs/{run_id}/assistant/stories/{story_id}/messages` | interview message: produces or revises the brief (202) |

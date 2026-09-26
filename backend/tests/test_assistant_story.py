@@ -519,3 +519,34 @@ def test_story_routes(manager, registry, worlds_dir, fake_model) -> None:
         r = client.post(base, json={"picks": {"from_turn_id": "r00042_end"}})
         assert r.status_code == 422 and r.json()["error"] == "validation_error"
         assert client.post(f"{base}/{sid}/cancel").json()["session"]["status"] == "cancelled"
+
+
+def test_list_all_stories_across_runs_with_filters(service, manager, fake_model) -> None:
+    """GET /api/assistant/stories: every run's stories newest first with run_name; ``unfinished``
+    keeps interviewing / brief ready / writing / paused / interrupted, ``finished`` keeps complete."""
+    from fastapi.testclient import TestClient
+
+    from empyrean.api import create_app
+
+    older = played_run(manager, 1)
+    newer = played_run(manager, 1)
+    # A finished story on the older run, an unfinished (brief ready) one on the newer run.
+    finished = approved_story(service, older.run_id, unit="round", generate_all=True)
+    wait_for(lambda: service.story.get(older.run_id, finished.session.story_id).session.status == "complete", what="complete")
+    pending = service.story.create(newer.run_id, StoryCreateRequest(text="A wry chronicle."))
+    brief_ready(service, newer.run_id, pending.session.story_id)
+    assert service.story.get(newer.run_id, pending.session.story_id).session.status == "brief_pending"
+
+    everything = service.story.list_all("all")
+    assert [s.story_id for s in everything] == [pending.session.story_id, finished.session.story_id]
+    assert {s.run_id: s.run_name for s in everything} == {older.run_id: manager.get_summary(older.run_id).name, newer.run_id: manager.get_summary(newer.run_id).name}
+    assert [s.story_id for s in service.story.list_all("unfinished")] == [pending.session.story_id]
+    assert [s.story_id for s in service.story.list_all("finished")] == [finished.session.story_id]
+
+    app = create_app(manager, service)
+    with TestClient(app) as client:
+        r = client.get("/api/assistant/stories?status=finished")
+        assert r.status_code == 200 and [s["story_id"] for s in r.json()] == [finished.session.story_id]
+        assert r.json()[0]["run_name"] == manager.get_summary(older.run_id).name
+        assert client.get("/api/assistant/stories?status=bogus").status_code == 422
+        assert len(client.get("/api/assistant/stories").json()) == 2

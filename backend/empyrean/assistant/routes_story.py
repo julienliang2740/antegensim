@@ -1,6 +1,7 @@
 """
 Story Mode routes (rev 4, amended D8).  OWNER: WP3.
 
+    GET  /api/assistant/stories?status=all|unfinished|finished          -> list[StorySessionSummary] (every run, newest first, run_name filled)
     GET  /api/runs/{run_id}/assistant/stories                         -> list[StorySessionSummary]
     POST /api/runs/{run_id}/assistant/stories  StoryCreateRequest     -> StoryView (201; deterministic run card; an author job only when picks/text are given)
     GET  /api/runs/{run_id}/assistant/stories/{story_id}              -> StoryView
@@ -29,6 +30,7 @@ from typing import TYPE_CHECKING, Optional
 from fastapi import APIRouter, Query
 
 from .models import (
+    StoryListFilter,
     StoryApproveRequest,
     StoryChapter,
     StoryContinueRequest,
@@ -39,7 +41,7 @@ from .models import (
     StorySessionSummary,
     StoryView,
 )
-from .routes import RUN_PREFIX
+from .routes import ASSISTANT_PREFIX, RUN_PREFIX
 from .story import StoryService
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -57,6 +59,11 @@ def build_router(service: "AssistantService") -> APIRouter:
     """The Story Mode router; attaches ``service.story`` when it is not there yet."""
     router = APIRouter()
     story = StoryService.attach(service)
+
+    @router.get(ASSISTANT_PREFIX + "/stories", response_model=list[StorySessionSummary])
+    def list_all_stories(status: StoryListFilter = Query("all")) -> list[StorySessionSummary]:
+        """Every run's stories, most recently updated first (``status``: all | unfinished | finished)."""
+        return story.list_all(status)
 
     @router.get(STORIES, response_model=list[StorySessionSummary])
     def list_stories(run_id: str) -> list[StorySessionSummary]:

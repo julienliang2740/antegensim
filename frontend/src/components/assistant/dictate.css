@@ -74,16 +74,6 @@
   font-weight: 600;
 }
 
-.dictate-spinner {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  flex: none;
-  animation: dictate-spin 0.8s linear infinite;
-}
-
 .dictate-message {
   color: var(--warn);
   background: var(--warn-bg);
@@ -120,15 +110,8 @@
   }
 }
 
-@keyframes dictate-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .dictate-dot,
-  .dictate-spinner {
+  .dictate-dot {
     animation: none;
   }
 }

@@ -107,8 +107,11 @@ QA backend `qa/assistant_fake_server.py`: it builds the same app as `python -m e
 every assistant profile (chat, narrator, author, summarizer) to `fake-assistant`, refuses to start
 otherwise, turns the Whisper preload off, serves on port 8020 with the worlds folder
 `qa/worlds-assistant/`, and adds `GET/PUT /api/_qa/fake_metadata` so the script can tell the fake chat
-model what to answer (a brief, refs, a slow step). The plain server has no such hook, so there the fake
-chat model only ever gives its default answer and the brief steps cannot run.
+model what to answer (a brief, refs, a slow step). The same hook slows the story author and the
+storybook narrator (`{"author": {"fake_options": {"sleep_ms": 8000}}}`), which is how the working
+indicator screenshots in `docs/evidence/screenshots/assistant/` were taken. The plain server has no
+such hook, so there the fake chat model only ever gives its default answer and the brief steps
+cannot run.
 
 ```bash
 # QA backend: every assistant profile forced to fake-assistant, whisper preload off, port 8020,

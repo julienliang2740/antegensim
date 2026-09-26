@@ -207,6 +207,7 @@ never spends money.
 | --- | --- | --- |
 | Opening entry, entries in commit order | Click an entry to view that turn; the viewed turn's entry is highlighted | |
 | Auto on/off toggle | Narrate new turns automatically from now on (the "auto since" turn) | `PUT /api/runs/{run_id}/assistant/settings` |
+| Working indicator "Narrating N turns…" (status line) | Shown with a ticking counter while entries are queued or being written | |
 | **Write missing** (N entries, ≈$X, ~Y min) | Narrate every committed turn without an entry, in batches | `POST /api/runs/{run_id}/assistant/storybook/generate` |
 | **Regenerate** (per entry) | Write one entry again (one narrator call) | `POST /api/runs/{run_id}/assistant/storybook/entries/{turn_id}/regenerate` |
 | **Raise budget** | Raise the run's storybook budget after auto paused at it | `PUT /api/runs/{run_id}/assistant/settings` |
@@ -252,14 +253,22 @@ otherwise. Escape closes it when focus is inside (a recording is cancelled first
 | Header | Spend indicator ("$x of $y") | Opens the spend popover: per-profile spend (list-price estimate) and the limits | `GET /api/assistant/capabilities` |
 | Spend popover | **Save limits** | Set this run's chat and storybook budgets (a direct control, no brief) | `PUT /api/runs/{run_id}/assistant/settings` |
 | Header | Dock / Float toggle | Dock the drawer beside the run page or float it | |
-| Composer | Text box + **Send** (Ctrl/Cmd+Enter) | Ask; the answer arrives step by step ("step k/4 · Ns · $x") | `POST /api/assistant/conversations/{conv_id}/messages`, then `GET /api/assistant/conversations/{conv_id}` |
+| Composer | Text box + **Send** (Ctrl/Cmd+Enter) | Ask; the answer arrives step by step ("step k/4 · Ns · $x"); while it is written the button shows a spinner and "Thinking…" | `POST /api/assistant/conversations/{conv_id}/messages`, then `GET /api/assistant/conversations/{conv_id}` |
 | Composer | **Include what I'm looking at** | Send the context chip (page, run, viewed turn, selection) with the message | |
 | Composer | **Dictate** | Speech to text (see "Dictate") | `POST /api/assistant/transcribe` |
 | Composer | Suggestion chips | Prefill a suggested question | |
-| Message in progress | **Stop** | Cancel after the current step ("Stopping after the current step…") | `POST /api/assistant/conversations/{conv_id}/jobs/{job_id}/cancel` |
+| Message in progress | Working indicator + **Cancel** | Spinner, "Thinking…" (or the step's note, "Queued (N ahead)…"), the ticking "step k/4 · Ns · $x" line; Cancel stops after the current step ("Stopping after the current step…") | `POST /api/assistant/conversations/{conv_id}/jobs/{job_id}/cancel` |
 | Failed message | **Retry** / **Raise limit** | Send again / raise the limit that stopped it | |
 | Answer | Reference chips and linked ids | View a turn, select an entity or point, open a run, open a docs section, flash a control (no approval needed) | |
 | Offline answer | "Docs search (AI offline)" | Shown when no model is available: the best matching docs sections | |
+
+### Working indicator (*new*)
+
+Wherever a model is working (the drawer's message in progress, Story Mode,
+the Storybook tab, Dictate's "Transcribing…") the UI shows the same indicator: a spinner (a
+static dotted ring when the system asks for reduced motion), what is happening, and an elapsed
+counter that ticks in the browser from the job's start. Screen readers hear the label once, not
+every tick.
 
 ### Brief card (*new*)
 
@@ -284,14 +293,15 @@ flag or budgets.
 
 | Step | Label | Effect | API |
 | --- | --- | --- | --- |
-| Pick a run | Run list | Choose a run (nothing is opened or spent) | `GET /api/runs` |
+| Pick a run | Run list | Choose a run (nothing is opened or spent). Runs with an unfinished story (choosing, brief ready, writing, paused, interrupted) are listed first, most recently touched first, shaded, with a **Stories** column saying what is going on ("writing 3 of 11 · title", "Story brief waiting for you · title") and a **Continue story** button that opens that story; other runs follow, newest saved first, with **Story** | `GET /api/runs`, `GET /api/assistant/stories?status=all` |
+| Pick a run | **Finished stories** (N) (top right of the filter row) / **Hide finished stories** | Toggle a panel above the table listing the complete stories of every run, most recent first: title, run, chapters, spend, finished time, **Read** (opens the story) and **Back to runs** | `GET /api/assistant/stories?status=all` |
 | Run card | Quick picks: genre, tone, vividness (1-5), point of view (chronicler or follow an agent), turn range; free text; **Dictate** | The deterministic run card (cast, rounds, deaths, highlights) plus your choices | `POST /api/runs/{run_id}/assistant/stories` |
-| Interview | Send | One author call writes the story brief | `POST /api/runs/{run_id}/assistant/stories/{story_id}/messages` |
+| Interview | **Write the story brief** (**Send the changes** after Change) | One author call writes the story brief; while it works the button reads "Writing the brief…" with a spinner, the composer is disabled and the interview shows the author's pending reply | `POST /api/runs/{run_id}/assistant/stories/{story_id}/messages` |
 | Story brief | **Accept** / **Change** / **Cancel** | Start the chapters / ask for a revised brief / drop it | `.../approve`, `.../messages`, `.../reject` |
 | Reader | Chapter list, previous / next | Read; the next 3 chapters are written ahead of you | `GET .../stories/{story_id}/chapters/{n}` |
 | Reader | **Generate all** (est. $X, ~Y min) | Write every remaining chapter now | `POST .../stories/{story_id}/continue` |
 | Reader | **Continue story** | Extend a story pinned to an end turn over newer turns | `POST .../stories/{story_id}/continue` |
-| Reader | Stop | Stop the chapter job after the current chapter | `POST .../stories/{story_id}/cancel` |
+| Working banner (under the header) | Label, elapsed counter, **Cancel** | Shown while a model works for the story: "Sending your choices to the story author…", "Story author is thinking…", "Writing chapter 3 of 11…", "Queued behind …", "Stopping after the current chapter…"; the header badge pulses. Cancel stops the author or the chapter job after the current chapter (the story becomes cancelled; written chapters stay) | `POST .../stories/{story_id}/cancel` |
 | Reader | **Export Markdown** | Download the story | `GET .../stories/{story_id}/export` |
 
 ## Dictate (*new*)

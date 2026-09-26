@@ -772,9 +772,14 @@ class StorySession(LooseModel):
     error: Optional[str] = None
 
 
+UNFINISHED_STORY_STATUSES: tuple[str, ...] = ("interviewing", "brief_pending", "generating", "paused", "interrupted")
+StoryListFilter = Literal["all", "unfinished", "finished"]
+
+
 class StorySessionSummary(StrictModel):
     story_id: str
     run_id: str
+    run_name: str = ""  # the run's display name (filled by the cross-run listing)
     title: str
     status: StoryStatus
     unit: ChapterUnit

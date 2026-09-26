@@ -12,7 +12,10 @@
  * story every 2.5 s while a job or an author reply is in flight, publishes
  * { page: "story", runId, storyId } to state/assistantContext.ts, and marks a
  * chapter read when it is opened (GET chapters/{n}?mark_read=true), which is
- * what lets the job write the next three.
+ * what lets the job write the next three.  While a model works for the story
+ * (the page's own send, the author's reply, a chapter, a queued job) a
+ * working banner (components/common/Working.tsx) sits under the header with
+ * the label, a ticking elapsed counter and Cancel; the header badge pulses.
  *
  * DOCS: Story Mode control labels live here and in components/story/*: "Story",
  * "New story", "Write the story brief", "Dictate", "Accept: write N chapters…",
@@ -27,6 +30,7 @@ import { approveStory, cancelStory, continueStory, exportStory, generateAllChapt
 import type { ChapterUnit, StoryView } from "../api/storyTypes";
 import { PageHeader } from "../components/common/PageHeader";
 import { ErrorLine } from "../components/common/Problems";
+import { Working } from "../components/common/Working";
 import { BriefCard } from "../components/story/BriefCard";
 import { Interview } from "../components/story/Interview";
 import { Reader } from "../components/story/Reader";
@@ -49,6 +53,7 @@ import {
   storyPhase,
   storyPollDelay,
   storyStatusText,
+  storyWork,
   validateTurnRange,
   type StoryChoices,
 } from "../state/storyMode";
@@ -71,7 +76,7 @@ function RunPickerPage() {
   }, []);
   return (
     <div className="page storymode-page">
-      <PageHeader title="Story Mode" subtitle="Turn a finished or running world into a story. Choose a run; reading and writing stories never opens it." />
+      <PageHeader title="Story Mode" subtitle="Turn a finished or running world into a story: pick a run, genre, tone and point of view, read it chapter by chapter." />
       <RunPicker />
     </div>
   );
@@ -256,7 +261,9 @@ function StorySessionPage(props: { runId: string; storyId: string }) {
     const check = validateTurnRange(choices.range, turns.data);
     return check.ok ? check.counts : null;
   }, [choices, turns.data]);
-  const authorBusy = busy !== null || (session?.messages.some((m) => m.status === "pending" || m.status === "running") ?? false);
+  /** What a model is doing for this story right now (the banner, the interview's pending reply, the reader's current chapter). */
+  const work = view ? storyWork(view.session, view.job, view.chapters, busy === "message") : null;
+  const authorBusy = busy !== null || work?.stage === "author" || (session?.messages.some((m) => m.status === "pending" || m.status === "running") ?? false);
 
   return (
     <div className="page storymode-page">
@@ -268,13 +275,25 @@ function StorySessionPage(props: { runId: string; storyId: string }) {
             {session ? (
               <>
                 {" · "}
-                <StatusBadge status={session.status} /> {storyStatusText(session.status)}
+                <StatusBadge status={session.status} working={work !== null} /> {storyStatusText(session.status)}
                 {session.spent_usd > 0 ? ` · spent ${formatSpent(session.spent_usd)}` : ""}
               </>
             ) : null}
           </span>
         }
       />
+      {work ? (
+        <Working
+          variant="banner"
+          className="storymode-working"
+          label={work.label}
+          note={work.note}
+          startedAt={work.startedAt}
+          workKey={work.key}
+          onCancel={work.cancellable ? cancel : undefined}
+          cancelDisabled={busy !== null}
+        />
+      ) : null}
       <div className="storymode-toolbar">
         <button type="button" className="btn btn-link" onClick={() => navigate({ name: "story", runId, storyId: null })}>
           All stories of this run
@@ -293,7 +312,7 @@ function StorySessionPage(props: { runId: string; storyId: string }) {
 
       {view && session && phase === "reader" && current !== null ? (
         <>
-          <Reader runId={runId} view={view} current={current} onSelect={(n) => setOpened(Math.max(1, total > 0 ? Math.min(total, n) : n))} runLastTurnId={run.data?.current_turn_id ?? null} busy={busy !== null} onGenerateAll={generateAll} onCancel={cancel} onContinue={continueLater} onExport={download} />
+          <Reader runId={runId} view={view} current={current} onSelect={(n) => setOpened(Math.max(1, total > 0 ? Math.min(total, n) : n))} runLastTurnId={run.data?.current_turn_id ?? null} busy={busy !== null} work={work} onGenerateAll={generateAll} onContinue={continueLater} onExport={download} />
           {session.brief || session.messages.length ? (
             <details className="storymode-card">
               <summary>Story brief and interview</summary>
@@ -304,7 +323,7 @@ function StorySessionPage(props: { runId: string; storyId: string }) {
                   <p className="hint">{session.brief.style_guide}</p>
                 </>
               ) : null}
-              <Interview messages={session.messages} />
+              <Interview messages={session.messages} pending={work?.stage === "author" ? work : null} />
             </details>
           ) : null}
         </>
@@ -326,12 +345,13 @@ function StorySessionPage(props: { runId: string; storyId: string }) {
               busy={authorBusy}
               heading="Ask for changes"
               submitLabel="Send the changes"
+              busyLabel="Writing the new brief…"
               note="The author writes a new brief from your changed chips and this note; the current brief is superseded."
               onCancel={() => setChanging(false)}
             />
           ) : null}
           {changing && !view.run_card ? <p className="hint">The run card is not available for this story; cancel the brief and start a new story to change the choices.</p> : null}
-          <Interview messages={session.messages} />
+          <Interview messages={session.messages} pending={work?.stage === "author" ? work : null} />
         </>
       ) : null}
 
@@ -340,12 +360,12 @@ function StorySessionPage(props: { runId: string; storyId: string }) {
           {session.status === "cancelled" ? <p className="hint">The brief was cancelled; nothing was generated. Change the choices and ask again, or start another story.</p> : null}
           {session.status === "error" && session.error ? <ErrorLine text={session.error} prefix="The author stopped:" /> : null}
           {view.run_card && choices ? (
-            <RunCard runId={runId} card={view.run_card} turnIds={turns.data} choices={choices} onChoices={setChosen} text={text} onText={setText} onSubmit={sendMessage} busy={authorBusy} heading={view.run_card.name} submitLabel="Write the story brief" />
+            <RunCard runId={runId} card={view.run_card} turnIds={turns.data} choices={choices} onChoices={setChosen} text={text} onText={setText} onSubmit={sendMessage} busy={authorBusy} heading={view.run_card.name} submitLabel="Write the story brief" busyLabel="Writing the brief…" />
           ) : (
             <p className="hint">No run card came with this story.</p>
           )}
           <ErrorLine text={turns.error} prefix="Could not list the run's turns (the turn range stays at the whole run):" />
-          <Interview messages={session.messages} />
+          <Interview messages={session.messages} pending={work?.stage === "author" ? work : null} />
         </>
       ) : null}
     </div>

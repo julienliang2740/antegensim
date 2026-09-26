@@ -31,6 +31,7 @@ const MODULES = [
   "state/storyMode.ts",
   "components/inspect/format.ts",
   "components/inspect/logic.ts",
+  "state/working.ts",
   "state/assistantBrief.ts",
 ];
 
@@ -64,6 +65,7 @@ const assistantContext = await load("state/assistantContext.mjs");
 const assistantBrief = await load("state/assistantBrief.mjs");
 const assistantFormat = await load("state/assistantFormat.mjs");
 const storyMode = await load("state/storyMode.mjs");
+const working = await load("state/working.mjs");
 
 // ---------------------------------------------------------------- fixtures
 
@@ -980,4 +982,109 @@ test("refChipText drops a leading copy of the chip's kind", () => {
   // no label: the id
   assert.equal(assistantFormat.refChipText(["run", "run"], null, "run_1"), "run_1");
   assert.equal(assistantFormat.refChipText(["run", "run"], "  ", "run_1"), "run_1");
+});
+
+test("working indicator: elapsed seconds tick from a start timestamp, a new piece of work restarts a local counter", () => {
+  const t0 = Date.parse("2026-09-26T10:00:00Z");
+  assert.equal(working.formatElapsed(0), "0 s");
+  assert.equal(working.formatElapsed(59.4), "59 s");
+  assert.equal(working.formatElapsed(65), "1 min 05 s");
+  assert.equal(assistantBrief.formatElapsed(65), "1 min 05 s");
+  assert.equal(working.startMs("2026-09-26T10:00:00Z"), t0);
+  assert.equal(working.startMs(t0), t0);
+  assert.equal(working.startMs(null), null);
+  assert.equal(working.startMs(""), null);
+  assert.equal(working.startMs("not a date"), null);
+  assert.equal(working.elapsedSince("2026-09-26T10:00:00Z", t0 + 12_900), 12);
+  assert.equal(working.elapsedSince(t0, t0 - 5000), 0); // clock skew never goes negative
+  assert.equal(working.elapsedSince(undefined, t0), null);
+  const first = working.trackStart(null, "job1:ch2", null, t0);
+  assert.deepEqual(first, { key: "job1:ch2", startMs: t0 });
+  assert.equal(working.trackStart(first, "job1:ch2", null, t0 + 9000), first); // same work: keep counting
+  assert.deepEqual(working.trackStart(first, "job1:ch3", null, t0 + 9000), { key: "job1:ch3", startMs: t0 + 9000 });
+  assert.deepEqual(working.trackStart(first, "job2", "2026-09-26T09:59:50Z", t0), { key: "job2", startMs: t0 - 10_000 });
+});
+
+test("storyWork names what the story's model is doing: sending, the author, a chapter, the queue, stopping", () => {
+  const session = { status: "interviewing", chapters_done: 0, chapters_total: 0, brief: null, superseded_briefs: [], generate_all: false, spent_usd: 0.12, job_budget_usd: 2, messages: [{ role: "user", created_at: "2026-09-26T10:00:00Z" }] };
+  const job = { job_id: "j1", status: "running", queue_position: 0, queued_behind: null, cancel_requested: false, started_at: "2026-09-26T10:00:01Z" };
+  assert.equal(storyMode.storyWork(null, job, []), null);
+  assert.equal(storyMode.storyWork(session, null, []), null);
+  assert.equal(storyMode.storyWork(session, { ...job, status: "done" }, []), null);
+  const sending = storyMode.storyWork(session, null, [], true);
+  assert.equal(sending.state, "sending");
+  assert.equal(sending.stage, "author");
+  assert.match(sending.label, /^Sending your choices to the story author/);
+  const author = storyMode.storyWork(session, job, []);
+  assert.equal(author.label, "Story author is thinking…");
+  assert.equal(author.stage, "author");
+  assert.equal(author.startedAt, job.started_at);
+  assert.equal(author.cancellable, true);
+  assert.match(author.note, /story brief from your choices/);
+  assert.match(storyMode.storyWork({ ...session, superseded_briefs: [{}] }, job, []).note, /new story brief from your changes/);
+  const queued = storyMode.storyWork(session, { ...job, status: "queued", started_at: null, queued_behind: 'Queued behind "The Arena" (ch 40/285)' }, []);
+  assert.equal(queued.label, 'Queued behind "The Arena" (ch 40/285)…');
+  assert.equal(queued.startedAt, "2026-09-26T10:00:00Z"); // counts from the user's request
+  assert.equal(storyMode.storyWork(session, { ...job, status: "queued", queue_position: 2 }, []).label, "Queued (position 2)…");
+  const stopping = storyMode.storyWork(session, { ...job, cancel_requested: true }, []);
+  assert.equal(stopping.state, "stopping");
+  assert.equal(stopping.cancellable, false);
+  assert.equal(storyMode.storyWork({ ...session, status: "cancelled" }, { ...job, cancel_requested: true }, []).label, "Stopping the story author…");
+  const gen = { ...session, status: "generating", chapters_done: 2, chapters_total: 11, brief: { status: "executing", chapter_plan: [] } };
+  const chapters = [
+    { number: 1, created_at: "2026-09-26T10:00:20Z" },
+    { number: 2, created_at: "2026-09-26T10:00:45Z" },
+  ];
+  const ch = storyMode.storyWork(gen, job, chapters);
+  assert.equal(ch.label, "Writing chapter 3 of 11…");
+  assert.equal(ch.stage, "chapters");
+  assert.equal(ch.chapter, 3);
+  assert.equal(ch.startedAt, "2026-09-26T10:00:45Z"); // the previous chapter's time, later than the job's start
+  assert.equal(ch.key, "j1:ch3");
+  assert.match(ch.note, /Written 3 ahead of where you read · spent \$0\.12 of \$2\.00/);
+  assert.equal(storyMode.storyWork({ ...gen, chapters_done: 0 }, job, []).startedAt, job.started_at);
+  assert.equal(storyMode.storyWork({ ...gen, chapters_done: 0 }, job, []).label, "Writing chapter 1 of 11…");
+  assert.match(storyMode.storyWork({ ...gen, generate_all: true }, job, chapters).note, /^Writing every remaining chapter/);
+  assert.equal(storyMode.storyWork(gen, { ...job, cancel_requested: true }, chapters).label, "Stopping after the current chapter…");
+  assert.equal(storyMode.storyWork({ ...gen, chapters_done: 11 }, job, chapters).label, "Finishing the story…");
+  // The session count trails the chapter files for one poll: chapter 1 is on screen, so the banner names chapter 2.
+  assert.equal(storyMode.storyWork({ ...gen, chapters_done: 0 }, job, [chapters[0]]).label, "Writing chapter 2 of 11…");
+});
+
+test("storybookWorkingLabel says how many turns are being narrated; the status line then omits the pending count", () => {
+  assert.equal(storyMode.storybookWorkingLabel({ pending_count: 3, in_flight: true }), "Narrating 3 turns…");
+  assert.equal(storyMode.storybookWorkingLabel({ pending_count: 1, in_flight: false }), "Narrating 1 turn…");
+  assert.equal(storyMode.storybookWorkingLabel({ pending_count: 0, in_flight: true }), "Narrating…");
+  assert.equal(storyMode.storybookWorkingLabel({ pending_count: 0, in_flight: false }), null);
+  assert.equal(storyMode.storybookWorkingLabel(null), null);
+  const spend = { limit_usd: 2, spent_usd: 0.35 };
+  assert.deepEqual(storyMode.storybookStatusParts({ pending_count: 3, in_flight: true, missing_count: 0, spend, entry_count: 1 }, false), ["1 entry", "spent $0.35 of $2.00"]);
+});
+
+
+test("story mode run picker: unfinished stories first, finished newest first", () => {
+  const story = (over) => ({ story_id: "s", run_id: "r1", run_name: "", title: "T", status: "complete", unit: "turn", chapters_done: 0, chapters_total: 0, spent_usd: 0, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", ...over });
+  const stories = [
+    story({ story_id: "a", run_id: "r1", status: "generating", chapters_done: 3, chapters_total: 11, title: "The Chronicle", updated_at: "2026-01-03T00:00:00Z" }),
+    story({ story_id: "b", run_id: "r2", status: "brief_pending", updated_at: "2026-01-05T00:00:00Z" }),
+    story({ story_id: "c", run_id: "r1", status: "interviewing", updated_at: "2026-01-02T00:00:00Z" }),
+    story({ story_id: "d", run_id: "r3", status: "complete", updated_at: "2026-01-04T00:00:00Z" }),
+    story({ story_id: "e", run_id: "r9", status: "complete", updated_at: "2026-01-06T00:00:00Z" }),
+    story({ story_id: "f", run_id: "r2", status: "cancelled", updated_at: "2026-01-09T00:00:00Z" }),
+  ];
+  const work = storyMode.unfinishedByRun(stories);
+  assert.deepEqual([...work.keys()].sort(), ["r1", "r2"]);
+  assert.equal(work.get("r1").count, 2);
+  assert.equal(work.get("r1").story.story_id, "a");
+  const runs = [
+    { run_id: "r3", saved_at: "2026-01-09T00:00:00Z" },
+    { run_id: "r1", saved_at: "2026-01-01T00:00:00Z" },
+    { run_id: "r4", saved_at: "2026-01-08T00:00:00Z" },
+    { run_id: "r2", saved_at: "2026-01-02T00:00:00Z" },
+  ];
+  assert.deepEqual(storyMode.orderRunsForPicker(runs, work).map((r) => r.run_id), ["r2", "r1", "r3", "r4"]);
+  assert.equal(storyMode.unfinishedStoryText(work.get("r1")), "writing 3 of 11 · The Chronicle (+1 more)");
+  assert.equal(storyMode.unfinishedStoryText(work.get("r2")), "Story brief waiting for you · T");
+  assert.equal(storyMode.unfinishedStoryText(undefined), "");
+  assert.deepEqual(storyMode.finishedStoriesNewestFirst(stories).map((s) => s.story_id), ["e", "d"]);
 });

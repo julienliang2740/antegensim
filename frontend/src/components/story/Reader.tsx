@@ -1,8 +1,10 @@
 /**
  * The Story Mode reader (amended D8; OWNER: WP6): the chapter list beside the
  * current chapter, prev/next, what the job is doing ("Writing chapter k of N",
- * queue position, "Stopping after the current chapter…"), "Generate all (est.
- * $X, ~Y min)", Cancel, "Continue story" for turns committed after the story's
+ * queue position, "Stopping after the current chapter…"; the current chapter
+ * shows the working indicator while it is written or queued, and Cancel lives
+ * in the page's working banner), "Generate all (est. $X, ~Y min)",
+ * "Continue story" for turns committed after the story's
  * end, Export Markdown, and "Open this turn in the run" links (#/run/<id>?turn=)
  * under each chapter.  Chapters are written lazily 3 ahead of the reader: the
  * page marks a chapter read when it is opened (StoryPage), which is what lets
@@ -25,7 +27,9 @@ import {
   storyStatusText,
   turnLabel,
   type ChapterAvailability,
+  type StoryWork,
 } from "../../state/storyMode";
+import { Working, WorkingSpinner } from "../common/Working";
 
 export interface ReaderProps {
   runId: string;
@@ -36,8 +40,9 @@ export interface ReaderProps {
   /** The last committed turn of the run (RunSummary.current_turn_id) for "Continue story"; null when unknown. */
   runLastTurnId: string | null;
   busy: boolean;
+  /** The story's working state (the page's banner shows it; the current chapter mirrors it). */
+  work: StoryWork | null;
   onGenerateAll(): void;
-  onCancel(): void;
   onContinue(): void;
   onExport(): void;
 }
@@ -50,7 +55,7 @@ const STATE_WORD: Record<ChapterAvailability, string> = {
   not_started: "not yet",
 };
 
-function ChapterBody(props: { chapter: StoryChapter | null; availability: ChapterAvailability; number: number; onGenerateAll(): void; canGenerateAll: boolean; busy: boolean; jobText: string }) {
+function ChapterBody(props: { chapter: StoryChapter | null; availability: ChapterAvailability; number: number; onGenerateAll(): void; canGenerateAll: boolean; busy: boolean; jobText: string; work: StoryWork | null }) {
   const { chapter, availability } = props;
   if (chapter && chapter.status === "done") {
     const parts = paragraphs(chapter.text);
@@ -67,15 +72,34 @@ function ChapterBody(props: { chapter: StoryChapter | null; availability: Chapte
       </div>
     );
   }
+  const work = props.work;
+  if (availability === "writing" || availability === "queued") {
+    const writingThis = availability === "writing" && work?.chapter === props.number;
+    return (
+      <div className="storymode-chapter-wait">
+        {availability === "writing" ? (
+          <Working
+            announce={false}
+            label={`Writing chapter ${props.number}…`}
+            note="The chapter appears here when it is written."
+            startedAt={writingThis ? work?.startedAt : null}
+            workKey={writingThis && work ? work.key : `chapter-${props.number}`}
+          />
+        ) : (
+          <Working
+            announce={false}
+            showElapsed={false}
+            label={`Chapter ${props.number} is queued…`}
+            note={work ? `Now: ${work.label}` : props.jobText || null}
+            workKey={`queued-${props.number}`}
+          />
+        )}
+      </div>
+    );
+  }
   return (
     <div className="storymode-chapter-wait" role="status">
-      <span>
-        {availability === "writing"
-          ? `Writing chapter ${props.number}…`
-          : availability === "queued"
-            ? `Chapter ${props.number} is queued${props.jobText ? ` (${props.jobText})` : ""}.`
-            : `Chapter ${props.number} has not been written yet. Read on and it is written three ahead of you, or generate the rest now.`}
-      </span>
+      <span>{`Chapter ${props.number} has not been written yet. Read on and it is written three ahead of you, or generate the rest now.`}</span>
       {availability === "not_started" && props.canGenerateAll ? (
         <button type="button" className="btn" disabled={props.busy} onClick={props.onGenerateAll}>
           Generate the rest
@@ -93,7 +117,6 @@ export function Reader(props: ReaderProps) {
   const plan = session.brief?.chapter_plan ?? [];
   const chapter = byNumber.get(current) ?? null;
   const availability = chapterAvailability(current, chapters, session, job);
-  const jobActive = job !== null && (job.status === "queued" || job.status === "running");
   const remaining = remainingEstimate(session.brief, session);
   const canGenerateAll = !session.generate_all && session.chapters_done < total && (session.status === "generating" || session.status === "paused");
   const canContinue = canContinueStory(session, props.runLastTurnId);
@@ -128,11 +151,6 @@ export function Reader(props: ReaderProps) {
             {generateAllLabel(remaining)}
           </button>
         ) : null}
-        {jobActive ? (
-          <button type="button" className="btn btn-danger" disabled={busy || job?.cancel_requested} onClick={props.onCancel}>
-            {job?.cancel_requested ? "Stopping after the current chapter…" : "Cancel"}
-          </button>
-        ) : null}
         {canContinue ? (
           <button type="button" className="btn" disabled={busy} onClick={props.onContinue} title={`The run has turns after ${session.end_turn_id}; add chapters for them`}>
             Continue story
@@ -157,7 +175,12 @@ export function Reader(props: ReaderProps) {
                     onClick={() => props.onSelect(n)}
                   >
                     <span>{heading(n)}</span>
-                    {STATE_WORD[state] ? <span className="storymode-chapter-state">{STATE_WORD[state]}</span> : null}
+                    {STATE_WORD[state] ? (
+                      <span className="storymode-chapter-state">
+                        {state === "writing" ? <WorkingSpinner /> : null}
+                        {STATE_WORD[state]}
+                      </span>
+                    ) : null}
                   </button>
                 </li>
               );
@@ -167,7 +190,7 @@ export function Reader(props: ReaderProps) {
 
         <article className="storymode-chapter" aria-live="polite">
           <h2>{heading(current)}</h2>
-          <ChapterBody chapter={chapter} availability={availability} number={current} onGenerateAll={props.onGenerateAll} canGenerateAll={canGenerateAll} busy={busy} jobText={jobText} />
+          <ChapterBody chapter={chapter} availability={availability} number={current} onGenerateAll={props.onGenerateAll} canGenerateAll={canGenerateAll} busy={busy} jobText={jobText} work={props.work} />
           {chapter && chapter.status === "done" ? (
             <div className="storymode-chapter-turns">
               {chapter.turn_ids.map((turnId) => (

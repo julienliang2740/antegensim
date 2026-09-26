@@ -4,8 +4,9 @@
  *
  * DOCS: shows the run's AI-written narrative from
  * GET /api/runs/{run_id}/assistant/storybook: the opening entry in the header,
- * a status line (Auto on/off toggle via PUT .../assistant/settings, pending
- * count, spend against the per-run storybook budget, missing count with the
+ * a status line (Auto on/off toggle via PUT .../assistant/settings, the shared
+ * working indicator "Narrating N turns…" with a ticking counter while entries
+ * are pending or being written, spend against the per-run storybook budget, missing count with the
  * "Write missing (N entries, ≈$X, ~Y min)" button, the paused reason with
  * "Raise budget"), then one entry per committed turn (and round end) in commit
  * order.  The entry of the viewed turn is highlighted; clicking an entry views
@@ -23,6 +24,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { ApiClientError } from "../../api/client";
 import { generateStorybook, getStorybook, regenerateStorybookEntry, updateRunAssistantSettings } from "../../api/story";
 import type { StorybookEntry, StorybookView } from "../../api/storyTypes";
+import { Working } from "../common/Working";
 import { errorText } from "../../state/runSessions";
 import {
   compareTurnIds,
@@ -37,6 +39,7 @@ import {
   storybookPausedReason,
   storybookPollDelay,
   storybookStatusParts,
+  storybookWorkingLabel,
   writeMissingLabel,
 } from "../../state/storyMode";
 import "../../storybook.css";
@@ -178,6 +181,7 @@ export function StorybookTab(props: StorybookTabProps) {
   }
 
   const paused = status ? storybookPausedReason(status) : null;
+  const narrating = storybookWorkingLabel(status);
   const opening = view?.opening ?? null;
 
   return (
@@ -208,7 +212,8 @@ export function StorybookTab(props: StorybookTabProps) {
             >
               {storybookAutoText(status)}
             </button>
-            <span className="storybook-status-parts">{storybookStatusParts(status).join(" · ")}</span>
+            {narrating ? <Working variant="compact" announce={false} label={narrating} workKey={`storybook:${runId}`} className="storybook-working" /> : null}
+            <span className="storybook-status-parts">{storybookStatusParts(status, narrating === null).join(" · ")}</span>
             {status.missing_count > 0 ? (
               <button
                 type="button"

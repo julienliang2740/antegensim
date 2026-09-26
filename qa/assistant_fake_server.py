@@ -10,6 +10,11 @@ and adds
     GET  /api/_qa/fake_metadata          -> the current per-profile fake metadata
     PUT  /api/_qa/fake_metadata {profile: {...}}  -> replace it (e.g. {"chat": {"fake_script": [step]}})
 
+The chat and summarizer calls merge that metadata themselves; this launcher also merges it into
+the story author's and the storybook narrator's calls (their own ``fake_reply`` wins), so
+``{"author": {"fake_options": {"sleep_ms": 8000}}}`` makes the author slow enough to see the
+working indicator in a browser.
+
 Never use it against real data: it forces the fake assistant keys and a QA worlds dir.
 
 Usage (from the repo root):
@@ -59,6 +64,16 @@ def main() -> None:
         assistant.fake_metadata.clear()
         assistant.fake_metadata.update({k: v for k, v in body.items() if isinstance(v, dict)})
         return assistant.fake_metadata
+
+    plain_call_profile = assistant.call_profile
+
+    def call_profile(profile: str, **kwargs):  # noqa: ANN202 - same signature as AssistantService.call_profile
+        extra = assistant.fake_metadata.get(profile) if profile in ("author", "narrator") else None
+        if extra:
+            kwargs["metadata"] = {**extra, **(kwargs.get("metadata") or {})}
+        return plain_call_profile(profile, **kwargs)
+
+    assistant.call_profile = call_profile
 
     app.add_api_route("/api/_qa/fake_metadata", get_fake_metadata, methods=["GET"])
     app.add_api_route("/api/_qa/fake_metadata", put_fake_metadata, methods=["PUT"])

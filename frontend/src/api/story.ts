@@ -25,6 +25,7 @@ import type {
   StoryCreateRequest,
   StoryExport,
   StoryMessageRequest,
+  StoryListFilter,
   StorySessionSummary,
   StoryView,
 } from "./storyTypes";
@@ -63,6 +64,11 @@ export function regenerateStorybookEntry(runId: string, turnId: string): Promise
 }
 
 // ---------------------------------------------------------------- story mode
+
+/** GET /api/assistant/stories?status=: every run's stories, most recently updated first (never opens a run). */
+export function listAllStories(status: StoryListFilter = "all", signal?: AbortSignal): Promise<StorySessionSummary[]> {
+  return request("GET", `/api/assistant/stories?status=${status}`, undefined, signal);
+}
 
 export function listStories(runId: string): Promise<StorySessionSummary[]> {
   return request("GET", `${runBase(runId)}/stories`);

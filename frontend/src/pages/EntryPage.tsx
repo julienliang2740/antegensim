@@ -38,7 +38,7 @@ export function EntryPage() {
         </button>
         <button type="button" className="choice" onClick={() => navigate({ name: "story", runId: null, storyId: null })}>
           <span className="choice-title">Story Mode</span>
-          <span className="choice-text">Turn a finished or running world into a story: pick a run, choose genre, tone and point of view, read it chapter by chapter.</span>
+          <span className="choice-text">Turn a finished or running world into a story: pick a run, genre, tone and point of view, read it chapter by chapter.</span>
         </button>
         <button type="button" className="choice choice-secondary" onClick={openInstructions}>
           <span className="choice-title">How the world works</span>

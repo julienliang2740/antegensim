@@ -31,6 +31,7 @@ import {
   DEFAULT_SPEECH_LIMITS,
 } from "../../api/assistantSpeech";
 import { ApiClientError } from "../../api/client";
+import { WorkingSpinner } from "../common/Working";
 import "./dictate.css";
 
 export interface DictateButtonProps {
@@ -339,7 +340,7 @@ export function DictateButton(props: DictateButtonProps) {
   } else if (phase === "transcribing") {
     content = (
       <>
-        <span className="dictate-spinner" aria-hidden="true" />
+        <WorkingSpinner />
         <span>Transcribing… (about {estimate} s)</span>
       </>
     );

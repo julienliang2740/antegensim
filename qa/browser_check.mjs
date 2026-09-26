@@ -1015,10 +1015,11 @@ async function askDrawer(page, text, timeout = 30_000, shot = null) {
   const progress = [];
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
-    const line = drawer.locator(".assistant-progress-line");
+    // The message in progress is the shared working indicator: its note is the ticking step line, its label "Thinking…" or the step note.
+    const line = drawer.locator("article.assistant-msg-progress .working-note");
     if (await line.count()) {
       const t = (await line.first().innerText().catch(() => "")).replace(/\s+/g, " ").trim();
-      const hint = (await drawer.locator("article.assistant-msg-progress .hint").first().innerText().catch(() => "")).replace(/\s+/g, " ").trim();
+      const hint = (await drawer.locator("article.assistant-msg-progress .working-label").first().innerText().catch(() => "")).replace(/\s+/g, " ").trim();
       if (t && progress.at(-1)?.text !== t) progress.push({ t_ms: timeout - (deadline - Date.now()), text: t, hint });
       if (shot && !shot.done && timeout - (deadline - Date.now()) > shot.afterMs) {
         shot.done = true;
@@ -1614,7 +1615,9 @@ async function runAssistantSteps(page) {
       rec.found.accept_label = (await accept.innerText()).trim();
       await accept.click();
       await waitVisible(page.locator(".storymode-progress"), "the reader", 20_000);
-      await waitApi("chapter 1 text", async () => (await page.locator(".storymode-chapter-text, .storymode-reader article, .storymode-reader").first().innerText().catch(() => "")).length, (n) => n > 80, 30_000).catch(() => {});
+      // Wait for the page's own count ("1 of 11 chapters written"; the story view is polled every 2.5 s), not for any
+      // reader text: the chapter list alone is longer than 80 characters, so a text-length wait passed at once.
+      await waitApi("chapter 1 counted in the reader", async () => (await page.locator(".storymode-progress").innerText().catch(() => "")).replace(/\s+/g, " ").trim(), (t) => /^[1-9]\d* of \d+ chapters? written/.test(t), 30_000).catch(() => {});
       await sleep(2500);
       rec.found.progress = (await page.locator(".storymode-progress").innerText()).replace(/\s+/g, " ").trim();
       rec.found.chapter_heading = (await page.locator(".storymode-reader h2, main h2").last().innerText().catch(() => "")).trim();
@@ -1650,6 +1653,8 @@ async function runAssistantSteps(page) {
         const drawer = await waitVisible(drawerLoc(p), "the drawer");
         const b = drawer.locator('[data-control="dictate"]');
         await waitVisible(b, "the Dictate button");
+        // The button starts as "Checking whether speech is available…" (disabled) until the capabilities answer; read the settled state.
+        await waitApi("the Dictate availability check", async () => (await b.getAttribute("title")) ?? "", (t) => !/^checking whether speech/i.test(t), 10_000).catch(() => {});
         return { secure: await p.evaluate(() => window.isSecureContext), aria_disabled: await b.getAttribute("aria-disabled"), title: await b.getAttribute("title"), label: await b.getAttribute("aria-label") };
       };
       const origins = {};

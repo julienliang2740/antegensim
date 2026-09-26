@@ -4,6 +4,8 @@
  * I'm looking at" chip, the "replying to a proposal" line and suggestion chips
  * for an empty conversation.
  *
+ * While a reply is being written Send shows a spinner and "Thinking…".
+ *
  * DOCS: the composer is controlled by the drawer (text state lives there so
  * "Ask" entry points and "Ask for changes" can prefill it).  Recording state is
  * reported upwards so Escape cancels a recording before it closes the drawer.
@@ -12,6 +14,7 @@
 import { useEffect } from "react";
 import type { KeyboardEvent, RefObject } from "react";
 import { DictateButton } from "./DictateButton";
+import { WorkingSpinner } from "../common/Working";
 
 export interface ComposerProps {
   text: string;
@@ -129,7 +132,14 @@ export function Composer(props: ComposerProps) {
           onRecordingChange={props.onRecordingChange}
         />
         <button type="button" className="btn btn-primary btn-small assistant-send" disabled={!canSend} title="Send (Ctrl+Enter or Cmd+Enter)" onClick={() => props.onSend()}>
-          {props.busy ? "Answering…" : "Send"}
+          {props.busy ? (
+            <>
+              <WorkingSpinner />
+              Thinking…
+            </>
+          ) : (
+            "Send"
+          )}
         </button>
       </div>
       <div className="hint assistant-composer-hint">

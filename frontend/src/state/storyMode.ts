@@ -23,6 +23,7 @@ import type {
   StoryQuickPicks,
   StoryRunCard,
   StorySession,
+  StorySessionSummary,
   StoryStatus,
   StorybookEntry,
   StorybookStatus,
@@ -482,6 +483,80 @@ export function jobQueueText(job: Pick<JobView, "status" | "queue_position" | "q
   return "";
 }
 
+/** What a Story Mode model is doing right now, for the working indicator (null when nothing is in the works). */
+export interface StoryWork {
+  /** "author": an interview reply or the story brief; "chapters": the chapter job. */
+  stage: "author" | "chapters";
+  /** sending: the page's POST is in flight; queued: waiting behind another story; running; stopping: Cancel was pressed. */
+  state: "sending" | "queued" | "running" | "stopping";
+  label: string;
+  note: string | null;
+  /** ISO start of this piece of work, when the server knows it (else the indicator counts from when the page saw it). */
+  startedAt: string | null;
+  /** Changes when a new piece of work begins (restarts a locally tracked counter). */
+  key: string;
+  /** The chapter being written (chapters stage, running), else null. */
+  chapter: number | null;
+  /** POST .../cancel applies (a job is queued or running and no cancel is pending). */
+  cancellable: boolean;
+}
+
+type WorkSession = Pick<StorySession, "status" | "chapters_done" | "chapters_total" | "brief" | "superseded_briefs" | "generate_all" | "spent_usd" | "job_budget_usd" | "messages">;
+type WorkJob = Pick<JobView, "job_id" | "status" | "queue_position" | "queued_behind" | "cancel_requested" | "started_at">;
+
+/**
+ * The Story Mode working state: the page's own "send to the author" request,
+ * then the story job (an interview reply while the story is being chosen, else
+ * the chapter job).  Labels: "Sending your choices to the story author…",
+ * "Story author is thinking…", "Writing chapter 3 of 11…", "Queued behind …",
+ * "Stopping…".  The chapter start is the later of the job's start and the
+ * previous chapter's created_at, so the counter restarts per chapter.
+ */
+export function storyWork(session: WorkSession | null | undefined, job: WorkJob | null | undefined, chapters: Pick<StoryChapter, "number" | "created_at">[], sending = false): StoryWork | null {
+  if (!session) return null;
+  const lastUser = [...session.messages].reverse().find((m) => m.role === "user") ?? null;
+  if (sending) {
+    return { stage: "author", state: "sending", label: "Sending your choices to the story author…", note: null, startedAt: null, key: "sending", chapter: null, cancellable: false };
+  }
+  if (!job || (job.status !== "queued" && job.status !== "running")) return null;
+  // Chapters once the brief was accepted (or one is written); before that the job is the author's reply (also just after Cancel).
+  const briefStatus = session.brief?.status ?? null;
+  // The session's count can trail the chapter files for a poll (the job writes the chapter, then the count): never name a chapter the page already shows as the one being written.
+  const done = Math.max(session.chapters_done, chapters.length);
+  const chaptersStarted = done > 0 || briefStatus === "executing" || briefStatus === "executed";
+  const stage: StoryWork["stage"] = session.status !== "interviewing" && chaptersStarted ? "chapters" : "author";
+  const total = chapterTotal(session, chapters);
+  const next = Math.min(Math.max(1, done + 1), Math.max(1, total));
+  const base = { stage, startedAt: job.started_at, chapter: null as number | null, cancellable: !job.cancel_requested };
+  if (job.cancel_requested) {
+    return { ...base, state: "stopping", label: stage === "author" ? "Stopping the story author…" : "Stopping after the current chapter…", note: null, key: `${job.job_id}:stop`, cancellable: false };
+  }
+  if (job.status === "queued") {
+    const label = job.queued_behind ? job.queued_behind.replace(/\.*$/, "") + "…" : job.queue_position > 0 ? `Queued (position ${job.queue_position})…` : "Queued…";
+    const note = stage === "author" ? "Only one story job runs at a time; the story author starts when it is this story's turn." : `Only one story job runs at a time; chapter ${next} starts when it is this story's turn.`;
+    return { ...base, state: "queued", label, note, startedAt: stage === "author" ? (lastUser?.created_at ?? null) : null, key: `${job.job_id}:queued` };
+  }
+  if (stage === "author") {
+    const note = session.superseded_briefs.length > 0 ? "Writing a new story brief from your changes." : "Writing the story brief from your choices; it may ask you a question first.";
+    return { ...base, state: "running", label: "Story author is thinking…", note, key: `${job.job_id}:author:${session.messages.length}` };
+  }
+  if (total > 0 && done >= total) {
+    return { ...base, state: "running", label: "Finishing the story…", note: null, key: `${job.job_id}:finish` };
+  }
+  const previous = chapters.find((c) => c.number === next - 1)?.created_at ?? null;
+  const jobStart = startMsOf(job.started_at);
+  const prevStart = startMsOf(previous);
+  const startedAt = prevStart !== null && (jobStart === null || prevStart > jobStart) ? previous : job.started_at;
+  const note = `${session.generate_all ? "Writing every remaining chapter" : `Written ${READ_AHEAD} ahead of where you read`} · spent ${formatSpent(session.spent_usd)} of ${formatSpent(session.job_budget_usd)}`;
+  return { ...base, state: "running", label: `Writing chapter ${next} of ${total || "?"}…`, note, startedAt, key: `${job.job_id}:ch${next}`, chapter: next };
+}
+
+function startMsOf(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : null;
+}
+
 /** Chapters, cost and time left to write every remaining chapter, priced per chapter from the brief's estimate for `unit`. */
 export function remainingEstimate(brief: Pick<StoryBrief, "estimate_turn" | "estimate_round"> | null, session: Pick<StorySession, "unit" | "chapters_total" | "chapters_done">): ChapterEstimate | null {
   const estimate = session.unit === "round" ? brief?.estimate_round : brief?.estimate_turn;
@@ -601,11 +676,18 @@ export function writeMissingLabel(status: Pick<StorybookStatus, "missing_count" 
   return `Write missing (${n} ${noun}, ${formatUsd(status.estimate.cost_usd)}, ${formatDuration(status.estimate.seconds)})`;
 }
 
-/** The status line pieces after the auto toggle: pending, spend, missing. */
-export function storybookStatusParts(status: Pick<StorybookStatus, "pending_count" | "in_flight" | "missing_count" | "spend" | "entry_count">): string[] {
+/** "Narrating 3 turns…" while entries are queued or being written (the working indicator's label), else null. */
+export function storybookWorkingLabel(status: Pick<StorybookStatus, "pending_count" | "in_flight"> | null | undefined): string | null {
+  if (!status) return null;
+  if (status.pending_count > 0) return `Narrating ${status.pending_count} ${status.pending_count === 1 ? "turn" : "turns"}…`;
+  return status.in_flight ? "Narrating…" : null;
+}
+
+/** The status line pieces after the auto toggle: pending (unless the working indicator shows it), spend, missing. */
+export function storybookStatusParts(status: Pick<StorybookStatus, "pending_count" | "in_flight" | "missing_count" | "spend" | "entry_count">, withPending = true): string[] {
   const parts: string[] = [];
-  if (status.pending_count > 0) parts.push(`${status.pending_count} pending`);
-  else if (status.in_flight) parts.push("writing…");
+  if (withPending && status.pending_count > 0) parts.push(`${status.pending_count} pending`);
+  else if (withPending && status.in_flight) parts.push("writing…");
   parts.push(`${status.entry_count} ${status.entry_count === 1 ? "entry" : "entries"}`);
   parts.push(`spent ${formatSpent(status.spend.spent_usd)} of ${formatSpent(status.spend.limit_usd)}`);
   if (status.missing_count > 0) parts.push(`${status.missing_count} missing`);
@@ -659,4 +741,61 @@ export function entryHeading(entry: Pick<StorybookEntry, "turn_id" | "kind" | "r
 /** True when a scroll box is at (or within `slack` px of) its bottom: only then does the list follow new entries. */
 export function isNearBottom(metrics: { scrollTop: number; clientHeight: number; scrollHeight: number }, slack = 24): boolean {
   return metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight <= slack;
+}
+
+
+// ---------------------------------------------------------------- run picker ordering
+
+export const UNFINISHED_STORY_STATUSES: readonly StoryStatus[] = ["interviewing", "brief_pending", "generating", "paused", "interrupted"];
+
+export function isUnfinishedStory(status: StoryStatus): boolean {
+  return UNFINISHED_STORY_STATUSES.includes(status);
+}
+
+export interface RunStoryWork {
+  /** The run's most recently updated unfinished story, or null. */
+  story: StorySessionSummary | null;
+  /** How many unfinished stories the run has. */
+  count: number;
+}
+
+/** Per run: its unfinished stories (most recently updated first). */
+export function unfinishedByRun(stories: StorySessionSummary[]): Map<string, RunStoryWork> {
+  const out = new Map<string, RunStoryWork>();
+  const sorted = [...stories].filter((s) => isUnfinishedStory(s.status)).sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
+  for (const s of sorted) {
+    const entry = out.get(s.run_id);
+    if (entry) entry.count += 1;
+    else out.set(s.run_id, { story: s, count: 1 });
+  }
+  return out;
+}
+
+/**
+ * Story Mode run picker order: runs with an unfinished story first (the most recently touched
+ * story first), then every other run newest saved first.  Pure; the picker renders this list.
+ */
+export function orderRunsForPicker<R extends { run_id: string; saved_at: string }>(runs: R[], work: Map<string, RunStoryWork>): R[] {
+  const key = (r: R) => work.get(r.run_id)?.story?.updated_at ?? "";
+  return [...runs].sort((a, b) => {
+    const wa = work.has(a.run_id) ? 1 : 0;
+    const wb = work.has(b.run_id) ? 1 : 0;
+    if (wa !== wb) return wb - wa;
+    if (wa && key(a) !== key(b)) return key(a) < key(b) ? 1 : -1;
+    return a.saved_at < b.saved_at ? 1 : a.saved_at > b.saved_at ? -1 : 0;
+  });
+}
+
+/** One line for the picker's "Stories" cell: "writing 3 of 11 · The Chronicle" or "brief ready · Title". */
+export function unfinishedStoryText(work: RunStoryWork | undefined): string {
+  if (!work || !work.story) return "";
+  const s = work.story;
+  const state = s.status === "generating" && s.chapters_total > 0 ? `writing ${s.chapters_done} of ${s.chapters_total}` : storyStatusText(s.status).replace(/\.$/, "");
+  const more = work.count > 1 ? ` (+${work.count - 1} more)` : "";
+  return `${state} · ${s.title || "untitled"}${more}`;
+}
+
+/** Finished stories, most recently updated first (the "Finished stories" panel). */
+export function finishedStoriesNewestFirst(stories: StorySessionSummary[]): StorySessionSummary[] {
+  return [...stories].filter((s) => s.status === "complete").sort((a, b) => (a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0));
 }

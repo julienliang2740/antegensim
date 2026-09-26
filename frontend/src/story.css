@@ -522,3 +522,72 @@
   padding: 12px 14px;
   color: var(--muted);
 }
+
+/* ------------------------------------------------------------------ working (components/common/Working.tsx, working.css) */
+
+/* The banner under the page header stays in view while the page scrolls. */
+.storymode-working {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.storymode-composer.is-busy textarea {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.storymode-composer.is-busy .btn-primary:disabled {
+  opacity: 1;
+  cursor: progress;
+}
+
+.storymode-chapter-state .working-spinner {
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  vertical-align: -1px;
+}
+
+.storymode-chapter-wait .working {
+  align-self: stretch;
+}
+
+
+/* Run picker: unfinished stories first, finished stories panel */
+.storymode-run-unfinished td {
+  background: color-mix(in srgb, var(--accent, #2563eb) 7%, transparent);
+}
+.storymode-run-work {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.storymode-finished-toggle {
+  margin-left: auto;
+}
+.storymode-finished-toggle.is-on {
+  border-color: var(--accent, #2563eb);
+}
+.storymode-finished {
+  margin: 12px 0 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong, #cbd5e1);
+  border-radius: 8px;
+  background: var(--panel, #fff);
+}
+.storymode-finished-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.storymode-finished-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.storymode-finished-head .btn {
+  margin-left: auto;
+}

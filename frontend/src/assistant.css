@@ -521,26 +521,11 @@
   margin-top: 4px;
 }
 
-.assistant-progress-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.assistant-spinner {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  animation: assistant-spin 0.9s linear infinite;
-}
-
-@keyframes assistant-spin {
-  to {
-    transform: rotate(360deg);
-  }
+/* The message in progress: the shared working indicator (working.css), without its own frame inside the bubble. */
+.assistant-msg-progress .assistant-working {
+  border: none;
+  background: none;
+  padding: 0;
 }
 
 .assistant-steps {

@@ -81,6 +81,7 @@ was built without an AssistantService):
     GET    /api/runs/{run_id}/assistant/storybook?last_n= -> StorybookView (read-only)
     POST   /api/runs/{run_id}/assistant/storybook/generate StorybookGenerateRequest -> StorybookGenerateResponse (202)
     POST   /api/runs/{run_id}/assistant/storybook/entries/{turn_id}/regenerate -> StorybookGenerateResponse (202)
+    GET    /api/assistant/stories?status=all|unfinished|finished -> list[StorySessionSummary] (every run, newest first)
     GET    /api/runs/{run_id}/assistant/stories          -> list[StorySessionSummary]
     POST   /api/runs/{run_id}/assistant/stories StoryCreateRequest -> StoryView (201)
     GET    /api/runs/{run_id}/assistant/stories/{story_id} -> StoryView
