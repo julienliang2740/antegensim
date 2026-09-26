@@ -25,6 +25,7 @@ Requirement-to-test mapping is in [TEST_PLAN.md](TEST_PLAN.md). Known gaps are i
 | Sonnet smoke on the primary backend | LIVE | 2026-09-26 | 1 chat step, CLI `malformed` then salvaged into a correct answer, **USD 0.10** |
 | Replay of stored malformed CLI replies through salvage | LOCAL | 2026-09-26 | 83 payloads: 77 validate after salvage (the same-key unwrap rule shipped in `calls.salvage`; 28 before it) |
 | Resume page archive and delete (multi-select, archive view, restore, delete with confirmation) | MOCKED | 2026-09-26 18:05 UTC | Backend **693 passed, 4 skipped** (+10: `test_run_archive.py` 9, `test_api.py` 1); `state.test.mjs` **60 of 60** (+6 selection tests); tsc clean, lint 0 errors and the same 4 warnings; `docs check: clean`; browser **34 of 34** on a fake QA backend (port 8022, `qa/worlds-archive`; `qa/out/2026-09-26_17-57-24`) and step 34 again after the last UI change (`qa/out/2026-09-26_18-05-57`); USD 0. See "Resume page archive and delete" below |
+| Entity profile card (card over the run page replaces the inspector's full record; Inspector tab keeps the cell, occupants and a summary) | MOCKED | 2026-09-26 19:44 UTC | tsc clean; lint 0 errors and the same 4 warnings; `state.test.mjs` **66 of 66** (+5 profile tests); `docs check: clean`; browser **35 of 35** on the fake QA backend (port 8020 on the launcher with the fake agent default, `qa/out/2026-09-26_19-46-30`, 0 live calls; new step 35 `profile-card`; `select-occupants`, `agent-inspector`, `plant-rules` and `assistant-progress-and-refs` now go through the card; one expected 409 console line from the refused delete in step 34). The check now creates every run on `fake-heuristic`; before that fix, the shipped default `claude-cli-haiku` made 31 live CLI Haiku calls during this work (a demo run and one aborted check, 191k input and 14k output tokens). Screenshots `docs/evidence/screenshots/profile-*.png` (agent Overview and Decisions, plant Overview and Growth, fruit; light and dark) |
 | Resilience and completion criteria (13 scripts, 165 checks) | MOCKED | 2026-09-25 | 165 of 165 on the source before the assistant release (not re-run) |
 | Headless simulations | MOCKED | 2026-09-25 | 2 runs of 8 agents x 3 rounds, no errors (not re-run) |
 | Live simulations, live tests and a live UI session | LIVE | 2026-09-25 | 6 runs, the 3 live pytest tests (2 of 3, then 3 of 3), 102 calls, USD 0.782 (not re-run) |
@@ -249,7 +250,7 @@ From the repository root:
 .venv/bin/python scripts/run_sim.py --model fake-heuristic --worlds-dir /tmp/w      # MOCKED
 bash qa/resilience/run_all.sh     # MOCKED; own backend on :8020, about 3.5 min; overwrites qa/resilience/out/
                                   # RES_PORT / RES_WORLDS / RES_OUT / RES_LOG select another port and folders; expect 165 of 165
-# browser check, all 34 steps on fake models (see qa/README.md)
+# browser check, all 35 steps on fake models (see qa/README.md)
 .venv/bin/python qa/assistant_fake_server.py
 (cd frontend && EMPYREAN_API_PROXY=http://127.0.0.1:8020 npx vite --port 5180 --strictPort)
 (cd qa && BASE_URL=http://127.0.0.1:5180 API_URL=http://127.0.0.1:8020 node browser_check.mjs)

@@ -16,6 +16,13 @@
  *   God mode and the rules widen this column; "Wider panel" does it for any
  *   tab (the toggle sits in the panel header under the one-line tabs row).
  *
+ * Entity profile card: clicking an entity (map dot, map tooltip row,
+ * occupant row, roster row, "Other entities" chip, an assistant entity link,
+ * or the Inspector's Profile button) selects it and opens its profile card
+ * (components/profile) over the page; the board stays visible behind it.
+ * The card is hidden while a record is open over the map and comes back when
+ * the record closes; closing it returns focus to what opened it.
+ *
  * Assistant (rev 4): the page publishes what the user is looking at to
  * state/assistantContext.ts on every render and registers its handlers keyed
  * by run id (select entity, find point, view turn, set tab, open record,
@@ -60,6 +67,7 @@ import { LauncherButton } from "../components/assistant/Launcher";
 import { ActivityLog } from "../components/run/ActivityLog";
 import { AgentShortcuts } from "../components/run/AgentShortcuts";
 import { AgentRoster, EntityIndex } from "../components/run/EntityLists";
+import { EntityProfileCard } from "../components/profile/EntityProfileCard";
 import { FindBar } from "../components/run/FindBar";
 import { GodModeTab } from "../components/run/GodModeTab";
 import { RecordViewer } from "../components/run/RecordViewer";
@@ -68,7 +76,6 @@ import { discardedAttemptSeqs, latestFailedTurn } from "../state/feed";
 import { RulesTab } from "../components/run/RulesTab";
 import { RunControls } from "../components/run/RunControls";
 import { Splitter } from "../components/run/Splitter";
-import { SpeciesRulePanel } from "../components/run/SpeciesRulePanel";
 import { StatusBar } from "../components/run/StatusBar";
 import { StorybookTab } from "../components/run/StorybookTab";
 import { Timeline } from "../components/run/Timeline";
@@ -81,7 +88,7 @@ import { useHistoryView, useTurnIndex } from "../hooks/useRunData";
 import { useRunFeed } from "../hooks/useRunFeed";
 import { MIN_LOG_H, MIN_RAIL_W, MIN_SIDE_W, useRunLayout } from "../hooks/useRunLayout";
 import { useThrottledKey } from "../hooks/useThrottledKey";
-import { askAssistant, clearContext, dockReserve, getDrawerState, publishContext, registerHandlers, subscribeDrawer } from "../state/assistantContext";
+import { clearContext, dockReserve, getDrawerState, publishContext, registerHandlers, subscribeDrawer } from "../state/assistantContext";
 import type { RunHandlers, RunTabId } from "../state/assistantContext";
 import { errorText, withReopen } from "../state/runSessions";
 import { allModelsFake, controlAvailability, isIdle } from "../state/statusText";
@@ -133,6 +140,8 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   const [selectedPoint, setSelectedPoint] = useState<Point | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [agentView, setAgentView] = useState(false);
+  // The entity whose profile card is open (local to the page, never in the URL).
+  const [profileId, setProfileId] = useState<string | null>(null);
   // "Wider panel": the right column takes more room from the map (God mode and the rules always do).
   const [wideSide, setWideSide] = useState(false);
   const [logCollapsed, setLogCollapsed] = useState(false);
@@ -268,17 +277,35 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     return () => cancelAnimationFrame(frame);
   }, [revealTick]);
 
-  const selectEntity = (id: string) => {
+  // The profile card: opening it remembers the control that had focus (not one inside the card), closing it returns focus there.
+  const profileOpener = useRef<HTMLElement | null>(null);
+  const openProfile = (id: string) => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && !active.closest(".profile-card")) profileOpener.current = active;
+    setProfileId(id);
+  };
+  const closeProfile = (restoreFocus = true) => {
+    setProfileId(null);
+    const opener = profileOpener.current;
+    profileOpener.current = null;
+    if (restoreFocus) requestAnimationFrame(() => opener?.isConnected && opener.focus({ preventScroll: true }));
+  };
+
+  /** Select an entity and its point; `open` also opens its profile card. */
+  const pickEntity = (id: string, open: boolean) => {
     const entity = (viewed ? findEntity(viewed.entities, id) : undefined) ?? (live.data ? findEntity(live.data.entities, id) : undefined);
     setSelectedId(id);
     if (entity) setSelectedPoint(entity.position);
     reveal();
+    if (open) openProfile(id);
   };
+  const selectEntity = (id: string) => pickEntity(id, true);
 
-  /** An occupant row or a single-occupant map cell: the point is already selected. */
+  /** An occupant row, a map dot or a single-occupant map cell: the point is already selected; the card opens. */
   const selectOccupant = (id: string) => {
     setSelectedId(id);
     reveal();
+    openProfile(id);
   };
 
   /** A map click or "Select point": a selection that is not at the new point is cleared, so the column shows that point. */
@@ -309,7 +336,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     }
     selectPoint(p);
     const here = entitiesAtPoint(entities, p);
-    if (here.length === 1) selectOccupant(here[0].id);
+    if (here.length === 1) pickEntity(here[0].id, false);
     return null;
   };
 
@@ -679,25 +706,11 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
             <InspectorPanel
               entity={selectedEntity}
               turn={viewed}
-              knowledge={knowledgeView}
-              settings={settings.data}
               rules={rules.data ?? viewed.rules}
-              onOpenModelCall={(callId) => openRecord({ kind: "call", turnId: viewed.turn.turn_id, callId })}
-              onOpenPacket={(packetId) => openRecord({ kind: "packet", turnId: viewed.turn.turn_id, packetId })}
               agentView={agentView}
               onToggleAgentView={() => setAgentView((v) => !v)}
-              onAsk={askAssistant}
+              onOpenProfile={() => selectedEntity && openProfile(selectedEntity.id)}
             />
-            {knowledge.error && selectedAgentId ? <ErrorLine text={knowledge.error} prefix="Knowledge:" /> : null}
-            {selectedEntity?.kind === "plant" && live.data ? (
-              <SpeciesRulePanel
-                key={selectedEntity.species}
-                species={selectedEntity.species}
-                liveRule={(rules.data ?? live.data.rules).plant_species[selectedEntity.species] ?? null}
-                stageIndex={selectedEntity.stage_index}
-                onStage={onStage}
-              />
-            ) : null}
           </div>
           <EntityIndex entities={others} selectedId={selectedId} onSelect={selectEntity} />
         </div>
@@ -778,6 +791,35 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
         onChange={layout.setLogH}
         onReset={() => layout.resetPart("log")}
       />
+
+      {profileId !== null && selectedEntity !== null && selectedEntity.id === profileId ? (
+        <EntityProfileCard
+          key={profileId}
+          runId={runId}
+          entity={selectedEntity}
+          turn={viewed}
+          turns={index.turns}
+          knowledge={knowledgeView}
+          knowledgeError={knowledge.error}
+          settings={settings.data}
+          liveRules={rules.data ?? live.data?.rules ?? null}
+          agentView={agentView}
+          onToggleAgentView={() => setAgentView((v) => !v)}
+          name={name}
+          hidden={record !== null}
+          rightInset={reserveW}
+          onClose={() => closeProfile()}
+          onOpenInInspector={() => {
+            closeProfile(false);
+            reveal();
+            requestAnimationFrame(() => inspectorRef.current?.querySelector<HTMLElement>(".insp-inspector button")?.focus({ preventScroll: true }));
+          }}
+          onSelectEntity={selectEntity}
+          onViewTurn={(turnId) => setViewTurnId(turnId === status.current_turn_id ? null : turnId)}
+          onOpen={openRecord}
+          onStage={onStage}
+        />
+      ) : null}
 
       <div className="run-log">
         <ActivityLog

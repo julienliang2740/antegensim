@@ -120,7 +120,7 @@ The status bar shows the run state, the acting agent, a pending model call with 
 
 ### Inspect and go back in time
 
-- Click a map point to list every occupant; select one to open the inspector. For an agent you see stats, skills, knowledge, notebook, the decision packet it was given and the model call record (raw output, parsed JSON, usage, cost). For a plant you see the instance values and the species rules.
+- Click a map point to list every occupant in the **Inspector** tab. Click an entity (a map dot, an occupant row, a roster row, or **Profile** in the Inspector) to open its profile card over the page; the board stays visible behind it. A list on the side of the card picks a section. For an agent: **Overview** (stats, totals, model, last action), **Decisions** (every turn it acted in, newest first, with its thought, action, result and cost, and buttons to view that turn or open its decision packet and model call record), **Skills**, **Knowledge** (believed self, notebook, memory priorities, records), **Messages** and **History**. For a plant: **Overview**, **Growth**, **Rules** (the species rule, with **Stage species rule change**) and **History**; fruit, seeds and residue have **Overview** and **History**. Everything in the card is as of the viewed turn. Escape or **×** closes it.
 - Previous/next round, previous/next turn and the turn list move through history. An orange HISTORY band names the turn you are viewing. **Return to live** goes back.
 - **Create continuation from turn** (in God mode) starts a new run from the viewed turn. The original run and its later turns are left untouched.
 - The **Turn record** tab tells what happened in the viewed turn from the recorded facts; the **Rules** tab shows the rules and settings in force.
@@ -292,7 +292,7 @@ EMPYREAN_ALLOW_LIVE=1 .venv/bin/python scripts/assistant_playtest.py chat --arm 
 
 ## Browser check
 
-`qa/browser_check.mjs` drives the real UI in headless Chromium: entry page, cards, validation, run controls, timeline, crowded map point, inspectors, plant rules, god mode, resume and error recovery, plus the assistant drawer, a brief, the Storybook tab and Story Mode with fake models. It saves a screenshot per step and a `log.json` to `qa/out/<timestamp>/`. Start the backend and the dev server first, then:
+`qa/browser_check.mjs` drives the real UI in headless Chromium: entry page, cards, validation, run controls, timeline, crowded map point, entity profile cards, plant rules, god mode, resume and error recovery, plus the assistant drawer, a brief, the Storybook tab and Story Mode with fake models. Every run it creates uses the free `fake-heuristic` agent model. It saves a screenshot per step and a `log.json` to `qa/out/<timestamp>/`. Start the backend and the dev server first, then:
 
 ```bash
 cd qa && node browser_check.mjs                  # uses BASE_URL=http://127.0.0.1:5173, API_URL=http://127.0.0.1:8000

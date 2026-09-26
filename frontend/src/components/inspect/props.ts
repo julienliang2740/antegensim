@@ -11,7 +11,7 @@
  * INTERFACES.md sections 9 and 10.
  */
 
-import type { Agent, AgentKnowledgeView, ContextOverrides, ContextSettings, EffectiveSettingsView, Entity, FieldChange, Intervention, InterventionRecord, MapState, ModelCapabilities, ModelInfo, ObservedEntity, PlantSpeciesRule, Point, RemovedEntity, RulesConfig, RunSettings, Terrain, TurnView } from "../../api/types";
+import type { Agent, ContextOverrides, ContextSettings, EffectiveSettingsView, Entity, FieldChange, Intervention, InterventionRecord, MapState, ModelCapabilities, ModelInfo, ObservedEntity, PlantSpeciesRule, Point, RemovedEntity, RulesConfig, RunSettings, Terrain, TurnView } from "../../api/types";
 
 /**
  * Agent view (spec "An optional agent-view overlay shows only permitted
@@ -82,35 +82,23 @@ export interface OccupantListProps {
 }
 
 /**
- * Detailed inspector for the selected entity.
+ * Compact summary of the selected entity in the Inspector tab, with the
+ * Profile button that opens the full entity profile card.
  *
  * `entity` is the selection as last known (it may come from another turn:
  * the shell keeps selection while browsing history).  When `turn` is given the
  * panel shows the turn's own record of that id and a banner for before-birth,
  * after-death, removal or absence.
- *
- * `knowledge` must be the selected agent's AgentKnowledgeView for the viewed
- * turn (getTurnKnowledge / getLiveKnowledge); pass null while loading.
- * `settings` is the live EffectiveSettingsView; for a historical turn the
- * panel reads `turn.settings` instead.  `rules` is used when `turn` is null.
- *
- * `agentView` hides omniscient data and shows only what the agent knows
- * (believed self, its own records, notebook and skills, its decision packet).
  */
 export interface InspectorPanelProps {
   entity: Entity | null;
   turn: TurnView | null;
-  knowledge: AgentKnowledgeView | null;
-  settings: EffectiveSettingsView | null;
+  /** Plant stage names in the summary line when no turn is loaded (turn.rules wins). */
   rules: RulesConfig | null;
-  /** Open ModelCallRecord `callId` of the viewed turn (getModelCall(run, turn.turn.turn_id, callId)). */
-  onOpenModelCall(callId: string): void;
-  /** Open DecisionPacketRecord `packetId` of the viewed turn. */
-  onOpenPacket(packetId: string): void;
   agentView: boolean;
   onToggleAgentView(): void;
-  /** Optional (rev 4): "Ask" button in the entity header; called with the prefilled question ("What is <name> up to?"). */
-  onAsk?(question: string): void;
+  /** "Profile": open the entity profile card (components/profile) for `entity`. */
+  onOpenProfile(): void;
 }
 
 /**

@@ -67,7 +67,7 @@ labelled "Docs search (AI offline)".
 4. At most **4 steps** per message (`ASSISTANT_MAX_STEPS`); the last step may only `answer` or
    `ask`. Per message: 90 s wall clock and USD 0.75.
 5. The answer carries **refs** (turn, entity, point, run, doc, control) that the drawer turns into
-   links: view that turn, select that entity, find that point, open that doc section, flash that
+   links: view that turn, select that entity (and open its profile card), find that point, open that doc section, flash that
    control. Navigation needs no approval. The engine appends "Based on: ..." from the tools it
    actually called.
 6. After the answer, the summarizer refreshes the conversation memory in the background.

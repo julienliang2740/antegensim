@@ -34,6 +34,7 @@ const MODULES = [
   "state/working.ts",
   "state/assistantBrief.ts",
   "state/selection.ts",
+  "state/profile.ts",
 ];
 
 function build() {
@@ -68,6 +69,7 @@ const assistantFormat = await load("state/assistantFormat.mjs");
 const storyMode = await load("state/storyMode.mjs");
 const working = await load("state/working.mjs");
 const selection = await load("state/selection.mjs");
+const profile = await load("state/profile.mjs");
 
 // ---------------------------------------------------------------- fixtures
 
@@ -1181,4 +1183,98 @@ test("agent view overlay: one marker per entity, the latest sighting wins", asyn
   assert.deepEqual(markers.map((m) => m.id).sort(), ["a01", "a02", "p0001"]);
   assert.deepEqual(markers.find((m) => m.id === "a02").position, { x: 2, y: 0 });
   assert.equal(markers.find((m) => m.id === "a01").self, true);
+});
+
+// ---------------------------------------------------------------- entity profile card
+
+function indexEntry(turn_id, overrides = {}) {
+  return { turn_id, kind: "agent_turn", round: 1, turn_index: 1, acting_agent_id: "a01", action_name: "move", ok: true, decision_source: "model", intervention_count: 0, event_count: 3, saved_at: "", ...overrides };
+}
+
+test("profile: sections per kind, Overview fallback and keyboard movement", () => {
+  assert.deepEqual(profile.profileSections("agent").map((s) => s.label), ["Overview", "Decisions", "Skills", "Knowledge", "Messages", "History"]);
+  assert.deepEqual(profile.profileSections("plant").map((s) => s.label), ["Overview", "Growth", "Rules", "History"]);
+  for (const kind of ["fruit", "seed", "residue"]) assert.deepEqual(profile.profileSections(kind).map((s) => s.id), ["overview", "history"]);
+  assert.equal(profile.sectionFor("plant", "decisions"), "overview");
+  assert.equal(profile.sectionFor("agent", "decisions"), "decisions");
+  assert.equal(profile.sectionFor("fruit", "history"), "history");
+  assert.equal(profile.navTarget("ArrowDown", 0, 4), 1);
+  assert.equal(profile.navTarget("ArrowDown", 3, 4), 0);
+  assert.equal(profile.navTarget("ArrowUp", 0, 4), 3);
+  assert.equal(profile.navTarget("ArrowLeft", 2, 4), 1);
+  assert.equal(profile.navTarget("End", 0, 4), 3);
+  assert.equal(profile.navTarget("Home", 3, 4), 0);
+  assert.equal(profile.navTarget("Enter", 1, 4), null);
+});
+
+test("profile: acting turns stop at the viewed turn, newest first; message turns are send/broadcast", () => {
+  const turns = [
+    indexEntry("r00001_t00_init", { kind: "init", acting_agent_id: null }),
+    indexEntry("r00001_t01_a01"),
+    indexEntry("r00001_t02_a02", { acting_agent_id: "a02" }),
+    indexEntry("r00001_end", { kind: "round_end", acting_agent_id: null }),
+    indexEntry("r00002_t01_a01", { round: 2, action_name: "send" }),
+    indexEntry("r00002_t02_a01", { round: 2, action_name: "broadcast", ok: false }),
+  ];
+  assert.deepEqual(profile.actingTurns(turns, "a01", "r00002_t01_a01").map((t) => t.turn_id), ["r00002_t01_a01", "r00001_t01_a01"]);
+  assert.deepEqual(profile.actingTurns(turns, "a01", "r00001_end").map((t) => t.turn_id), ["r00001_t01_a01"]);
+  // A turn that is not in the index (not loaded yet): the whole index.
+  assert.equal(profile.actingTurns(turns, "a01", "r00009_t01_a01").length, 3);
+  assert.deepEqual(profile.messageTurns(profile.actingTurns(turns, "a01", "r00002_t02_a01")).map((t) => t.turn_id), ["r00002_t02_a01", "r00002_t01_a01"]);
+});
+
+test("profile: a decision row reads thought, action, result, costs, skill and call ids from the events", () => {
+  const events = [
+    event(1, { kind: "turn_started", actor: "system" }),
+    event(2, { kind: "model_call_completed", actor: "a03", details: { call_id: "mc_r00001_t01_a03_01" }, costs: { compute: 2.5, essence: 0 } }),
+    event(3, { kind: "decision", details: { thought: "Eat the fruit.", notebook_updated: true, saved_skills: ["forage"], deleted_skills: [], memory_priorities: [{ record_id: "k1", priority: 0.5 }] } }),
+    event(4, { kind: "action", details: { action: { name: "absorb", args: { source: "f0004", resource: "compute" } }, result: { ok: true, reason: "ok", cost_compute: 1, cost_essence: 0 }, via_skill: false, skill_name: null }, costs: { compute: 1, essence: 0 } }),
+    event(5, { kind: "action", actor: "a05", details: { action: { name: "move", args: {} }, result: { ok: true } } }),
+  ];
+  const d = profile.decisionFromEvents("a03", events);
+  assert.equal(d.thought, "Eat the fruit.");
+  assert.deepEqual(d.action, { name: "absorb", args: { source: "f0004", resource: "compute" } });
+  assert.equal(d.ok, true);
+  assert.equal(d.costCompute, 1);
+  assert.equal(d.thinkingCompute, 2.5);
+  assert.deepEqual(d.callIds, ["mc_r00001_t01_a03_01"]);
+  assert.equal(d.problem, null);
+  assert.deepEqual(d.extras, ["notebook updated", "saved skills: forage", "memory priorities: 1"]);
+
+  const viaSkill = profile.decisionFromEvents("a03", [
+    event(1, { kind: "action", details: { action: { name: "attack", args: { target: "a02" } }, result: { ok: false, reason: "target_gone", cost_compute: 0.5, cost_essence: 0 }, via_skill: true, skill_name: "hunt" } }),
+  ]);
+  assert.equal(viaSkill.viaSkill, true);
+  assert.equal(viaSkill.skillName, "hunt");
+  assert.equal(viaSkill.ok, false);
+  assert.equal(viaSkill.reason, "target_gone");
+  assert.equal(viaSkill.thought, null);
+
+  const failed = profile.decisionFromEvents("a03", [event(1, { kind: "model_call_failed", details: { call_id: "mc_x_01", error: "timeout" }, costs: { compute: 1, essence: 0 } })]);
+  assert.equal(failed.action, null);
+  assert.equal(failed.problem, "timeout");
+  assert.deepEqual(failed.callIds, ["mc_x_01"]);
+});
+
+test("profile: sent messages pair each successful send with its delivery", () => {
+  const events = [
+    event(1, { kind: "action", details: { action: { name: "send", args: { recipient: "a02", message: "hello" } }, result: { ok: true } } }),
+    event(2, { kind: "message_delivered", details: { recipients: ["a02"], broadcast: false } }),
+    event(3, { kind: "action", details: { action: { name: "broadcast", args: { message: "anyone?" } }, result: { ok: false, reason: "insufficient_compute" } } }),
+    event(4, { kind: "action", details: { action: { name: "move", args: {} }, result: { ok: true } } }),
+  ];
+  const sent = profile.sentMessages("a03", events);
+  assert.equal(sent.length, 2);
+  assert.deepEqual(sent[0], { kind: "send", recipient: "a02", message: "hello", ok: true, reason: null, delivered: ["a02"] });
+  assert.equal(sent[1].kind, "broadcast");
+  assert.equal(sent[1].ok, false);
+  assert.equal(sent[1].reason, "insufficient_compute");
+  assert.deepEqual(sent[1].delivered, []);
+  assert.deepEqual(profile.sentMessages("a09", events), []);
+});
+
+test("profile: excerpt flattens whitespace and cuts with an ellipsis", () => {
+  assert.equal(profile.excerpt("  a\n b  "), "a b");
+  assert.equal(profile.excerpt("abcdefghij", 5), "abcd…");
+  assert.equal(profile.excerpt("abcde", 5), "abcde");
 });

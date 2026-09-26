@@ -152,13 +152,10 @@ export function InspectHarness() {
           <InspectorPanel
             entity={selectedEntity}
             turn={turn}
-            knowledge={knowledge}
-            settings={effective}
             rules={turn.rules}
-            onOpenModelCall={(id) => note(`onOpenModelCall(${id})`)}
-            onOpenPacket={(id) => note(`onOpenPacket(${id})`)}
             agentView={agentView}
             onToggleAgentView={() => setAgentView((v) => !v)}
+            onOpenProfile={() => note(`onOpenProfile(${selectedEntity?.id ?? ""})`)}
           />
         </div>
         <div className="harness-godmode" id="harness-godmode">

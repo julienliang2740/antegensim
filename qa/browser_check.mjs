@@ -215,6 +215,26 @@ async function markCard(page, inputIndex, marker, minInputs = 4) {
   );
 }
 
+/** Every run this script creates uses this free, deterministic agent model (the shipped default is a real one). */
+const QA_AGENT_MODEL = "fake-heuristic";
+
+/** A GET /defaults request with every agent on QA_AGENT_MODEL. */
+function withFakeModels(request) {
+  request.default_model_key = QA_AGENT_MODEL;
+  for (const card of request.agents ?? []) card.model_key = null;
+  return request;
+}
+
+/** Select fake-heuristic in the New session form's default-model picker (its option text starts with "fake-heuristic"). */
+async function pickFakeDefaultModel(page, rec) {
+  const select = page.locator("#setup-default-model");
+  const label = (await select.locator("option").allTextContents()).find((t) => t.trim().startsWith(QA_AGENT_MODEL));
+  if (!label) throw new Error(`no "${QA_AGENT_MODEL}" option in the default model picker`);
+  await select.selectOption({ label });
+  rec.found.default_model = await select.inputValue();
+  if (rec.found.default_model !== QA_AGENT_MODEL) throw new Error(`the default model picker holds ${rec.found.default_model}, expected ${QA_AGENT_MODEL}`);
+}
+
 // ---------------------------------------------------------------------------
 // Step runner
 // ---------------------------------------------------------------------------
@@ -300,6 +320,20 @@ async function selectAgentOrEntity(page, rec, entityId) {
     return true;
   }
   return false;
+}
+
+/** The entity profile card (opened by clicking an entity), or a locator that matches nothing. */
+function profileCard(page) {
+  return page.locator(".profile-card");
+}
+
+/** Close the profile card with its × when it is open (its backdrop covers the page). */
+async function closeProfileCard(page) {
+  const card = profileCard(page);
+  if (!(await card.isVisible().catch(() => false))) return false;
+  await card.getByRole("button", { name: "Close profile" }).click();
+  await card.waitFor({ state: "detached", timeout: 3000 }).catch(() => {});
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -395,6 +429,9 @@ async function runSteps(page) {
       await tryFind(rec, "remove card control", clickables(page, /remove|delete/i));
       await tryFind(rec, "context settings in setup (U16)", fields(page, /input token cap|token cap|generation allowance/i));
       await tryFind(rec, "model choice in setup", fields(page, /model/i));
+      // The browser check always creates fake-model runs (the operator default is claude-cli-haiku):
+      // pick fake-heuristic as the default model before any validation or creation.
+      await pickFakeDefaultModel(page, rec);
     },
     { needs: ["defaults"] },
   );
@@ -494,6 +531,8 @@ async function runSteps(page) {
     async (rec) => {
       const runName = await tryFind(rec, "run name field", fields(page, /run name|session name|^name of the run/i), 1500);
       if (runName) await fillField(runName, RUN_NAME);
+      // Never spend: checked again right before creating (the form's operator default is a real provider).
+      await pickFakeDefaultModel(page, rec);
       const before = new Set((await api("GET", "/runs")).map((r) => r.run_id));
       const create = await mustFind(rec, "create button", clickables(page, RE.create));
       await create.click();
@@ -504,6 +543,9 @@ async function runSteps(page) {
         30_000,
       );
       const created = runs.filter((r) => !before.has(r.run_id)).sort((a, b) => (a.saved_at < b.saved_at ? 1 : -1))[0];
+      const models = new Set(Object.values((await api("GET", `/runs/${created.run_id}/settings`)).effective_model_key));
+      rec.found.agent_models = [...models];
+      if (models.size !== 1 || !models.has(QA_AGENT_MODEL)) throw new Error(`the QA run's agents use ${[...models]} (expected only ${QA_AGENT_MODEL}); stopping before any turn`);
       state.runId = created.run_id;
       log.run_id = created.run_id;
       rec.found.run = { run_id: created.run_id, name: created.name };
@@ -672,6 +714,8 @@ async function runSteps(page) {
         throw new Error(`could not click coordinate ${key} (no data-coord/title/aria-label and no coordinate lookup field)`);
       }
       await sleep(600);
+      // A click on a dot (or a cell with one entity) opens that entity's profile card; the occupant list stays behind it.
+      rec.found.profile_card_opened = await closeProfileCard(page);
       const listed = [];
       for (const id of ids) if (await textVisible(page, new RegExp(`\\b${escapeRe(id)}\\b`), 800)) listed.push(id);
       rec.found.occupants_listed = listed;
@@ -683,10 +727,11 @@ async function runSteps(page) {
   await step(
     page,
     "select-occupants",
-    "Select each occupant of that coordinate and see its inspector (U1, U2)",
+    "Select each occupant of that coordinate and see its profile card (U1, U2)",
     async (rec) => {
       const results = {};
       for (const id of state.crowded.ids.slice(0, 8)) {
+        await closeProfileCard(page);
         const item = await findOne(
           [
             [`button ${id}`, page.getByRole("button", { name: new RegExp(`\\b${escapeRe(id)}\\b`) })],
@@ -701,12 +746,15 @@ async function runSteps(page) {
         }
         await item.locator.click();
         await sleep(300);
-        const inspector = await textVisible(page, /stats|health|compute|species|available/i, 1500);
-        results[id] = inspector ? `selected via ${item.how}` : `clicked via ${item.how}, no inspector details`;
+        const card = profileCard(page);
+        const shown = (await card.isVisible().catch(() => false)) && (await card.getAttribute("data-entity-id")) === id;
+        const details = shown && (await findOne([[`card text`, card.getByText(/stats|health|compute|species|available/i)]], 1500)) !== null;
+        results[id] = details ? `selected via ${item.how}` : `clicked via ${item.how}, no profile card with details`;
       }
+      await closeProfileCard(page);
       rec.found.occupants = results;
       const failed = Object.entries(results).filter(([, v]) => !v.startsWith("selected"));
-      if (failed.length) throw new Error(`occupants without an inspector: ${JSON.stringify(Object.fromEntries(failed))}`);
+      if (failed.length) throw new Error(`occupants without a profile card: ${JSON.stringify(Object.fromEntries(failed))}`);
     },
     { needs: ["runId", "crowded"] },
   );
@@ -714,51 +762,54 @@ async function runSteps(page) {
   await step(
     page,
     "agent-inspector",
-    "Agent inspector: stats, skills, knowledge, decision packet and model call (U2)",
+    "Agent profile card: stats, skills, knowledge, decision packet and model call (U2)",
     async (rec) => {
       const turns = await api("GET", `/runs/${state.runId}/turns`);
       const modelTurn = [...turns].reverse().find((t) => t.kind === "agent_turn" && t.decision_source === "model");
       if (!modelTurn) throw new Error("no model-decision turn to inspect");
       const agentId = modelTurn.acting_agent_id;
       rec.found.agent = agentId;
+      await closeProfileCard(page);
       if (!(await selectAgentOrEntity(page, rec, agentId))) throw new Error(`could not select agent ${agentId}`);
+      const card = await waitVisible(profileCard(page), "the agent's profile card");
       await sleep(600);
-      for (const [label, re] of [
-        ["stats", /stats|health/i],
-        ["compute balance", /compute/i],
-        ["skills", /skill/i],
-        ["knowledge", /knowledge|notebook|memory/i],
-        ["model assignment", /model/i],
+      const inCard = (re) => findOne([[`card text ${re}`, card.getByText(re)]], 1500).then((f) => f !== null);
+      rec.found["section stats"] = await inCard(/^Stats$/);
+      rec.found["compute balance"] = await inCard(/compute/i);
+      rec.found["model assignment"] = await inCard(/^model$/);
+      for (const [label, tab, re] of [
+        ["skills", "Skills", /saved skills/i],
+        ["knowledge", "Knowledge", /notebook|knowledge records/i],
       ]) {
-        rec.found[`section ${label}`] = await textVisible(page, re, 1500);
+        await card.getByRole("tab", { name: tab }).click();
+        rec.found[`section ${label}`] = await inCard(re);
       }
-      let packet = await findOne(clickables(page, /decision packet|packet/i), 2500);
-      if (!packet) {
-        // The packet belongs to a turn: view the agent's model turn from history.
-        const selector = await findOne([["combobox", page.getByRole("combobox")]], 1000);
-        if (selector) {
-          const options = await selector.locator.locator("option").allTextContents().catch(() => []);
-          const option = options.find((o) => o.includes(modelTurn.turn_id));
-          if (option) await selector.locator.selectOption({ label: option });
-        }
-        await selectAgentOrEntity(page, rec, agentId);
-        packet = await findOne(clickables(page, /decision packet|packet/i), 2500);
-      }
-      if (!packet) throw new Error("no decision packet control in the agent inspector");
+      await card.getByRole("tab", { name: "Decisions" }).click();
+      const row = card.locator(`li[data-turn-id="${modelTurn.turn_id}"]`);
+      const packet = await findOne([[`Packet of ${modelTurn.turn_id}`, row.getByRole("button", { name: /^Packet$/ })], ["any Packet", card.getByRole("button", { name: /^Packet$/ })]], 4000);
+      if (!packet) throw new Error("no decision packet control in the agent's Decisions");
       rec.found["decision packet control"] = packet.how;
       await packet.locator.click();
       await sleep(800);
+      rec.found.card_hidden_under_record = !(await card.isVisible().catch(() => false));
       rec.found.packet_content = await textVisible(page, /stable rules|stable_rules|pk_r\d+|situation|decision request/i, 3000);
       await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-decision-packet.png`) }).catch(() => {});
-      const call = await findOne(clickables(page, /model call|mc_r\d+/i), 2000);
+      await page.keyboard.press("Escape");
+      await sleep(500);
+      rec.found.card_back_after_record = await card.isVisible().catch(() => false);
+      const call = await findOne([["Model call", card.getByRole("button", { name: /^Model call( \d+)?$/ })]], 3000);
       if (call) {
         await call.locator.click();
         await sleep(600);
         rec.found.model_call_content = await textVisible(page, /tokens|usage|latency|mc_r\d+/i, 2000);
+        await page.keyboard.press("Escape");
+        await sleep(400);
       } else {
         rec.notes.push("no model call control found");
       }
+      await closeProfileCard(page);
       if (!rec.found.packet_content) throw new Error("the decision packet view shows no packet content");
+      if (!rec.found.card_back_after_record) throw new Error("the profile card did not come back after the record viewer closed");
     },
     { needs: ["runId"] },
   );
@@ -766,22 +817,26 @@ async function runSteps(page) {
   await step(
     page,
     "plant-rules",
-    "Plant inspector shows the instance and its species rule; the rule editor stages a species change (U3)",
+    "Plant profile card shows the instance and its species rule; the Rules section stages a species change (U3)",
     async (rec) => {
       const live = await api("GET", `/runs/${state.runId}/state`);
       const plant = Object.values(live.entities.plants).find((p) => p.alive);
       if (!plant) throw new Error("no living plant in the run");
       rec.found.plant = plant.id;
+      await closeProfileCard(page);
       if (!(await selectAgentOrEntity(page, rec, plant.id))) throw new Error(`could not select plant ${plant.id}`);
+      const card = await waitVisible(profileCard(page), "the plant's profile card");
       await sleep(600);
       rec.found.species_shown = await textVisible(page, new RegExp(escapeRe(plant.species)), 2000);
       rec.found.stage_shown = await textVisible(page, /sprout|sapling|mature|stage/i, 1500);
-      rec.found.instance_vs_rule_labels = await textVisible(page, /species rule|instance/i, 1500);
+      rec.found.instance_label = await textVisible(page, /instance values/i, 1500);
+      await card.getByRole("tab", { name: "Rules" }).click();
+      rec.found.instance_vs_rule_labels = await textVisible(page, /species rule/i, 1500);
       const stagedBefore = (await api("GET", `/runs/${state.runId}/interventions`)).staged.length;
-      const field = await tryFind(rec, "fruit energy field", fields(page, /fruit energy/i));
+      const field = await tryFind(rec, "fruit energy field", fields(card, /fruit energy/i));
       if (!field) throw new Error("no editable 'fruit energy' species rule field");
       await fillField(field, 70);
-      const stage = await mustFind(rec, "stage plant rule", clickables(page, /stage|apply|save/i));
+      const stage = await mustFind(rec, "stage plant rule", clickables(card, /stage species rule change|stage|apply|save/i));
       await stage.click();
       const staged = await waitApi(
         "a staged update_plant_rules",
@@ -792,6 +847,7 @@ async function runSteps(page) {
       const iv = staged.staged.find((x) => x.type === "update_plant_rules");
       rec.found.staged_rule = { species: iv.species, fruit_energy: iv.rule?.fruit_energy };
       if (iv.rule?.fruit_energy !== 70) rec.notes.push(`staged fruit_energy is ${iv.rule?.fruit_energy}, expected 70`);
+      await closeProfileCard(page);
     },
     { needs: ["runId"] },
   );
@@ -892,7 +948,7 @@ async function runSteps(page) {
       "error-recovery",
       "Error state is shown and 'Recover (pause)' returns to paused (A-COG-5)",
       async (rec) => {
-        const request = await api("GET", "/defaults?agent_count=8");
+        const request = withFakeModels(await api("GET", "/defaults?agent_count=8"));
         request.name = `${RUN_NAME} error`;
         request.play_delay_seconds = 0;
         for (const card of request.agents) card.fake_options = { fail: { status: "timeout", rounds: [1], failing_attempts: 3 } };
@@ -932,6 +988,110 @@ async function runSteps(page) {
 
   if (ASSISTANT_MODE !== "0") await runAssistantSteps(page);
   await runResumeArchiveStep(page);
+  await runProfileCardStep(page);
+}
+
+// ---------------------------------------------------------------------------
+// Entity profile card (runs last, on the QA run; never calls a model)
+// ---------------------------------------------------------------------------
+//
+// Opens the run page live, centres the map on the living agent with the most turns, clicks its
+// dot and checks the card: the board stays visible behind a see-through backdrop, Overview comes
+// first, Decisions lists the agent's turns and "View turn" on an older row moves the page (and
+// the card's "as of turn") to that turn, Skills and Knowledge show their content, ArrowDown on the
+// side list selects the next section, and Escape closes the card.  Extra screenshots
+// profile-overview and profile-decisions.
+
+async function runProfileCardStep(page) {
+  await step(
+    page,
+    "profile-card",
+    "Profile card from a map dot: board visible behind it; Overview, Decisions (View turn), Skills, Knowledge; arrows move; Escape closes",
+    async (rec) => {
+      await gotoRun(page, state.runId);
+      await closeDrawer(page);
+      await closeProfileCard(page);
+      const turns = await api("GET", `/runs/${state.runId}/turns`);
+      const live = await api("GET", `/runs/${state.runId}/state`);
+      // A living agent that acted at least twice, so its Decisions list has an older turn to view.
+      const acted = (id) => turns.filter((t) => t.kind === "agent_turn" && t.acting_agent_id === id).length;
+      const agent = Object.values(live.entities.agents).filter((a) => a.alive).sort((a, b) => acted(b.id) - acted(a.id))[0];
+      if (!agent || acted(agent.id) < 2) throw new Error("no living agent with two turns");
+      rec.found.agent = agent.id;
+      // Centre the map on the agent's cell ("Go to" also selects that point), then click the dot drawn there.
+      const map = page.locator("main.run-center");
+      await map.getByLabel("Go to x").fill(String(agent.position.x));
+      await map.getByLabel("Go to y").fill(String(agent.position.y));
+      await map.getByRole("button", { name: /^Go$/ }).click();
+      await sleep(600);
+      const cell = page.locator(`main.run-center [data-coord="${agent.position.x},${agent.position.y}"]`);
+      const dots = await cell.evaluate((rect) => {
+        const svg = rect.ownerSVGElement;
+        const box = rect.getBoundingClientRect();
+        return [...svg.querySelectorAll("circle.insp-dot-agent")]
+          .map((c) => c.getBoundingClientRect())
+          .filter((b) => b.left >= box.left - 1 && b.right <= box.right + 1 && b.top >= box.top - 1 && b.bottom <= box.bottom + 1)
+          .map((b) => ({ x: b.left + b.width / 2, y: b.top + b.height / 2 }));
+      });
+      if (dots.length === 0) throw new Error(`no agent dot drawn in cell ${agent.position.x},${agent.position.y}`);
+      await page.mouse.click(dots[0].x, dots[0].y);
+      const card = await waitVisible(profileCard(page), "the profile card after a map dot click");
+      rec.found.opened_for = await card.getAttribute("data-entity-id");
+      const kind = await card.getAttribute("class");
+      if (!/profile-kind-agent/.test(kind ?? "")) throw new Error(`the dot opened a card for ${rec.found.opened_for} (${kind})`);
+
+      // The backdrop dims the board but leaves it in view: part of the map lies outside the card.
+      const look = await page.evaluate(() => {
+        const backdrop = document.querySelector(".profile-backdrop");
+        const alpha = Number((getComputedStyle(backdrop).backgroundColor.match(/rgba?\(([^)]+)\)/)?.[1] ?? "0,0,0,1").split(",")[3] ?? 1);
+        const cardBox = document.querySelector(".profile-card").getBoundingClientRect();
+        const mapBox = document.querySelector("main.run-center .insp-map-svg").getBoundingClientRect();
+        const mapOutside = mapBox.left < cardBox.left - 20 || mapBox.bottom > cardBox.bottom + 20 || mapBox.top < cardBox.top - 20;
+        return { alpha, mapOutside, cardW: Math.round(cardBox.width), winW: window.innerWidth };
+      });
+      rec.found.backdrop = look;
+      if (!(look.alpha > 0 && look.alpha <= 0.5)) throw new Error(`backdrop alpha ${look.alpha} (expected a dim, see-through backdrop)`);
+      if (!look.mapOutside) throw new Error("the card covers the whole map");
+
+      const tab = (name) => card.getByRole("tab", { name });
+      if ((await tab("Overview").getAttribute("aria-selected")) !== "true") throw new Error("Overview is not the first section shown");
+      await waitVisible(card.getByText(/^Stats$/), "Overview's Stats");
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-profile-overview.png`) }).catch(() => {});
+
+      await tab("Decisions").click();
+      const rows = card.locator("li.profile-row");
+      await waitVisible(rows, "a Decisions row");
+      rec.found.decision_rows = await rows.count();
+      const older = rows.nth(1);
+      const olderTurn = await older.getAttribute("data-turn-id");
+      await waitVisible(older.getByText(/^action |^result |no action|thinking/), "the older row's loaded events", 6000).catch(() => null);
+      await older.getByRole("button", { name: "View turn" }).click();
+      await waitVisible(page.locator(".map-history-strip"), "the history strip after View turn");
+      rec.found.view_turn = olderTurn;
+      rec.found.card_header_turn = await card.locator(".profile-sub code").innerText();
+      if (rec.found.card_header_turn !== olderTurn) throw new Error(`the card shows turn ${rec.found.card_header_turn}, expected ${olderTurn}`);
+      if (!(await card.isVisible())) throw new Error("View turn closed the card");
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-profile-decisions.png`) }).catch(() => {});
+
+      await tab("Skills").click();
+      await waitVisible(card.getByText(/saved skills/i), "Skills: saved skills");
+      await tab("Knowledge").click();
+      await waitVisible(card.getByText(/^Notebook$/), "Knowledge: notebook");
+      rec.found.knowledge_records = await card.getByText(/knowledge records \(\d+\)/i).first().innerText().catch(() => null);
+      await tab("Knowledge").focus();
+      await page.keyboard.press("ArrowDown");
+      rec.found.arrow_down_selects = await tab("Messages").getAttribute("aria-selected");
+      if (rec.found.arrow_down_selects !== "true") throw new Error("ArrowDown on Knowledge did not select Messages");
+
+      await page.keyboard.press("Escape");
+      await card.waitFor({ state: "detached", timeout: 3000 });
+      rec.found.escape_closes = true;
+      rec.found.history_kept = await page.locator(".map-history-strip").isVisible();
+      await page.locator(".map-history-strip").getByRole("button", { name: /back to live/i }).click();
+    },
+    { needs: ["runId"] },
+  );
+
 }
 
 // ---------------------------------------------------------------------------
@@ -953,7 +1113,7 @@ async function runResumeArchiveStep(page) {
     "Resume page: Ctrl/Shift multi-select, archive, archive view, restore, delete with confirmation",
     async (rec) => {
       const prefix = `${RUN_NAME} tidy-`;
-      const request = await api("GET", "/defaults?agent_count=6");
+      const request = withFakeModels(await api("GET", "/defaults?agent_count=6"));
       request.play_delay_seconds = 0;
       for (let i = 1; i <= 5; i += 1) {
         const run = await api("POST", "/runs", { ...request, name: `${prefix}${i}` });
@@ -1445,6 +1605,9 @@ async function runAssistantSteps(page) {
       await reply.article.locator(".assistant-ref-entity").click();
       await sleep(700);
       rec.found.entity_ref_selects = await page.locator("section.run-side").innerText().then((t) => /\ba01\b/.test(t)).catch(() => false);
+      // The entity link also opens a01's profile card over the page; close it so the turn link and the history strip are reachable.
+      rec.found.entity_ref_opens_card = (await profileCard(page).getAttribute("data-entity-id").catch(() => null)) === "a01";
+      await closeProfileCard(page);
       await reply.article.locator(`.assistant-ref-turn[title="turn ${someTurn}"]`).click();
       await sleep(900);
       rec.found.turn_ref_history = await textVisible(page, new RegExp(escapeRe(someTurn)), 2000);
@@ -1491,7 +1654,7 @@ async function runAssistantSteps(page) {
     "assistant-create-run-brief",
     "Fake create_run brief: the card's deterministic 'What will happen', setup diff and the assistant's description; Approve creates the run and navigates",
     async (rec) => {
-      await setFake({ chat: { fake_script: [briefStep(BRIEF_RUN_NAME, "Six fighters in a small arena; Ash hits harder and moving costs less.", "create_run", { name: BRIEF_RUN_NAME, agent_count: 6, overlay: { agents: [{ name: "Ash", stats: { attack: 3 } }], rules: { prices: { move: 2 } }, play_delay_seconds: 0 } })] } });
+      await setFake({ chat: { fake_script: [briefStep(BRIEF_RUN_NAME, "Six fighters in a small arena; Ash hits harder and moving costs less.", "create_run", { name: BRIEF_RUN_NAME, agent_count: 6, overlay: { default_model_key: QA_AGENT_MODEL, agents: [{ name: "Ash", stats: { attack: 3 } }], rules: { prices: { move: 2 } }, play_delay_seconds: 0 } })] } });
       const drawer = await openDrawerAnywhere(page);
       const reply = await askDrawer(page, "Set up a small fight arena with six agents");
       const card = reply.article.locator("section.assistant-brief");
@@ -1515,6 +1678,8 @@ async function runAssistantSteps(page) {
       await approve.click();
       const runs = await waitApi("the brief's run", () => api("GET", "/runs"), (list) => list.some((r) => !before.has(r.run_id) && r.name === BRIEF_RUN_NAME), 20_000);
       const created = runs.find((r) => !before.has(r.run_id) && r.name === BRIEF_RUN_NAME);
+      const briefModels = new Set(Object.values((await api("GET", `/runs/${created.run_id}/settings`)).effective_model_key));
+      if (briefModels.size !== 1 || !briefModels.has(QA_AGENT_MODEL)) throw new Error(`the brief's run uses ${[...briefModels]} (expected only ${QA_AGENT_MODEL}); no turn will be run on it`);
       state.briefRunId = created.run_id;
       rec.found.run = created.run_id;
       await waitApi("navigation to the new run", async () => page.url(), (u) => u.includes(`#/run/${created.run_id}`), 10_000);

@@ -1303,6 +1303,12 @@
   flex-wrap: wrap;
 }
 
+/* The Inspector tab's one-line summary of the selected entity (the full record is in the profile card). */
+.insp-summary-line {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+
 .insp-toggle {
   border: 1px solid var(--insp-border-strong);
   border-radius: 14px;

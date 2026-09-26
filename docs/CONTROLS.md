@@ -25,7 +25,8 @@ Pages (hash routes): `#/` entry, `#/new` New session, `#/resume` Resume session,
 | **Step round** | Run page, left rail | Finish the current round, then pause |
 | **Recover (pause)** | Status bar, error state | Discard the failed attempt; the next Run turn re-runs that turn |
 | **Return to live** | Timeline | Leave history and follow the latest saved turn |
-| **Inspector** / **Turn record** / **God mode** / **Rules** / **Storybook** (*new*) | Run page, right tabs | Inspect entities / the facts of the viewed turn / stage edits / read the rules / read the AI narrative |
+| **Inspector** / **Turn record** / **God mode** / **Rules** / **Storybook** (*new*) | Run page, right tabs | Occupants of a cell and a summary of the selection / the facts of the viewed turn / stage edits / read the rules / read the AI narrative |
+| Click an entity, or **Profile** | Map dot, occupant row, roster row, Inspector | Opens the entity's profile card over the page: Overview, Decisions, Skills, Knowledge, Messages, History (agents); Overview, Growth, Rules, History (plants) |
 | **Create continuation from turn <id>** | God mode tab | New run from the viewed checkpoint; the original is untouched |
 | **Reload working/ files** | God mode tab | Stage the edits made to the run's `working/` JSON files |
 | **Assistant** (*new*) | Bottom-right pill on every page (hidden while the drawer is open) plus a rail-header button on the run page, Alt+A | Open the assistant drawer |
@@ -124,7 +125,7 @@ at 1280 px and wider the assistant drawer docks on the right (*new*).
 | Timeline | **‹ Previous turn** / **Next turn ›** | View the neighbouring turn | same | |
 | Timeline | **‹ Parent run** / **Open parent run at that turn** | On a continuation's first turn: open the parent run at the branch turn | | |
 | Timeline | Turn select | Pick any turn of the viewed round | `GET /api/runs/{run_id}/turns` | |
-| Agents roster | Agent row | Select that agent (switches to the Inspector unless God mode is open) | | |
+| Agents roster | Agent row | Select that agent and open its profile card (the Inspector tab shows it behind, unless God mode is open) | | |
 
 ### Map (centre)
 
@@ -136,8 +137,9 @@ at 1280 px and wider the assistant drawer docks on the right (*new*).
 | Toolbar | **Origin** | Centre on (0, 0) |
 | Toolbar | **Center selection** | Centre on the selected cell |
 | Toolbar | **Go to** x / y + **Go** | Centre on and select a point inside the region |
-| Map | Click a cell / a dot; drag | Select a point / an entity; pan |
+| Map | Click a cell / a dot; drag | Select a point (its occupants are listed in the Inspector) / an entity and open its profile card (a cell with one entity opens it too); pan |
 | Cell tooltip | **Close (Esc)** | Close the hover details |
+| Cell tooltip | Entity row | Select that entity and open its profile card |
 | Status line | **show removed-entity markers (∅n)** | Mark cells where entities were removed |
 | Legend | Kind chips, **Select all**, **Unselect all** | Show or hide dots of a kind on the map only |
 | History strip | **Back to live** | Leave history |
@@ -160,18 +162,46 @@ column narrower than about 280 px does the row scroll sideways.
 
 #### Inspector tab
 
+The tab lists what is at the selected cell and sums up the selected entity in two lines. The full
+record is in the entity profile card.
+
 | Label | Effect | API |
 | --- | --- | --- |
-| **Find entity by id** + **Select entity** | Select an entity of the viewed turn (or its last point if it was removed) | |
-| **Coordinate (x,y)** + **Select point** | Select a point | |
-| Occupant rows | Select that entity | |
+| **Find entity by id** + **Select entity** | Select an entity of the viewed turn and open its profile card (or select its last point if it was removed) | |
+| **Coordinate (x,y)** + **Select point** | Select a point (a single occupant is selected, the card stays closed) | |
+| Occupant rows, "Other entities" chips | Select that entity and open its profile card | |
 | **Clear selection** | Clear the entity selection | |
+| **Profile** | Open the selected entity's profile card | |
 | **Open its latest decision packet** / **View that turn** | Open the agent's latest packet / view the turn it was made in | `GET /api/runs/{run_id}/turns/{turn_id}/decision_packets/{packet_id}` |
-| **Agent view** checkbox | Map, occupants and inspector show only what the selected agent knows | `GET /api/runs/{run_id}/agents/{agent_id}/knowledge` (live) or `/turns/{turn_id}/agents/{agent_id}/knowledge` |
-| **Open decision packet <id>** / **Open model call <id>** | Open the record viewer | `.../decision_packets/{packet_id}`, `.../model_calls/{call_id}` |
-| **Show full JSON** / **Hide full JSON** | Expand an action result | |
-| **Stage species rule change** / **Reset draft** (plants) | Stage an `update_plant_rules` edit for the plant's species | `POST /api/runs/{run_id}/interventions` |
-| **Ask** (*new*, entity header, "What is <name> up to?") | Opens the drawer with the question prefilled | |
+| **Agent view** checkbox (agents) | Map and occupants show only what the selected agent knows; the card's Overview shows its believed self | `GET /api/runs/{run_id}/agents/{agent_id}/knowledge` (live) or `/turns/{turn_id}/agents/{agent_id}/knowledge` |
+
+#### Entity profile card
+
+A card over the run page for one entity of the viewed turn. The board stays visible, dimmed,
+behind it, and a docked assistant drawer stays usable beside it. The card opens when you click an
+entity: a map dot, a map tooltip row, an occupant row, a roster row, an "Other entities" chip, an
+entity link in an assistant answer, or **Profile** in the Inspector. Opening it never changes the
+viewed turn or the play state. Every value is "as of turn <id>" of the viewed turn: **View turn** in
+Decisions or Messages moves the page to that turn and the card follows it. A dead or removed entity keeps its last known data
+with a dead / removed badge.
+
+| Area | Label | Effect | API |
+| --- | --- | --- | --- |
+| Header | **Agent view** (agents) | Same toggle as in the Inspector | |
+| Header | **Ask** ("What is <name> up to?") | Opens the assistant drawer with the question prefilled | |
+| Header | **Open in Inspector** | Close the card and show the entity in the Inspector tab | |
+| Header | **×** (or Escape, or a click on the dimmed board) | Close the card; focus returns to what opened it | |
+| Side list | **Overview**, **Decisions**, **Skills**, **Knowledge**, **Messages**, **History** (agents); **Overview**, **Growth**, **Rules**, **History** (plants); **Overview**, **History** (fruit, seeds, residue) | Show that section; arrow keys, Home and End move between sections. Below 900 px the list is a row of tabs and the card fills the window | |
+| Overview (agent) | | Identity, model and mind multiplier, totals (compute spent on actions, cognition and interpreter, model calls, upgrades), the stats table, last action and result, persona, context settings | |
+| Decisions (agent) | **View turn** / **Packet** / **Model call** | Every turn the agent acted in up to the viewed turn, newest first, ten at a time ("Show 10 older"), with its thought, action, result, cost and skill; view that turn / open its decision packet / its model call in the record viewer (the card waits behind it) | `GET /api/runs/{run_id}/turns`, `.../turns/{turn_id}/events`, `.../decision_packets/{packet_id}`, `.../model_calls/{call_id}` |
+| Skills (agent) | | Saved skills with their source, and the skill execution state | |
+| Knowledge (agent) | **Show full JSON** / **Hide full JSON** | Believed self against the actual stats, notebook, memory priorities, recent results as the agent recorded them, and every knowledge record with kind filters and search | `.../knowledge` |
+| Messages (agent) | **View turn** | Messages it sent (send and broadcast, with who they reached) and messages and voice it received | `.../turns/{turn_id}/events`, `.../knowledge` |
+| History | | Created round, death round and cause, residue left, removal, and presence in the viewed turn | |
+| Overview (plant) | | Species, stage, age, size, stored energy, essence, alive, position | |
+| Growth (plant) | | Its fruit and seeds (each id opens that entity's card), rounds since fruit and seed, when the next ones come, totals and the stage's intervals | |
+| Rules (plant) | **Stage species rule change** / **Reset draft** | Stage an `update_plant_rules` edit for the plant's species (in history, the rule as of the viewed turn is shown above it) | `POST /api/runs/{run_id}/interventions` |
+| Overview (fruit, seed, residue) | | Available compute and essence, source plant or entity, created round, rot or germination round | |
 
 #### Turn record tab
 
@@ -222,7 +252,7 @@ never spends money.
 | **Raise budget** | Raise the run's storybook budget after auto paused at it | `PUT /api/runs/{run_id}/assistant/settings` |
 | **Jump to viewed turn** | Scroll to the highlighted entry | |
 | **Following <name>** · **clear** | While a map selection is active, only entries involving it are listed; clear removes the filter | |
-| **Inspect** | Show the followed entity in the Inspector | |
+| **Inspect** | Open the followed entity's profile card (the Inspector tab shows it behind) | |
 | **Make a story of this run** | Open Story Mode for this run | |
 
 #### Record viewer (over the map)

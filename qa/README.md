@@ -60,24 +60,28 @@ when the script is interrupted.
 ## What it checks
 
 Steps 1-17 (the simulation UI); steps 18-33 are in the assistant section below; step 34
-(Resume page housekeeping) is described after them.
+(Resume page housekeeping) and step 35 (the entity profile card) are described after them.
+The browser check always creates fake-model runs; the operator default is claude-cli-haiku.
+`new-session-cards` picks `fake-heuristic` in the form's default-model picker before any
+validation, `create-run` checks it again and stops before any turn if the backend reports another
+model, and every direct `POST /api/runs` sets `default_model_key` to `fake-heuristic`.
 
 | # | Step id | Check | Requirement |
 | --- | --- | --- | --- |
 | 1 | `preflight` | `GET /api/health` and `/api/defaults` answer | |
 | 2 | `entry` | The entry page shows **New session** and **Resume session** | U10 |
-| 3 | `new-session-cards` | New session shows 8 prefilled cards with the default names. Also notes whether add/remove card, context settings and a model choice exist | U11, U16 |
+| 3 | `new-session-cards` | New session shows 8 prefilled cards with the default names. Also notes whether add/remove card, context settings and a model choice exist, then picks `fake-heuristic` as the default model | U11, U16 |
 | 4 | `edit-card` | Renames the first card and sets its starting x to 3 | U11 |
 | 5 | `invalid-value` | Sets health to 999 (or x to 999). Expects a problem shown by its path (`agents[0]...`), then fixes the value | Spec "New session" |
-| 6 | `create-run` | Creates the run and checks that it opens **Paused** with a round/turn status line. The backend confirms the edited name and x | U12, U14 |
+| 6 | `create-run` | Checks that `fake-heuristic` is the default model, creates the run and checks that it opens **Paused** with a round/turn status line. The backend confirms the edited name and x | U12, U14 |
 | 7 | `run-turn` | **Run turn** commits exactly one turn, and a `[r1 t1] ...` feed line appears | U12, U13 |
 | 8 | `play-pause` | **Play**, then **Pause**. Records whether "Pause requested" was seen before "Paused" | U12 |
 | 9 | `step-round` | **Step round** stops at `r{n}_end` | U12 |
 | 10 | `timeline` | Previous/next arrows, a history indicator, turn selection, then **return to live** | U6 |
-| 11 | `crowded-coordinate` | Hovers and clicks the coordinate with the most occupants (taken from the API). Every occupant id must be listed | U1 |
-| 12 | `select-occupants` | Selects each occupant and expects inspector details | U1, U2 |
-| 13 | `agent-inspector` | Agent stats, skills, knowledge and model, plus the decision packet and model call record | U2 |
-| 14 | `plant-rules` | The plant inspector shows the species and stage. Editing "fruit energy" stages `update_plant_rules` | U3 |
+| 11 | `crowded-coordinate` | Hovers and clicks the coordinate with the most occupants (taken from the API). Every occupant id must be listed (a profile card opened by the click is closed first) | U1 |
+| 12 | `select-occupants` | Selects each occupant and expects its profile card with details, closing it between clicks | U1, U2 |
+| 13 | `agent-inspector` | The agent's profile card: stats, model, Skills and Knowledge sections; the Decisions row's **Packet** opens the decision packet (the card hides behind the record viewer and comes back after Escape), then its **Model call** | U2 |
+| 14 | `plant-rules` | The plant's profile card shows the species and stage; in its Rules section, editing "fruit energy" stages `update_plant_rules` | U3 |
 | 15 | `god-mode` | Changes "recent history length" and sends a broadcast voice. Both appear in the staged list, and after **Run turn** they are recorded in that turn | U7, U8, U16 |
 | 16 | `resume` | Goes back to the entry page, uses **Resume session**, and checks the run opens paused | U10 |
 | 17 | `error-recovery` | A run whose fake model times out in round 1 is opened in the UI. **Run turn** leads to the error state, and **Recover (pause)** leads back to paused | A-COG-5 |
@@ -145,6 +149,7 @@ step that would call a model skips itself, so the script never spends against a 
 | 33 | `assistant-dictate` | The **Dictate** button: enabled on secure origins when speech is ready; on a non-secure origin disabled with its reason |
 
 | 34 | `resume-select-archive-delete` | Resume page housekeeping (runs after the assistant steps, never calls a model): creates five closed runs and one open run through the API, Ctrl-clicks two rows, Shift-clicks a range (the checkboxes must show exactly the four runs), **Archive selected** ("Archived 4 runs."), **View archive** (no Open buttons), **Restore** one, deletes one with **Delete selected…** and the confirmation dialog (it must name the run and say it cannot be undone), checks both lists and the 404 through the API, then tries to delete the open run and expects "Not deleted:" in the dialog. Extra screenshots `34-resume-selection-toolbar.png`, `-archive-view`, `-delete-dialog`, `-delete-refused`. Removes the runs it created. `QA_ONLY_RESUME_ARCHIVE=1` runs only the preflight and this step |
+| 35 | `profile-card` | The entity profile card on the QA run (live view, never calls a model): centres the map on the living agent with the most turns with **Go to**, clicks its dot, checks the backdrop is see-through (alpha at most 0.5) and part of the map lies outside the card, Overview first, Decisions rows with **View turn** on an older row (the history strip appears and the card's "as of turn" follows), Skills and Knowledge content, ArrowDown on the side list selects the next section, Escape closes the card. Extra screenshots `35-profile-overview.png`, `35-profile-decisions.png` |
 
 "Scripted" steps need the fake-metadata hook and skip with that reason without it; they and the
 "model call(s)" steps run only when every profile is fake (8 steps: 23-28, 30 and 32). The others spend
