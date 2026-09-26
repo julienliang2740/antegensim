@@ -99,6 +99,25 @@ Every model call goes `calls.call_profile` -> `model.call_model`; every route is
 | `scripts/run_sim.py` | headless driver: create a run from the defaults (plus `--request` overlay), step rounds, print a summary; optional `--assistant` |
 | `scripts/scenarios/` | scenario overlays (`arena_fight.json`, `arena_predators.json`) |
 | `scripts/check_docs.py` | the docs consistency checker (`scripts/check_docs.py::main`, `scripts/check_docs.py::CHECKS`) |
-| `qa/browser_check.mjs` | Playwright walk through the real UI (see `qa/README.md`) |
+| `scripts/assistant_playtest.py` | ground-truthed assistant playtest across model tiers (LIVE, costs money; `chat`/`narrator`/`author`/`briefs` need `EMPYREAN_ALLOW_LIVE=1`): question sets from run storage, one backend per arm, scoring, the evidence report (`scripts/assistant_playtest.py::build_questions`, `scripts/assistant_playtest.py::require_live`, `scripts/assistant_playtest.py::run_report`, `scripts/assistant_playtest.py::main`) |
+| `scripts/assistant_replay_malformed.py` | replays stored malformed `claude_cli` decision replies through `calls.salvage` and reports the salvage rate; no model call (`scripts/assistant_replay_malformed.py::replay`, `scripts/assistant_replay_malformed.py::experimental_unwrap`, `scripts/assistant_replay_malformed.py::main`) |
+| `qa/browser_check.mjs` | Playwright walk through the real UI: 17 legacy steps and the 16 assistant steps (see `qa/README.md`) |
+| `qa/assistant_fake_server.py` | QA-only backend for the browser check: the served app with every assistant profile forced to `fake-assistant`, port 8020, worlds `qa/worlds-assistant/`, plus `GET/PUT /api/_qa/fake_metadata` to script the fake chat model; refuses to start on a live key (`qa/assistant_fake_server.py::main`) |
+| `qa/render_brief.mjs` | renders stored briefs' "What will happen" lines with the real frontend `describeAction` (stdin/stdout JSON), used by the playtest's `briefs` arm |
+| `qa/playtest_shots.mjs` | screenshots of the playtest artefacts through the UI (Storybook tab, executed brief card); fake keys, no spend |
 | `qa/resilience/` | crash, restart and concurrency scenarios over HTTP (`qa/resilience/run_all.sh`) |
 | `docs/` | the documentation; `docs/INDEX.md` lists every file |
+| `docs/evidence/` | dated records of past checks, not rewritten when the code changes; see the table below |
+
+### Evidence files (`docs/evidence/`)
+
+| Path | What it records |
+| --- | --- |
+| `docs/evidence/assistant_playtest.md` | the 2026-09-26 assistant playtest: chat, narrator, author and briefs arms per tier, the salvage replay, tier decisions, spend and findings |
+| `docs/evidence/assistant_playtest_calls.jsonl` | one line per playtest model call (arm, profile, status, latency, cost, tokens, cache reads) |
+| `docs/evidence/assistant_sonnet_smoke.md` | the lead's Sonnet smoke on the primary backend and five Sonnet chat steps and narrator calls |
+| `docs/evidence/browser_qa_assistant.md` | the 2026-09-26 browser QA of the assistant steps 18-33: runs, step table, findings, spend |
+| `docs/evidence/browser_qa_assistant_fake.log.json` | `log.json` of the all-fake browser pass (33 of 33) |
+| `docs/evidence/browser_qa_assistant_primary.log.json` | `log.json` of the pass against the primary servers (25 passed, 8 skipped) |
+| `docs/evidence/screenshots/assistant/` | screenshots of the assistant browser steps (`01-` … `16-`) and the playtest (`playtest-01-` … `playtest-03-`) |
+| `docs/evidence/browser_qa.md`, `docs/evidence/live_sims.md`, `docs/evidence/resilience.md`, `docs/evidence/final_pass/` | the 2026-09-25 records from before the assistant release |

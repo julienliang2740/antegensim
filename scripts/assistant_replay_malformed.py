@@ -62,9 +62,10 @@ def _extra_keys(obj: dict[str, Any]) -> list[str]:
 
 
 def experimental_unwrap(obj: dict[str, Any]) -> dict[str, Any]:
-    """A rule the current salvage lacks: a single-key object whose value is a dict that itself
-    contains the same key (``{"action": {"thought": ..., "action": {...}}}``) is the decision
-    wrapped under one of its own field names.  Measured here to size the gain, not shipped."""
+    """The same-key unwrap (``{"action": {"thought": ..., "action": {...}}}`` -> the inner dict).
+    Shipped in ``calls._salvage_once`` since the fix-up after the playtest, so ``salvage`` already
+    applies it and this column now equals ``decision_valid_after_salvage``; kept so the report
+    shows the pre-fix measurement (28 -> 77 of 83) can be reproduced by removing the rule."""
     if len(obj) == 1:
         (key, value), = obj.items()
         if isinstance(value, dict) and key in value:
@@ -160,7 +161,7 @@ def main() -> int:
     print(f"claude_cli malformed envelopes: {n} (with stored reply text: {report['with_text']}, empty text: {report['without_text']})")
     print(f"salvage -> JSON object: {report['salvaged_to_object']} ({report['salvage_rate_of_with_text']} of those with text; {report['salvage_rate_of_all']} of all)")
     print(f"salvaged objects that validate as a Decision: {report['decision_valid_after_salvage']} ({report['decision_valid_rate_of_salvaged']} of salvaged)")
-    print(f"with the experimental same-key unwrap rule ({{'action': {{'action': ...}}}}): {report['decision_valid_with_experimental_unwrap']} of {report['salvaged_to_object']} would validate; remaining: {report['experimental_errors'][:5]}")
+    print(f"same-key unwrap ({{'action': {{'action': ...}}}}, shipped in salvage; this line should equal the one above): {report['decision_valid_with_experimental_unwrap']} of {report['salvaged_to_object']}; remaining: {report['experimental_errors'][:5]}")
     print(f"paid for malformed replies: ${report['wasted_cost_usd']:.4f}")
     print("Decision validation errors after salvage (first error, grouped):")
     for msg, count in report["decision_errors"][:15]:

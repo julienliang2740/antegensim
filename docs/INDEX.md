@@ -25,12 +25,22 @@ Row format (parsed): `` | `<repo path>` | purpose | audience | assistant: yes|no
 | `docs/LIMITATIONS.md` | Known limits and defects, each with a next step | operators, developers, assistant | assistant: yes |
 | `docs/sample_run/README.md` | A trimmed real run folder and how to read it | developers | assistant: no |
 | `frontend/README.md` | Frontend structure, commands and conventions | developers | assistant: no |
-| `qa/README.md` | The browser check and the resilience harness | QA | assistant: no |
+| `qa/README.md` | The browser check (17 legacy + 16 assistant steps, the fake QA server) and the resilience harness | QA | assistant: no |
 | `llm_world_technical_spec.md` | Source requirements: the technical specification (v0.5) | developers | assistant: no |
 | `llm_world_running_design.md` | Source requirements: the world design (v0.7) | developers | assistant: no |
 
-Historical evidence (`docs/evidence/`: browser QA, live simulations, resilience runs,
-screenshots) is a record of past checks and is not rewritten when the code changes.
+Historical evidence (`docs/evidence/`: browser QA, live simulations, resilience runs, the
+assistant playtest, screenshots) is a dated record of past checks and is not rewritten when the
+code changes; `docs/TEST_EVIDENCE.md` summarises the current state. The assistant does not load it.
+
+| File | Purpose | Audience | Assistant |
+| --- | --- | --- | --- |
+| `docs/evidence/assistant_playtest.md` | 2026-09-26 assistant playtest: model tiers per capability, salvage replay, spend, findings (per-call log `docs/evidence/assistant_playtest_calls.jsonl`) | developers, QA | assistant: no |
+| `docs/evidence/assistant_sonnet_smoke.md` | 2026-09-26 Sonnet smoke: the salvaged chat step on the primary backend, five chat steps, narrator calls | developers, QA | assistant: no |
+| `docs/evidence/browser_qa_assistant.md` | 2026-09-26 browser QA of the assistant steps 18-33 (logs `docs/evidence/browser_qa_assistant_fake.log.json`, `docs/evidence/browser_qa_assistant_primary.log.json`; screenshots `docs/evidence/screenshots/assistant/`) | developers, QA | assistant: no |
+| `docs/evidence/browser_qa.md` | 2026-09-25 browser QA and reviewer passes of the simulation UI | developers, QA | assistant: no |
+| `docs/evidence/live_sims.md` | 2026-09-25 live simulation runs and live tests (claude-cli-haiku) | developers, QA | assistant: no |
+| `docs/evidence/resilience.md` | 2026-09-25 resilience and completion-criteria runs | developers, QA | assistant: no |
 
 Knowledge core (always in the assistant's system prompt): `docs/SYSTEM.md#overview`,
 `docs/GLOSSARY.md`, `docs/CONTROLS.md#quick-reference` and

@@ -81,6 +81,8 @@ PATH_ALLOW_MISSING_PREFIXES = (
     "backend/server.",  # server.pid / server.log written by a running backend
     "qa/resilience/worlds",  # gitignored scratch worlds of the resilience harness
     "backend/tests/data/",  # optional Whisper sample clip (EMPYREAN_WHISPER_TEST_AUDIO)
+    "qa/worlds-",  # gitignored worlds of the fake QA server and the playtest arms
+    "qa/playtest-out",  # gitignored raw logs of scripts/assistant_playtest.py
 )
 
 # Backend routes that deliberately have no frontend wrapper (none today).

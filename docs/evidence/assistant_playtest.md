@@ -197,3 +197,132 @@ Six commands in run-scoped conversations on `run_20260926_034607_b7c5` (chip: ru
   want Sonnet prose at 3.5x the cost.
 * Opus: no measurable gain on briefs or story briefs in this sample; not worth a default anywhere.
 
+
+## Recheck after fixes
+
+Run on 2026-09-26 (09:13-09:18 UTC) after the backend fix-up for the findings above, with the same
+script and CLI (2.1.283, thinking off), each stage on a fresh copy of that arm's worlds
+(`qa/worlds-playtest/recheck_haiku/`, `qa/worlds-playtest/recheck_sonnet/`; the Haiku copy's storybook
+entries were deleted first so the narrator rewrote them). Raw results:
+`qa/playtest-out/narrator_haiku_recheck.json`, `briefs_sonnet_recheck.json`, `briefs_haiku_recheck.json`,
+`briefs_haiku_recheck_b1.json`, `chat_haiku_recheck_malformed.json` (the original result files were
+restored unchanged). Explicit cap USD 1.50; **spent USD 0.6675 in 31 calls** (every call below, from
+the copies' `usage.jsonl`; CLI-reported `total_cost_usd`).
+
+What changed in the code before the recheck:
+
+* `digest.py`: round-end digests carry names next to ids (`living` and `upkeep_short` are
+  `[{id, name}]`, `starvation` is `[{id, name, health_after}]`) and the text names the survivors
+  ("4 agents alive: Damaris (a04), Eos (a05), Ferrin (a06), Galene (a07)."); new `cast_map`.
+* `storybook.py`: every narrator turn call carries the cast (id, name, alive after the call's last
+  turn); the narrator rules say names come only from the cast and the digests.
+* `tools.py` `search_events`: `total_matches`, `counts_by_kind` and `counts_by_round` over the whole
+  range, `from_round` / `to_round`, `truncated_after` when the list is cut (the list shrinks to fit
+  the 6,000-character cap, the totals never do); an uncommitted `from_turn` / `to_turn` is now an
+  error (it used to widen the range to the whole run silently, which is why Sonnet saw rounds 4-24
+  for a "26-30" query). `prompts.py`: count lost turns from `get_round_digest` `counts.lost_turns`
+  or `search_events` totals, never from a listed page; `set_stat.field` is a dotted path
+  (`stats.health`) with an example.
+* `engine.py`: one brief-repair step also when a typed action has problems the model can fix; the
+  job's elapsed time and progress line refresh every second during a model call; the job is marked
+  done under the conversation lock together with clearing `meta.active_job_id`; the "as of" ref label
+  is the bare turn id. `calls.py`: the same-key unwrap rule in salvage.
+
+### Storybook (Haiku, 13 entries of `run_20260926_034607_b7c5`)
+
+13/13 written in 3 calls (batch sizes 1, 9, 3; 18 s wall; USD 0.0134), **13/13 pass the automated
+faithfulness check, 0 unknown names** (the check that flagged "Verdant, Sage, Cascade" before). The
+round-19 end now reads: "Round 19 ended with a single plant growing and spreading 12 energy and 1
+essence across the arena. Halcyon, unable to pay her upkeep, starved and fell. Four agents remained
+alive: Damaris, Eos, Ferrin, and Galene." (the true survivors a04-a07); the round-3 end names the seven
+survivors correctly. A manual read of all 13 entries found one factual invention the automated check
+does not catch: `r00019_t02_a05` says Eos "absorbed" Aster's residue, which the digest has only as
+her stated plan ("I can then absorb the residue"); and two small misreadings ("a new plant" for
+"1 plants grew", "empty air where the plant had been" for a fruit that was gone).
+
+### Briefs
+
+| arm | command | result | steps | cost | wall s | typed action | validation | approved |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| sonnet | b3_set_health "Set Eos's health to 5." | **PASS** (was FAIL) | 1 | $0.090 | 7.8 | `set_stat a05 stats.health = 5` | ok | executed (staged on the copy) |
+| haiku | b3_set_health | **PASS** (was FAIL) | 1 | $0.032 | 5.0 | `set_stat a05 stats.health = 5` | ok | executed (staged on the copy) |
+| haiku | b1_create_arena (checks the new brief-repair step) | FAIL (unchanged) | 2 (`brief-repair`, `brief`) | $0.045 | 21.1 | create_run with 6 cards | 2 problems after the repair: `overlay.rules.plant_species.fruit_tree.spawn_initial` / `.regrow_rounds`: extra inputs | no |
+
+The repair step fired live as designed (the model saw the problems and the rejected action and sent
+a corrected brief), but Haiku replaced its first invented overlay keys with other invented keys
+instead of calling `get_defaults`; Sonnet stays the chat default for briefs. The Sonnet call cost
+more than in the first run ($0.090 vs $0.054) because the changed system prompt was a cache write.
+
+### Log interpretation (Haiku, the 12 "turns lost to malformed replies in rounds A-B" questions)
+
+**10/12 correct (was 8/12)**, 24 calls, p50 7.1 s / p90 9.2 s (was 8.5 / 17.6), $0.041 per question,
+0 CLI malformed replies. Nine answers used one `search_events` call with a round range and read the
+totals; the progress polled during every question ticked once a second
+(`job.elapsed_s` 0.1 -> 1.1 -> 2.1 -> 3.1 -> 4.1 in `progress_seen`), where the first run showed "0 s"
+for the whole first step.
+
+| question | range (run) | truth | result | tools | wall s | cost |
+| --- | --- | --- | --- | --- | --- | --- |
+| q037 | rounds 1-3 (predators) | 2 | MISS | - | 4.9 | $0.018 |
+| q038 | rounds 4-6 (predators) | 5 | OK | search_events | 6.4 | $0.035 |
+| q039 | rounds 7-10 (predators) | 6 | OK | search_events | 7.1 | $0.037 |
+| q040 | rounds 11-15 (predators) | 5 | OK | search_events | 6.3 | $0.036 |
+| q041 | rounds 16-20 (predators) | 8 | OK | search_events | 7.0 | $0.037 |
+| q042 | rounds 1-20 (predators) | 26 | OK | search_events | 9.2 | $0.038 |
+| q043 | rounds 1-5 (fight) | 4 | OK | search_events | 6.4 | $0.035 |
+| q044 | rounds 6-10 (fight) | 6 | OK | search_events | 8.5 | $0.037 |
+| q045 | rounds 11-15 (fight) | 6 | OK | search_events | 7.8 | $0.037 |
+| q046 | rounds 16-20 (fight) | 5 | MISS | get_round_digest + get_round_digest + get_round_digest + get_round_digest + get_round_digest | 11.3 | $0.093 |
+| q047 | rounds 21-25 (fight) | 8 | OK | search_events | 7.0 | $0.037 |
+| q048 | rounds 26-30 (fight) | 1 | OK | get_round_digest + get_round_digest + get_round_digest | 8.5 | $0.047 |
+Misses: `q037` failed before answering with the claude_cli adapter error "claude CLI made 4 model
+requests; at most 3 allowed" (a `model.py` adapter limit, not the tool; the call still cost $0.018);
+`q046` read the five round digests, listed "2 + 2 + 0 + 1 + 0" per round and wrote the total as 6
+(truth 5), an arithmetic slip over correct data. The category is still under the 90% gate on n = 12.
+
+### Other checks
+
+* Replay of the stored malformed envelopes (`scripts/assistant_replay_malformed.py`, no spend): 77 of
+  the 83 payloads now validate as a Decision after salvage (was 28); the remaining 6 are `think`
+  instead of `thought` (4), an over-long thought (1) and a missing action (1).
+* `tests/test_assistant_api.py::test_plain_answer_with_refs_and_progress`: 10 single runs and 10 runs of
+  the whole file, all green (the cause, a job marked done before `meta.active_job_id` was cleared,
+  is fixed; `test_finished_job_never_shows_a_stale_active_job_id` polls for the window directly).
+
+### Every call of the recheck
+
+| time (UTC) | stage | profile | served model | step | batch | status | latency s | cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 09:13:59 | storybook narrator (haiku) | narrator | claude-haiku-4-5-20251001 |  | 1 | ok | 3.3 | $0.0026 |
+| 09:14:08 | storybook narrator (haiku) | narrator | claude-haiku-4-5-20251001 |  | 9 | ok | 8.7 | $0.0070 |
+| 09:14:12 | storybook narrator (haiku) | narrator | claude-haiku-4-5-20251001 |  | 3 | ok | 3.9 | $0.0038 |
+| 09:14:50 | brief b3_set_health (haiku) | chat | claude-haiku-4-5-20251001 | 1 |  | ok | 4.8 | $0.0324 |
+| 09:15:21 | brief b1_create_arena (haiku) | chat | claude-haiku-4-5-20251001 | 1 |  | ok | 12.8 | $0.0221 |
+| 09:15:29 | brief b1_create_arena (haiku) | chat | claude-haiku-4-5-20251001 | 2 |  | ok | 8.1 | $0.0226 |
+| 09:15:47 | chat q037 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 1 |  | error | 4.8 | $0.0183 |
+| 09:15:50 | chat q038 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 1 |  | ok | 2.9 | $0.0169 |
+| 09:15:52 | chat q038 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 2 |  | ok | 2.7 | $0.0183 |
+| 09:15:56 | chat q039 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 1 |  | ok | 3.3 | $0.0173 |
+| 09:16:00 | chat q039 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 2 |  | ok | 3.7 | $0.0194 |
+| 09:16:03 | chat q040 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 1 |  | ok | 3.2 | $0.0174 |
+| 09:16:06 | chat q040 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 2 |  | ok | 3.0 | $0.0187 |
+| 09:16:10 | chat q041 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 1 |  | ok | 3.2 | $0.0172 |
+| 09:16:13 | chat q041 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 2 |  | ok | 3.3 | $0.0195 |
+| 09:16:17 | chat q042 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 1 |  | ok | 3.2 | $0.0171 |
+| 09:16:22 | chat q042 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 2 |  | ok | 5.4 | $0.0214 |
+| 09:16:26 | chat q043 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 1 |  | ok | 3.0 | $0.0169 |
+| 09:16:29 | chat q043 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 2 |  | ok | 3.1 | $0.0184 |
+| 09:16:32 | chat q044 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 1 |  | ok | 2.6 | $0.0171 |
+| 09:16:37 | chat q044 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 2 |  | ok | 5.7 | $0.0195 |
+| 09:16:41 | chat q045 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 1 |  | ok | 3.0 | $0.0173 |
+| 09:16:45 | chat q045 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 2 |  | ok | 4.2 | $0.0195 |
+| 09:16:50 | chat q046 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 1 |  | ok | 4.2 | $0.0180 |
+| 09:16:53 | chat q046 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 2 |  | ok | 2.9 | $0.0323 |
+| 09:16:57 | chat q046 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 3 |  | ok | 4.0 | $0.0430 |
+| 09:16:59 | chat q047 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 1 |  | ok | 2.8 | $0.0171 |
+| 09:17:04 | chat q047 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 2 |  | ok | 4.2 | $0.0198 |
+| 09:17:08 | chat q048 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 1 |  | ok | 4.4 | $0.0181 |
+| 09:17:12 | chat q048 malformed_count (haiku) | chat | claude-haiku-4-5-20251001 | 2 |  | ok | 3.4 | $0.0287 |
+| 09:14:38 | brief b3_set_health (sonnet) | chat | claude-sonnet-5 | 1 |  | ok | 7.6 | $0.0898 |
+
+Total: 31 calls, USD 0.6675 (Haiku copy USD 0.5776, Sonnet copy USD 0.0898) of the USD 1.50 cap.

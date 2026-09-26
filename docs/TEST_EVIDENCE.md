@@ -1,60 +1,80 @@
 # Test evidence
 
-What was tested, how, and with what result. Date: 2026-09-25. Code: the working tree on top of commit `a11e51b` (uncommitted changes), recorded in run manifests as `code_revision` `a11e51b+dirty.67f19b11`. The sha256 prefix of `backend/empyrean/*.py` for every final-source result below is `1132bcec6042` (after the reload-order / agent-view fix pass).
+What was tested, how, and with what result. **Current as of 2026-09-26** (the assistant release and its verification pass), on the working tree at commit `bd240df`. Sections that were not re-run in this pass keep their original date in the heading (2026-09-25, before the assistant release); their numbers are historical.
 
 Every section is labelled:
 
-- **MOCKED**: no real provider was called. Models are the deterministic fakes (`fake-heuristic`, `fake-scripted`, `fake-malformed`), or provider responses are recorded or mocked payloads.
-- **LIVE**: real, paid calls to `claude-cli-haiku` (the Claude Code CLI with model `haiku`). This is the only live model on this machine.
+- **MOCKED**: no real provider was called. Models are the deterministic fakes (`fake-heuristic`, `fake-scripted`, `fake-malformed`, `fake-assistant`), or provider responses are recorded or mocked payloads.
+- **LIVE**: real, paid calls through the Claude Code CLI (`claude-cli-haiku` for simulation agents; `claude-cli-haiku-assistant`, `claude-cli-sonnet-assistant`, `claude-cli-opus-assistant` for the assistant). This is the only live provider on this machine.
+- **LOCAL**: no model provider and no spend, but real local computation (Whisper on the CPU, the salvage replay over stored replies).
 
 Requirement-to-test mapping is in [TEST_PLAN.md](TEST_PLAN.md). Known gaps are in [LIMITATIONS.md](LIMITATIONS.md).
 
-> **To be refreshed by the assistant verification pass (WP8).** Everything below records the
-> state before the assistant release (2026-09-25). The assistant release (2026-09-26) adds backend
-> tests (`test_assistant_*.py`, `test_speech.py`, `test_docs_consistency.py`), frontend state tests,
-> browser steps and live playtests, so these sections must be re-measured and replaced: the
-> Summary table; "Backend tests" (counts per file, skipped live and `whisper` tests); "Frontend"
-> (state test count, lint warnings); "Browser QA" (`browser_check.mjs` with the assistant steps);
-> and a new "Assistant" section (fake-model QA, the replay of stored malformed envelopes, the
-> Sonnet smoke and the ground-truthed playtest with per-call cost, latency and cache reads,
-> linking `docs/evidence/assistant_playtest.md`). The docs check (`scripts/check_docs.py`) result
-> belongs in the Summary table too. Until then, treat the counts below as historical.
-
 ## Summary
 
-| Area | Label | Result |
-| --- | --- | --- |
-| Backend unit + end-to-end tests | MOCKED | 469 passed, 3 skipped (the live tests) |
-| Frontend unit tests, type-check, build, lint | no models | 25 of 25 passed; `tsc -b` clean; `vite build` ok; lint 0 errors, 6 warnings |
-| Headless simulations | MOCKED | 2 runs of 8 agents x 3 rounds, no errors (source before the last fix pass) |
-| Resilience and completion criteria (13 scripts, 165 checks) | MOCKED | **165 of 165 passed on the final source** |
-| Live simulations, live tests and a live UI session | LIVE | 6 runs (1 on the final source), the 3 live pytest tests on the final source (2 of 3, then 3 of 3), 102 calls in all, **USD 0.782** |
-| Browser QA | MOCKED (one review session LIVE) | `browser_check.mjs` 17 of 17 on the final code; of the 21 reviewer findings 20 pass and 1 is partial (status-bar height); the pass-1 major is fixed; 3 minor UI issues remain (plus legacy-run cost fields) |
-| Provider adapters other than `fake` and `claude_cli` | MOCKED only | Unit tests against mocked payloads; never called for real |
+| Area | Label | Date | Result |
+| --- | --- | --- | --- |
+| Backend unit + end-to-end + assistant tests | MOCKED | 2026-09-26 09:22 UTC (after the fix pass) | **682 passed, 4 skipped** (3 live, 1 Whisper test without its clip) of 686 collected, 111.1 s |
+| Docs consistency (`scripts/check_docs.py`) | no models | 2026-09-26 | `docs check: clean` (10 checks) |
+| Frontend type-check, lint, state tests, build | no models | 2026-09-26 09:22 UTC (after the fix pass) | `tsc -p tsconfig.app.json --noEmit` clean; lint 0 errors, 4 warnings; `state.test.mjs` 50 of 50; `npm run build` ok |
+| Whisper (real model on the CPU) | LOCAL | 2026-09-26 | both `whisper`-marked tests pass with the clip present (6.4 s and 5.9 s); an 11 s clip transcribes in about 7 s with `large-v3-turbo` |
+| Browser QA, 17 legacy + 16 assistant steps | MOCKED | 2026-09-26 09:24 UTC (after the fix pass; first run 08:34-08:37) | **33 of 33** against the fake QA backend (`qa/out/2026-09-26_09-24-22`); **25 passed, 8 skipped** (the steps that would call a model) against the primary live backend (`qa/out/2026-09-26_09-24-14`); no console or page errors; USD 0 |
+| Assistant playtest, model tiers per capability | LIVE | 2026-09-26 | 80 ground-truthed questions per chat arm: Haiku 74/80, Sonnet 73/80; narrator, author and briefs arms; **USD 10.93** of a USD 22 cap |
+| Sonnet smoke on the primary backend | LIVE | 2026-09-26 | 1 chat step, CLI `malformed` then salvaged into a correct answer, **USD 0.10** |
+| Replay of stored malformed CLI replies through salvage | LOCAL | 2026-09-26 | 83 payloads: 77 validate after salvage (the same-key unwrap rule shipped in `calls.salvage`; 28 before it) |
+| Resilience and completion criteria (13 scripts, 165 checks) | MOCKED | 2026-09-25 | 165 of 165 on the source before the assistant release (not re-run) |
+| Headless simulations | MOCKED | 2026-09-25 | 2 runs of 8 agents x 3 rounds, no errors (not re-run) |
+| Live simulations, live tests and a live UI session | LIVE | 2026-09-25 | 6 runs, the 3 live pytest tests (2 of 3, then 3 of 3), 102 calls, USD 0.782 (not re-run) |
+| Provider adapters other than `fake` and `claude_cli` | MOCKED only | | Unit tests against mocked payloads; never called for real |
+
+Total paid model spend recorded here: USD 0.782 (simulation agents, 2026-09-25) + USD 10.93 (assistant playtest) + USD 0.10 (Sonnet smoke) = **USD 11.81**.
 
 ## Deterministic (fake models): MOCKED
 
-### Backend tests
+### Backend tests (2026-09-26)
 
-`cd backend && ../.venv/bin/pytest -q` on the final source: **469 passed, 3 skipped in 53.2 s.** The 3 skipped tests are `@pytest.mark.live` and run only with `EMPYREAN_LIVE_TESTS=1` (results under LIVE below).
+`cd backend && ../.venv/bin/pytest -q` at 09:22 UTC, after the fix pass: **682 passed, 4 skipped in 111.1 s** (686 collected; about twice the usual minute because other work was running on the machine). Fake model keys only; `EMPYREAN_LIVE_TESTS` unset. The per-file table below is the `bd240df` state (674 collected) before the fix pass added 12 assistant tests.
 
-| Kind | Files | Passed | Skipped (live) |
-| --- | --- | --- | --- |
-| Unit | `test_world` 65, `test_skills` 148, `test_runner` 54, `test_model` 69, `test_storage` 39, `test_context` 36, `test_api` 11, `test_integration_rev3` 9 | 429 | 2 (`test_model.py`) |
-| End-to-end, through the public API routes | `test_e2e_run` 12, `test_e2e_rules` 9, `test_e2e_godmode` 12, `test_e2e_context` 4, `test_e2e_boundaries` 4 | 40 | 1 (`test_e2e_boundaries.py`) |
+Skipped:
 
-The fakes sit behind the same `model.py` boundary as the real providers, so these tests run the real runner, world engine, context builder, skills interpreter, storage and API. What they prove, and what only a live run can prove, is set out in TEST_PLAN.md under "Mocked vs live".
+- the 3 `@pytest.mark.live` tests (`test_model.py::test_live_claude_cli_haiku_tiny_schema`, `test_model.py::test_live_claude_cli_decision_bills_near_packet_estimate`, `test_e2e_boundaries.py::test_live_provider_runs_the_same_decision_flow[claude-cli-haiku]`), which need `EMPYREAN_LIVE_TESTS=1`;
+- `test_model.py::test_whisper_transcribes_the_jfk_sample` ("no test audio at backend/tests/data/jfk.flac"). The other `whisper` test found the session's copy of the clip and passed. With `EMPYREAN_WHISPER_TEST_AUDIO` set to the clip, `pytest -q -m whisper` gives 2 passed in 13.0 s (6.4 s and 5.9 s per test).
 
-### Frontend
+Tests per file (collected):
+
+| Kind | Files | Tests |
+| --- | --- | --- |
+| Unit | `test_world` 65, `test_skills` 148, `test_runner` 54, `test_model` 108, `test_storage` 39, `test_context` 36, `test_api` 11, `test_integration_rev3` 9 | 470 |
+| End-to-end, through the public API routes | `test_e2e_run` 12, `test_e2e_rules` 9, `test_e2e_godmode` 12, `test_e2e_context` 4, `test_e2e_boundaries` 5 | 42 |
+| Assistant (fake models) | `test_assistant_contracts` 25, `test_assistant_engine` 16, `test_assistant_briefs` 11, `test_assistant_store` 8, `test_assistant_ledger` 6, `test_assistant_knowledge` 15, `test_assistant_api` 13, `test_assistant_digest` 10, `test_assistant_storybook` 16, `test_assistant_story` 15 | 135 |
+| Dictate | `test_speech` 25 | 25 |
+| Docs | `test_docs_consistency` 2 | 2 |
+| **Total** | | **674** |
+
+Re-run at 09:10-09:12 UTC while the assistant fix packages were landing their backend and test changes: 685 collected, 680 passed, 4 skipped (the same four), 1 failed in `test_assistant_engine.py`, a file being edited at that moment; `test_assistant_engine.py` and `test_docs_consistency.py` passed (25 of 25) on the immediate re-run. Final run on the committed fix pass at 09:22 UTC: 686 collected, 682 passed, 4 skipped.
+
+Known flake: `test_assistant_api.py::test_plain_answer_with_refs_and_progress` failed in 2 of 18 runs during the playtest (and not in 5 group runs during browser QA, nor in this run). The engine marks the job `done` before it clears `meta.active_job_id`, so a read between the two writes saw a stale id; the UI was unaffected. Fixed: the final message write, the clearing of `active_job_id` and the job status now change together under the conversation lock, and the test passed 10 of 10 single runs and 10 of 10 file runs afterwards.
+
+The fakes sit behind the same `model.py` boundary as the real providers, so these tests run the real runner, world engine, context builder, skills interpreter, storage, API and assistant engine. What they prove, and what only a live run can prove, is set out in TEST_PLAN.md under "Mocked vs live".
+
+### Docs check (2026-09-26)
+
+`.venv/bin/python scripts/check_docs.py`: `[paths] OK`, `[symbols] OK`, `[routes] OK`, `[models] OK`, `[env] OK`, `[assumptions] OK`, `[testplan] OK`, `[controls] OK`, `[stale] OK`, `[index] OK`, `docs check: clean`. It also runs inside the backend suite (`test_docs_consistency.py`).
+
+### Frontend (2026-09-26)
 
 | Check | Command (in `frontend/`) | Result |
 | --- | --- | --- |
-| Unit tests of the state modules | `node src/state/state.test.mjs` | 25 of 25 passed |
-| Type-check | `npx tsc -b` | no errors |
-| Build | `npx vite build --outDir <scratch dir>` (the bundling half of `npm run build`, kept out of `frontend/dist`) | built in 0.2 s |
-| Lint | `npm run lint` | 0 errors, 6 warnings: 2 `react(jsx-key)` (`AgentInspector.tsx:186-187`), 1 `react(only-export-components)` (`inspect/common.tsx:38`), 2 `react(refs)` (`MapView.tsx:490`), 1 `react(set-state-in-effect)` (`RunPage.tsx:137`); see LIMITATIONS.md |
+| Type-check | `npx tsc -p tsconfig.app.json --noEmit` | no errors |
+| Lint | `npm run lint` (oxlint) | 0 errors, 4 warnings after the fix pass: 1 `react(set-state-in-effect)` (`RunPage.tsx:170`), 3 `react(only-export-components)` (`inspect/common.tsx:38`, `InstructionsPage.tsx:26,31`); see LIMITATIONS.md (10 warnings at `bd240df`) |
+| Unit tests of the state modules | `node src/state/state.test.mjs` | 50 of 50 passed (47 at `bd240df`) |
+| Build | `npm run build` | ok (09:22 UTC) |
 
-### Headless simulations
+The table shows the state after the fix pass (09:22 UTC); at `bd240df` lint had 10 warnings (six `react(set-state-in-effect)` in `AssistantDrawer.tsx`, since removed without suppress comments) and the state tests numbered 47.
+
+There are no React component tests; the UI is covered by the state tests above and the browser check below.
+
+### Headless simulations (2026-09-25, before the assistant release)
 
 `scripts/run_sim.py`, in-process, scratch worlds folder, run at 19:39 on the source before the last fix pass (not re-run; the resilience suite and pytest cover the final source). Full output: `docs/evidence/final_pass/headless_*.txt`.
 
@@ -64,7 +84,7 @@ The fakes sit behind the same `model.py` boundary as the real providers, so thes
 | `fake-malformed` | 8 agents, 3 rounds, seed 1 | 8 observe actions ok. 16 decisions rejected by the format gate (`decision_invalid`: no action applied, cognition charged). 8 calls classified `failed/malformed`. The run stayed `paused` after each round, with no error |
 | `claude-cli-haiku` without `EMPYREAN_ALLOW_LIVE=1` | | Refused: "refusing to run a live model (provider 'claude_cli') without EMPYREAN_ALLOW_LIVE=1" |
 
-### Resilience and completion criteria
+### Resilience and completion criteria (2026-09-25, before the assistant release)
 
 Full method, per-criterion evidence and run ids: [evidence/resilience.md](evidence/resilience.md). The scripts in `qa/resilience/` drive a real backend process over HTTP with fake models; `qa/resilience/run_all.sh` runs them all.
 
@@ -91,7 +111,76 @@ This pass realigned 19 assertions with rules the fix pass changed on purpose. Th
 
 The first QA batch found 5 defects. On the final source: D1 (every turn copied all knowledge) is fixed; D2 (ledger helpers disagreed) is fixed; D3 (prompt stored three times) is open; D4 (reload problems) has its paths fixed but still comes in two rounds; D5 (`action` summaries omitted the actor) is fixed.
 
-## Live provider (claude-cli-haiku): LIVE
+## Browser QA
+
+### Assistant steps and the legacy steps (2026-09-26): MOCKED
+
+Full results, step table, findings and screenshots: [evidence/browser_qa_assistant.md](evidence/browser_qa_assistant.md). Headless Chromium (Playwright 1.49.1) through `qa/browser_check.mjs`: the 17 legacy steps plus 16 assistant steps (18-33: drawer, docking, tabs row, questions, progress and refs, first-time user, create-run and interventions briefs, God mode badge, Storybook, Escape order, Story Mode, Dictate).
+
+| Pass | When (UTC) | UI / backend | Assistant models | Result | Log |
+| --- | --- | --- | --- | --- | --- |
+| A: all fake | 08:34-08:36, repeated 09:24 after the fix pass | Vite 5180 -> `qa/assistant_fake_server.py` on 8020 (worlds `qa/worlds-assistant`) | all four profiles `fake-assistant` | **33 passed, 0 failed, 0 skipped** both times | `docs/evidence/browser_qa_assistant_fake.log.json` (first run); `qa/out/2026-09-26_09-24-22/log.json` (after the fix pass, with step 27 scripting the invalid brief twice for the new repair step) |
+| B: primary servers | 08:36-08:37, repeated 09:24 after the fix pass | Vite 5173 -> backend 8000 | chat/author Sonnet, narrator/summarizer Haiku (live keys) | **25 passed, 0 failed, 8 skipped** both times (the 8 steps that would call a model skip themselves) | `docs/evidence/browser_qa_assistant_primary.log.json` (first run); `qa/out/2026-09-26_09-24-14/log.json` |
+
+No model money was spent: the primary's assistant spend stayed at USD 0.1028 (the Sonnet smoke) before and after. No console or page errors in either final pass. Screenshots: `docs/evidence/screenshots/assistant/` (each opened and checked by eye).
+
+Findings (none failed a step): the fifth run-page tab ("Storybook") is partly hidden in the scrolling tabs row at the default side-column width; the drawer printed the backend's stale "0 s" progress text under the ticking line; the step list numbered steps from 2; the as-of chip read "TURN turn <id>"; an approved interventions brief showed in the God mode count only after the next status poll (about 1.5 s). All five were fixed by the frontend fix pass (tabs sized by the tabs-row container, backend progress text no longer shown and the elapsed time derived client-side, 1-based step list, ref chips without a doubled kind, staged count applied at approval), and the browser check passed again afterwards (09:24 UTC). `http://127.0.0.1` is a secure context in Chromium, so Dictate's disabled state is checked on a non-loopback host alias (`QA_INSECURE_HOST`).
+
+### Legacy steps 1-17 and the reviewer passes (2026-09-25)
+
+Recorded on 2026-09-25, before the assistant release; the 17 steps still pass in the 2026-09-26 runs above. Full results: [evidence/browser_qa.md](evidence/browser_qa.md) (two passes, the second on the final code). Curated screenshots: `docs/evidence/screenshots/01-entry.png` … `18-resume-session.png`. Every screenshot was opened and checked by eye.
+
+- **MOCKED (fake models, real Chromium):**
+  - `qa/browser_check.mjs` passed **17 of 17** steps on the final code, with no console or page errors (`qa/out/2026-09-25_20-43-52/`; the fixer's own run `qa/out/2026-09-25_20-21-26/` also passed 17 of 17).
+  - Pass 2 (after the reload-order fix): the pass-1 major (a `working/` reload undoing UI edits staged for the same turn) passes in both orders at 1440x900 and 1100x750. A conflicting reload is rejected whole, with the reason shown. The tooltip, the occupant scroll cue, the full action JSON, the Set stat display, the full next-round order and the agent-view filtering all pass.
+  - Reviewer findings on the final code: 20 of 21 pass, and 1 is partial (row 21: the status bar now changes height at round boundaries because the full next-round order wraps).
+  - Remaining: 3 minor issues (agent view works only at the agent's own cell; that status-bar height change; species-rule edit records do not name the changed field), plus the legacy-run cost fields. All are listed in LIMITATIONS.md.
+  - All 18 required operator flows passed in pass 1 (entry, cards, validation, controls, pending call, pause, history, crowded cell, inspectors, plant rules, god mode, continuation, error recovery, resume).
+- **Reviewer 1 (MOCKED):** an operator could complete all nine steps. They found 1 major and 10 minor issues, all fixed and re-tested since.
+- **Reviewer 2 (LIVE):** six steps through the UI with `claude-cli-haiku` (the `review2` row in the live table). The main findings were the stale backend and the "nothing was charged" wording; both have been fixed and re-tested with fakes.
+
+## Assistant (2026-09-26): LIVE and LOCAL
+
+### Ground-truthed playtest: LIVE
+
+Full report: [evidence/assistant_playtest.md](evidence/assistant_playtest.md); per-call log `docs/evidence/assistant_playtest_calls.jsonl`; tier decisions in `docs/ASSISTANT.md` "Model tier evidence". `scripts/assistant_playtest.py` started one backend per arm on a copy of two reference runs (`qa/worlds-playtest/<arm>/`), Claude Code CLI 2.1.283, thinking off, served models `claude-haiku-4-5-20251001`, `claude-sonnet-5`, `claude-opus-5-5`. Answers were scored automatically against ground truth computed from the run folders.
+
+| Arm | Chat questions correct | p50 / p90 latency | Chat calls | CLI malformed | Post-salvage failures | $/question |
+| --- | --- | --- | --- | --- | --- | --- |
+| Haiku | 74 of 80 (92%) | 6.3 / 9.2 s | 132 | 1 | 1 | 0.031 |
+| Sonnet | 73 of 80 (91%) | 11.3 / 22.5 s | 139 | 3 | 2 | 0.089 |
+
+| Capability | Haiku | Sonnet | Opus |
+| --- | --- | --- | --- |
+| Help and controls | 8/8 | 8/8 | |
+| Run analysis | 58/60 (97%) | 58/60 (97%) | |
+| Log interpretation (malformed-turn counts) | 8/12 | 7/12 | |
+| Execution briefs | 4/6 | 5/6 | 2/3 |
+| Storybook entries faithful | 12/13 ($0.0011/entry) | 11/13 ($0.0039/entry) | |
+| Story brief valid first try | 1/1 | 1/1 | 2/2 |
+
+| Arm | Spend (CLI-reported) |
+| --- | --- |
+| Haiku | USD 2.64 |
+| Sonnet | USD 7.70 |
+| Opus | USD 0.59 |
+| **Total** | **USD 10.93** (hard cap USD 22) |
+
+What it showed: Haiku matches Sonnet on help and run analysis at about half the latency and a third of the cost; log-interpretation counting failed on both tiers because `search_events` output is capped without a match count; every tier wrote `set_stat` with `field: "health"` instead of a dotted path; both narrator tiers invented survivor names because the round-end digest listed ids only; every story brief was valid on the first call; format failures stayed under 2% after salvage, and every late chat step read the system prompt from the CLI cache. Defaults were not changed (Sonnet chat and author, Haiku narrator and summarizer). Open items are in LIMITATIONS.md "The assistant".
+
+### Sonnet smoke: LIVE
+
+[evidence/assistant_sonnet_smoke.md](evidence/assistant_sonnet_smoke.md). On the primary backend: one chat step on `run_20260926_034607_b7c5`, CLI verdict `malformed` (`schema_mismatch`), salvaged into a valid, correct answer step without a repair call; 15.2 s, USD 0.103, 40,229 input tokens of which 19,654 cache reads. The ledger records the pre-salvage status. From the sonnet arm: five chat steps all matched the step schema (4.2-7.9 s, USD 0.04-0.06 each), and the narrator's batched calls parsed every section.
+
+### Replay of stored malformed replies: LOCAL
+
+`.venv/bin/python scripts/assistant_replay_malformed.py`: 144 `claude_cli` decision replies under `worlds/` were rejected by the CLI validator (USD 1.12 paid for them); 83 have the rejected payload stored. Salvage turns all 83 into a JSON object, and 28 validate as a Decision (the `{"output": "<json>"}` wrappers). Of the rest, 49 are the whole object wrapped under one of its own field names (`{"action": {"thought": ..., "action": ...}}`); the same-key unwrap rule now in `calls._salvage_once` (top level only) brings the total to 77 of 83 (93%); the replay reports 77 of 83.
+
+### Whisper benchmark: LOCAL
+
+`faster-whisper` int8 on the CPU (8 cores, no GPU), the 11 s public-domain JFK clip: about 7 s per clip with `large-v3-turbo` (shipped default), about 6 s with `medium`, about 3 s with `small` (measured when Dictate was built). A load without preload adds about 15 s to the first Dictate. In this pass both `whisper`-marked tests passed in 6.4 s and 5.9 s with `large-v3-turbo` from the local cache.
+
+## Live provider, simulation agents (claude-cli-haiku, 2026-09-25): LIVE
 
 Provider `claude_cli`, Claude Code CLI 2.1.282 using its own login, served model `claude-haiku-4-5-20251001` (recorded as `response_model` in every call). No API keys exist on this machine. Details, excerpts and commands: [evidence/live_sims.md](evidence/live_sims.md). The UI session is described in the reviewer 2 report summarised under Browser QA.
 
@@ -127,19 +216,6 @@ Not shown live:
 - Multi-round live play on the final source: the final live run is one round. No live UI session has run on the final backend.
 - The live test `test_live_claude_cli_decision_bills_near_packet_estimate` fails when Haiku returns a malformed reply (it happened once in 3 invocations); see LIMITATIONS.md.
 
-## Browser QA
-
-Full results: [evidence/browser_qa.md](evidence/browser_qa.md) (two passes, the second on the final code). Curated screenshots: `docs/evidence/screenshots/01-entry.png` … `18-resume-session.png`. Every screenshot was opened and checked by eye.
-
-- **MOCKED (fake models, real Chromium):**
-  - `qa/browser_check.mjs` passed **17 of 17** steps on the final code, with no console or page errors (`qa/out/2026-09-25_20-43-52/`; the fixer's own run `qa/out/2026-09-25_20-21-26/` also passed 17 of 17).
-  - Pass 2 (after the reload-order fix): the pass-1 major (a `working/` reload undoing UI edits staged for the same turn) passes in both orders at 1440x900 and 1100x750. A conflicting reload is rejected whole, with the reason shown. The tooltip, the occupant scroll cue, the full action JSON, the Set stat display, the full next-round order and the agent-view filtering all pass.
-  - Reviewer findings on the final code: 20 of 21 pass, and 1 is partial (row 21: the status bar now changes height at round boundaries because the full next-round order wraps).
-  - Remaining: 3 minor issues (agent view works only at the agent's own cell; that status-bar height change; species-rule edit records do not name the changed field), plus the legacy-run cost fields. All are listed in LIMITATIONS.md.
-  - All 18 required operator flows passed in pass 1 (entry, cards, validation, controls, pending call, pause, history, crowded cell, inspectors, plant rules, god mode, continuation, error recovery, resume).
-- **Reviewer 1 (MOCKED):** an operator could complete all nine steps. They found 1 major and 10 minor issues, all fixed and re-tested since.
-- **Reviewer 2 (LIVE):** six steps through the UI with `claude-cli-haiku` (the `review2` row in the live table). The main findings were the stale backend and the "nothing was charged" wording; both have been fixed and re-tested with fakes.
-
 ## Provider adapters verified only with mocked payloads
 
 The `anthropic`, `openai`, `fireworks`, `bedrock` and `foundry` adapters were verified only against mocked payloads, because no credentials for those providers exist on this machine. `backend/tests/test_model.py` covers request building, schema transforms, usage-normalisation goldens, and error, refusal and truncation classification for each of them. None of them has made a real call.
@@ -149,12 +225,19 @@ The `anthropic`, `openai`, `fireworks`, `bedrock` and `foundry` adapters were ve
 From the repository root:
 
 ```bash
-(cd backend && ../.venv/bin/pytest -q)                                  # MOCKED
-(cd frontend && node src/state/state.test.mjs && npx tsc -b)            # frontend
+(cd backend && ../.venv/bin/pytest -q)                                  # MOCKED, about 1-2 min
+.venv/bin/python scripts/check_docs.py                                  # docs check
+(cd frontend && npx tsc -p tsconfig.app.json --noEmit && npm run lint && node src/state/state.test.mjs)
+(cd backend && EMPYREAN_WHISPER_TEST_AUDIO=<jfk clip> ../.venv/bin/pytest -q -m whisper)   # LOCAL, needs the cached model
 .venv/bin/python scripts/run_sim.py --model fake-heuristic --worlds-dir /tmp/w      # MOCKED
 bash qa/resilience/run_all.sh     # MOCKED; own backend on :8020, about 3.5 min; overwrites qa/resilience/out/
                                   # RES_PORT / RES_WORLDS / RES_OUT / RES_LOG select another port and folders; expect 165 of 165
-(cd qa && node browser_check.mjs)                                       # needs the backend and Vite running
+# browser check, all 33 steps on fake models (see qa/README.md)
+.venv/bin/python qa/assistant_fake_server.py
+(cd frontend && EMPYREAN_API_PROXY=http://127.0.0.1:8020 npx vite --port 5180 --strictPort)
+(cd qa && BASE_URL=http://127.0.0.1:5180 API_URL=http://127.0.0.1:8020 node browser_check.mjs)
+.venv/bin/python scripts/assistant_replay_malformed.py                  # LOCAL, no spend
+EMPYREAN_ALLOW_LIVE=1 .venv/bin/python scripts/assistant_playtest.py chat --arm haiku --max-spend 3.5   # LIVE, about USD 2.5
 EMPYREAN_ALLOW_LIVE=1 .venv/bin/python scripts/run_sim.py --model claude-cli-haiku --live-check   # LIVE, one paid call
 (cd backend && env -u CLAUDECODE EMPYREAN_LIVE_TESTS=1 ../.venv/bin/pytest -q -m live)            # LIVE, 3 paid calls (about USD 0.017)
 ```

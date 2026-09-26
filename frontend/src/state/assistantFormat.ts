@@ -187,3 +187,23 @@ export function formatAnswer(text: string, options: LinkifyOptions = {}): Block[
 export function inlineText(inlines: Inline[]): string {
   return inlines.map((part) => (part.kind === "strong" ? part.parts.map((p) => p.text).join("") : part.text)).join("");
 }
+
+/**
+ * The text of a reference chip after its kind badge: the ref's label (else
+ * its id) without a leading copy of the kind, so an engine label "turn
+ * r00002_t01_a04" under the badge "turn" reads "r00002_t01_a04", not
+ * "turn turn r00002_t01_a04".  `kinds` are the words that count as the kind
+ * (the badge text and the ref kind, e.g. "docs" and "doc").
+ */
+export function refChipText(kinds: readonly string[], label: string | null | undefined, id: string): string {
+  const text = (label ?? "").trim() || id;
+  const lower = text.toLowerCase();
+  for (const kind of kinds) {
+    const k = kind.toLowerCase();
+    if (!k || !lower.startsWith(k)) continue;
+    const rest = text.slice(k.length);
+    const match = /^\s*:?\s+(.+)$/s.exec(rest) ?? /^:\s*(.+)$/s.exec(rest);
+    if (match && match[1].trim()) return match[1].trim();
+  }
+  return text;
+}

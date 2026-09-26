@@ -313,7 +313,16 @@ def _get_agent_dossier(service: "AssistantService", args: dict[str, Any]) -> Too
     return ToolResult("get_agent_dossier", args, True, payload, f"dossier of {agent_id}", sources=[f"entity {agent_id}"])
 
 
+SEARCH_EVENTS_MAX_TURNS = 2000  # turns scanned per call (a whole long run fits)
+SEARCH_EVENTS_SUMMARY_CHARS = 200
+
+
 def _search_events(service: "AssistantService", args: dict[str, Any]) -> ToolResult:
+    """Every matching event of the range is counted (``total_matches``, ``counts_by_kind``,
+    ``counts_by_round``); the newest ``limit`` are listed in commit order.  When the list is cut
+    (by ``limit`` or to fit the output cap) ``truncated_after`` is the number listed, so the
+    model counts from the totals, never from a capped list.  Unknown turn ids are an error
+    (they used to widen the range silently)."""
     run_id = _require_run(args)
     kinds_raw = args.get("kinds")
     kinds = {str(k) for k in kinds_raw} if isinstance(kinds_raw, list) else ({str(kinds_raw)} if kinds_raw else set())
@@ -321,30 +330,58 @@ def _search_events(service: "AssistantService", args: dict[str, Any]) -> ToolRes
     text = (_s(args, "text") or "").lower()
     from_turn = _s(args, "from_turn")
     to_turn = _s(args, "to_turn")
+    from_round = _i(args, "from_round", None, 0, 10**6)
+    to_round = _i(args, "to_round", None, 0, 10**6)
     limit = _i(args, "limit", 30, 1, 50) or 30
-    ids = [e.turn_id for e in storage.list_turns(run_id)]
-    start = ids.index(from_turn) if from_turn in ids else 0
-    end = ids.index(to_turn) + 1 if to_turn in ids else len(ids)
-    window = ids[start:end][-300:]  # newest 300 turns of the range at most
+    entries = storage.list_turns(run_id)
+    ids = [e.turn_id for e in entries]
+    for key, value in (("from_turn", from_turn), ("to_turn", to_turn)):
+        if value and value not in ids:
+            raise ToolError(f"{key} {value!r} is not a committed turn of {run_id}; use from_round/to_round for a round range")
+    start = ids.index(from_turn) if from_turn else 0
+    end = ids.index(to_turn) + 1 if to_turn else len(ids)
+    window = [e for e in entries[start:end] if (from_round is None or e.round >= from_round) and (to_round is None or e.round <= to_round)]
+    scan_capped = len(window) > SEARCH_EVENTS_MAX_TURNS
+    window = window[-SEARCH_EVENTS_MAX_TURNS:]
     matches: list[dict[str, Any]] = []
-    scanned = 0
-    for turn_id in reversed(window):
-        scanned += 1
-        for event in reversed(storage.read_turn_events(run_id, turn_id)):
+    by_kind: dict[str, int] = {}
+    by_round: dict[str, int] = {}
+    for entry in reversed(window):
+        for event in reversed(storage.read_turn_events(run_id, entry.turn_id)):
             if kinds and event.kind not in kinds:
                 continue
             if actor and event.actor != actor:
                 continue
             if text and text not in (event.summary or "").lower() and text not in json.dumps(event.details, default=str).lower():
                 continue
-            matches.append({"seq": event.seq, "turn_id": event.turn_id, "round": event.round, "actor": event.actor, "kind": event.kind, "summary": event.summary})
-            if len(matches) >= limit:
-                break
-        if len(matches) >= limit:
-            break
+            by_kind[event.kind] = by_kind.get(event.kind, 0) + 1
+            by_round[str(event.round)] = by_round.get(str(event.round), 0) + 1
+            if len(matches) < limit:
+                summary = event.summary or ""
+                if len(summary) > SEARCH_EVENTS_SUMMARY_CHARS:
+                    summary = summary[: SEARCH_EVENTS_SUMMARY_CHARS - 1] + "…"
+                matches.append({"seq": event.seq, "turn_id": event.turn_id, "round": event.round, "actor": event.actor, "kind": event.kind, "summary": summary})
     matches.reverse()
-    payload = {"matches": matches, "turns_scanned": scanned, "turns_in_range": len(window), "limit": limit}
-    return ToolResult("search_events", args, True, payload, f"{len(matches)} events", sources=[f"turns {t['turn_id']}" for t in matches[:5]])
+    total = sum(by_kind.values())
+    payload: dict[str, Any] = {
+        "total_matches": total,
+        "counts_by_kind": dict(sorted(by_kind.items())),
+        "counts_by_round": dict(sorted(by_round.items(), key=lambda kv: int(kv[0]))),
+        "matches": matches,
+        "turns_in_range": len(window),
+        "rounds": [window[0].round, window[-1].round] if window else None,
+        "limit": limit,
+    }
+    if scan_capped:
+        payload["note_scan"] = f"only the newest {SEARCH_EVENTS_MAX_TURNS} turns of the range were scanned; narrow the range"
+    # keep the totals: drop the oldest listed matches until the payload fits the output cap
+    budget = config.ASSISTANT_TOOL_OUTPUT_MAX_CHARS - 200
+    while matches and len(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)) > budget:
+        matches.pop(0)
+    if len(matches) < total:
+        payload["truncated_after"] = len(matches)
+        payload["note"] = f"{total} events match; only the newest {len(matches)} are listed. Count with total_matches / counts_by_round, not by counting the list."
+    return ToolResult("search_events", args, True, payload, f"{total} events" + (f" ({len(matches)} listed)" if len(matches) < total else ""), sources=[f"turns {t['turn_id']}" for t in matches[-5:]])
 
 
 def _get_model_call(service: "AssistantService", args: dict[str, Any]) -> ToolResult:
@@ -526,10 +563,10 @@ _CATALOGUE: list[dict[str, Any]] = [
     {"name": "get_rules_and_settings", "description": "The run's rule numbers (prices, upgrades, plants, death ...) and settings (models, max_rounds, play delay, real budget, context) at the committed turn.", "params": {**_RUN, "turn_id": {"type": "string", "description": "optional committed turn; default current"}}},
     {"name": "list_turns", "description": "Committed turns in order with actor, action name, ok flag and decision source; optional round range; newest 'limit' shown.", "params": {**_RUN, "from_round": {"type": "integer"}, "to_round": {"type": "integer"}, "limit": {"type": "integer", "default": 60}}},
     {"name": "get_turn_digest", "description": "What happened in one turn: actor, decision source, action and result, thought (a belief), events, deaths, messages, whether the turn was lost.", "params": {**_RUN, "turn_id": {"type": "string", "description": "turn id or 'live'"}}},
-    {"name": "get_round_digest", "description": "Summary of one round: order, actions by agent, deaths and kills, resources, notable events.", "params": {**_RUN, "round": {"type": "integer"}, "detail": {"type": "string", "enum": ["brief", "normal", "full"], "default": "normal"}}},
+    {"name": "get_round_digest", "description": "Summary of one round: order, actions by agent, deaths and kills, resources, notable events; counts.lost_turns = turns lost to malformed, refused or failed model replies in that round (absent = 0).", "params": {**_RUN, "round": {"type": "integer"}, "detail": {"type": "string", "enum": ["brief", "normal", "full"], "default": "normal"}}},
     {"name": "get_trends", "description": "Population, compute/essence totals, deaths and messages per round over the last N rounds.", "params": {**_RUN, "last_n_rounds": {"type": "integer", "default": 5}}},
     {"name": "get_agent_dossier", "description": "One agent: operator truth (stats, position, alive, kills) and its own beliefs (notebook, believed self), labelled separately; optional turn.", "params": {**_RUN, "agent_id": {"type": "string"}, "turn_id": {"type": "string"}}},
-    {"name": "search_events", "description": "Filter committed events by kinds (death, damage, message_delivered, decision_invalid, model_call_failed, intervention ...), actor, text and turn range; newest first, at most 'limit'.", "params": {**_RUN, "kinds": {"type": "array", "items": {"type": "string"}}, "actor": {"type": "string"}, "text": {"type": "string"}, "from_turn": {"type": "string"}, "to_turn": {"type": "string"}, "limit": {"type": "integer", "default": 30}}},
+    {"name": "search_events", "description": "Filter committed events by kinds (death, damage, message_delivered, decision_invalid, model_call_failed, intervention ...), actor, text and a round or turn range. Returns total_matches, counts_by_kind and counts_by_round over the WHOLE range, plus the newest 'limit' matches (truncated_after = how many are listed when cut).", "params": {**_RUN, "kinds": {"type": "array", "items": {"type": "string"}}, "actor": {"type": "string"}, "text": {"type": "string"}, "from_round": {"type": "integer"}, "to_round": {"type": "integer"}, "from_turn": {"type": "string", "description": "an exact committed turn id"}, "to_turn": {"type": "string", "description": "an exact committed turn id"}, "limit": {"type": "integer", "default": 30}}},
     {"name": "get_model_call", "description": "A model call record of a turn: status, error and error code, attempts, usage, cost and an excerpt of the (possibly rejected) reply.", "params": {**_RUN, "turn_id": {"type": "string"}, "call_id": {"type": "string", "description": "optional; default the turn's last call"}}},
     {"name": "get_decision_packet_summary", "description": "What the agent was shown for its decision: packet sections, record counts, omissions, token estimate, affordability.", "params": {**_RUN, "turn_id": {"type": "string"}, "packet_id": {"type": "string"}}},
     {"name": "get_staged_interventions", "description": "God-mode edits staged for the next turn (with origin 'assistant' for approved briefs).", "params": {**_RUN}},

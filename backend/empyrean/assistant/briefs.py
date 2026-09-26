@@ -300,6 +300,17 @@ def validate_brief(service: "AssistantService", draft: BriefDraft, *, run_id_hin
     return action, validation
 
 
+def model_can_fix(action: Any, validation: BriefValidation) -> bool:
+    """True when a typed action has problems the model could fix by changing its args (an
+    unknown entity, a field path, an overlay key, a turn id).  A run_command refused only
+    because of the run's state (paused / running) is not: another model call cannot change it."""
+    if validation.ok or not validation.problems:
+        return False
+    if isinstance(action, RunCommandAction) and all(p.path == "command" for p in validation.problems):
+        return False
+    return True
+
+
 def target_run_of(action: Any) -> Optional[str]:
     return getattr(action, "run_id", None)
 
@@ -589,6 +600,7 @@ __all__ = [
     "execute_action",
     "merge_create_run",
     "prepared_intervention",
+    "model_can_fix",
     "problems_from_validation_error",
     "reject_brief",
     "setup_diff",

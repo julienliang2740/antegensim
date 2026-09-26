@@ -2,7 +2,10 @@
  * The conversation transcript: user messages (with the context chip they were
  * sent with), assistant answers (formatted blocks, linkified refs, sources,
  * "as of turn", cost, the offline "Docs search" label), clarifying questions
- * with option chips, in-progress cards ("step k/4 · Ns · $x" with Cancel) and
+ * with option chips, in-progress cards ("step k/4 · Ns · $x" with Cancel,
+ * elapsed ticking locally from job.started_at, the backend's per-step note
+ * under it, never its stale "N s" text; the step list numbers steps as the
+ * engine does, from 1) and
  * failed messages rendered through the fixed error table with a Retry/other
  * action.  Brief messages render a BriefCard.
  *
@@ -13,7 +16,7 @@
 
 import { useEffect, useRef } from "react";
 import type { Brief, ConversationView, JobView, Message } from "../../api/assistantTypes";
-import { errorGuidance, formatUsd, progressLine } from "../../state/assistantBrief";
+import { errorGuidance, formatUsd, progressLine, progressNote } from "../../state/assistantBrief";
 import type { ErrorAction, DescribeOptions } from "../../state/assistantBrief";
 import { AnswerBlocks, RefChips } from "./AnswerBlocks";
 import type { RefAction } from "./AnswerBlocks";
@@ -43,6 +46,7 @@ export interface MessageListProps {
   onOpenGodMode(runId: string): void;
 }
 
+/** Seconds since the job started (else since the message was created), from the wall clock: the backend's elapsed_s is written once per step. */
 function elapsedSeconds(job: JobView | null, message: Message, now: number): number {
   const started = job?.started_at ?? message.created_at;
   const t = Date.parse(started);
@@ -125,12 +129,12 @@ export function MessageList(props: MessageListProps) {
                   </button>
                 ) : null}
               </div>
-              <div className="hint">{stopping ? "Stopping after the current step…" : (message.progress ?? job?.progress ?? (job?.queue_position ? `Queued (${job.queue_position} ahead)…` : "Thinking…"))}</div>
+              <div className="hint">{stopping ? "Stopping after the current step…" : job?.queue_position ? `Queued (${job.queue_position} ahead)…` : (progressNote(message.progress ?? job?.progress) ?? "Thinking…")}</div>
               {message.steps.length > 0 ? (
                 <ul className="assistant-steps">
                   {message.steps.map((step) => (
                     <li key={step.index} className="hint">
-                      step {step.index + 1}: {step.kind || "…"}
+                      step {step.index}: {step.kind || "…"}
                       {step.tool_calls.length ? ` · ${step.tool_calls.map((t) => t.summary || t.name).join("; ")}` : ""}
                       {step.status === "error" && step.error ? ` · ${step.error}` : ""}
                     </li>

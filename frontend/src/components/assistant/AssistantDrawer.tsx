@@ -39,7 +39,7 @@ import { setSpeechCapability } from "../../api/assistantSpeech";
 import { ApiClientError } from "../../api/client";
 import type { Route } from "../../hooks/useHashRoute";
 import { navigate } from "../../hooks/useHashRoute";
-import { buildSuggestions, chipFromContext, docSectionFor, errorGuidance, quoteBrief, requiresOnScreenRun, scopeRunId, searchDocSections } from "../../state/assistantBrief";
+import { buildSuggestions, chipFromContext, docSectionFor, effectStatusFor, errorGuidance, quoteBrief, requiresOnScreenRun, scopeRunId, searchDocSections } from "../../state/assistantBrief";
 import type { DocSectionHit, ErrorAction, ErrorGuidance } from "../../state/assistantBrief";
 import {
   DRAWER_MAX_W,
@@ -168,12 +168,14 @@ export function AssistantDrawer(props: AssistantDrawerProps) {
   const scopeKey = scope ?? GLOBAL_KEY;
 
   const prefsRef = useRef<Prefs | null>(null);
-  const [language, setLanguage] = useState("en");
+  const [language, setLanguage] = useState(() => loadPrefs().language);
   const [capabilities, setCapabilities] = useState<AssistantCapabilities | null>(null);
   const [capError, setCapError] = useState<ErrorGuidance | null>(null);
   const [conversations, setConversations] = useState<ConversationMeta[]>([]);
   const [convId, setConvId] = useState<string | null>(null);
-  const [view, setView] = useState<ConversationView | null>(null);
+  const [loadedView, setView] = useState<ConversationView | null>(null);
+  // Only the selected conversation's transcript (derived instead of clearing the state from an effect).
+  const view = convId && loadedView?.meta.conversation_id === convId ? loadedView : null;
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pollNonce, setPollNonce] = useState(0);
   const [composer, setComposer] = useState("");
@@ -192,7 +194,9 @@ export function AssistantDrawer(props: AssistantDrawerProps) {
   const [now, setNow] = useState(() => Date.now());
   const [innerWidth, setInnerWidth] = useState(() => window.innerWidth);
   const [spendOpenRequest, setSpendOpenRequest] = useState(0);
-  const [pendingSend, setPendingSend] = useState<string | null>(null);
+  /** The last auto-send ask request (numbered); sent once, as soon as no other send is in flight. */
+  const [pendingSend, setPendingSend] = useState<{ seq: number; text: string } | null>(null);
+  const sentSeq = useRef(0);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const asideRef = useRef<HTMLElement | null>(null);
@@ -203,7 +207,6 @@ export function AssistantDrawer(props: AssistantDrawerProps) {
   useEffect(() => {
     const prefs = loadPrefs();
     prefsRef.current = prefs;
-    setLanguage(prefs.language);
     setDrawerState({ docked: prefs.docked, width: prefs.width });
   }, []);
   useEffect(() => {
@@ -241,9 +244,13 @@ export function AssistantDrawer(props: AssistantDrawerProps) {
   const active = jobActive(view);
   useEffect(() => {
     if (!active) return;
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
+    const tick = () => setNow(Date.now());
+    const first = setTimeout(tick, 0);
+    const timer = setInterval(tick, 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(timer);
+    };
   }, [active]);
 
   // ------------------------------------------------------------------ pages without their own context publisher
@@ -259,37 +266,53 @@ export function AssistantDrawer(props: AssistantDrawerProps) {
   }, [props.route]);
 
   // ------------------------------------------------------------------ capabilities (status dot, budgets, speech)
-  const refreshCapabilities = useCallback(async (runId: string | null) => {
-    try {
-      const cap = await getAssistantCapabilities(runId);
-      setCapabilities(cap);
-      setCapError(null);
-      setDrawerState({ status: statusFromCapabilities(cap) });
-      setSpeechCapability(cap.speech);
-    } catch (error) {
-      setCapabilities(null);
-      const code = apiCode(error);
-      setCapError(guidanceFor(error));
-      setDrawerState({ status: code === "assistant_unavailable" ? "unavailable" : "unknown" });
-    }
+  const applyCapabilities = useCallback((cap: AssistantCapabilities) => {
+    setCapabilities(cap);
+    setCapError(null);
+    setDrawerState({ status: statusFromCapabilities(cap) });
+    setSpeechCapability(cap.speech);
   }, []);
+  const applyCapabilitiesError = useCallback((error: unknown) => {
+    setCapabilities(null);
+    const code = apiCode(error);
+    setCapError(guidanceFor(error));
+    setDrawerState({ status: code === "assistant_unavailable" ? "unavailable" : "unknown" });
+  }, []);
+  const refreshCapabilities = useCallback(
+    (runId: string | null): Promise<void> => getAssistantCapabilities(runId).then(applyCapabilities, applyCapabilitiesError),
+    [applyCapabilities, applyCapabilitiesError],
+  );
   useEffect(() => {
-    void refreshCapabilities(scope);
-  }, [scope, refreshCapabilities, drawer.open]);
+    // Refetched on a scope change and on every open; a reply for an older scope is dropped.
+    let cancelled = false;
+    getAssistantCapabilities(scope).then(
+      (cap) => !cancelled && applyCapabilities(cap),
+      (error: unknown) => !cancelled && applyCapabilitiesError(error),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [scope, applyCapabilities, applyCapabilitiesError, drawer.open]);
 
   // ------------------------------------------------------------------ conversations of the scope
-  const refreshList = useCallback(async (runId: string | null): Promise<ConversationMeta[]> => {
-    try {
-      const list = (await listConversations(runId)).slice().sort(byUpdated);
-      setConversations(list);
-      setLoadError(null);
-      return list;
-    } catch (error) {
-      setConversations([]);
-      if (apiCode(error) !== "assistant_unavailable") setLoadError(errorText(error));
-      return [];
-    }
-  }, []);
+  /** The scope's conversations, newest first; [] on failure (with the load error shown unless the service is absent). */
+  const refreshList = useCallback(
+    (runId: string | null): Promise<ConversationMeta[]> =>
+      listConversations(runId).then(
+        (list) => {
+          const sorted = list.slice().sort(byUpdated);
+          setConversations(sorted);
+          setLoadError(null);
+          return sorted;
+        },
+        (error: unknown) => {
+          setConversations([]);
+          if (apiCode(error) !== "assistant_unavailable") setLoadError(errorText(error));
+          return [];
+        },
+      ),
+    [],
+  );
   useEffect(() => {
     if (!drawer.open) {
       wasOpen.current = false;
@@ -315,10 +338,7 @@ export function AssistantDrawer(props: AssistantDrawerProps) {
 
   // ------------------------------------------------------------------ transcript polling
   useEffect(() => {
-    if (!drawer.open || !convId) {
-      if (!convId) setView(null);
-      return;
-    }
+    if (!drawer.open || !convId) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const tick = async () => {
@@ -385,7 +405,7 @@ export function AssistantDrawer(props: AssistantDrawerProps) {
       setComposer(request.text);
       setReplyTo(null);
       setSendError(null);
-      if (request.autoSend) setPendingSend(request.text);
+      if (request.autoSend) setPendingSend((prev) => ({ seq: (prev?.seq ?? 0) + 1, text: request.text }));
       focusComposer();
     };
     const pending = takeLastAsk();
@@ -440,10 +460,9 @@ export function AssistantDrawer(props: AssistantDrawerProps) {
     [convId, scope, scopeKey, includeContext, replyTo, sending, remember, bumpPoll],
   );
   useEffect(() => {
-    if (pendingSend === null || sending) return;
-    const text = pendingSend;
-    setPendingSend(null);
-    void send(text);
+    if (pendingSend === null || sending || pendingSend.seq <= sentSeq.current) return;
+    sentSeq.current = pendingSend.seq;
+    void send(pendingSend.text);
   }, [pendingSend, sending, send]);
 
   const onCancelJob = async (job: JobView) => {
@@ -517,7 +536,12 @@ export function AssistantDrawer(props: AssistantDrawerProps) {
       }
       const result = await approveBrief(convId, brief.brief_id, { validated_against_turn_id: brief.validation.validated_against_turn_id });
       const done = result.brief;
-      if (done.effect?.status && handlers) handlers.applyStatus(done.effect.status);
+      // Any effect that carries a status for a run whose page is mounted (run commands, staged edits, ...) is applied at once,
+      // so the run page's state and its staged-edit counts never wait for the next status poll.
+      const shown = getSnapshot();
+      const status = effectStatusFor(done.effect, needsRun ?? (shown.page === "run" ? shown.runId : null));
+      const statusHandlers = status ? (handlers ?? getHandlers(status.run_id)) : null;
+      if (status && statusHandlers) statusHandlers.applyStatus(status);
       if (done.status === "executed" && done.effect?.run_id && (action.type === "create_run" || action.type === "create_continuation")) {
         remember(done.effect.run_id, convId);
         setRebound(done.effect.run_summary?.name ?? done.effect.run_id);

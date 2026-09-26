@@ -3,7 +3,9 @@ Chat engine (rev 4, amended D3/D4): per user message up to ``config.ASSISTANT_MA
 calls on the chat executor; step 1 is prefetched with deterministic context; a tool step runs up
 to 3 read tools whose nonce-fenced results feed the next step; the last step gets the restricted
 answer|ask schema; malformed JSON goes through ``calls.salvage`` then one repair step; a brief
-step is validated by ``briefs`` before it is shown; wall clock and message budget are enforced;
+step is validated by ``briefs`` before it is shown (an action that does not type, or a typed
+action with problems the model can fix, gets the one repair step with the problems fenced);
+wall clock and message budget are enforced;
 the summarizer refreshes the rolling memory after the answer.  OWNER: WP2.
 
 Fake metadata: every chat call carries ``fake_script_index`` = the number of model calls made
@@ -11,13 +13,16 @@ so far for this message (0-based) and a per-profile ``fake_reply`` default, merg
 ``service.fake_metadata[profile]`` (tests put ``fake_script`` there).  Real providers never see
 metadata.
 """
-# DOCS: progress line 'step 2/4 · 18 s · $0.03'; answers stamped 'as of turn <id>'; offline
-# fallback answers from docs search when no model is available; one repair step after
-# deterministic salvage; only one job per conversation (409 assistant_busy).
+# DOCS: progress line 'step 2/4 · 18 s · $0.03' (refreshed every PROGRESS_TICK_SECONDS while a
+# model call runs); answers stamped 'as of turn <id>'; offline fallback answers from docs search
+# when no model is available; one repair step after deterministic salvage, or for a brief whose
+# typed action has fixable validation problems; only one job per conversation (409 assistant_busy);
+# a finished job clears meta.active_job_id under the conversation lock in the same step.
 
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -60,6 +65,7 @@ FAKE_DEFAULT_SUMMARY = "(fake summary) The operator asked questions about the si
 OFFLINE_LABEL = "Docs search (AI offline)"
 MEMORY_RECENT_MESSAGES = 8
 LIVE_JOB_STATES = ("queued", "running")
+PROGRESS_TICK_SECONDS = 1.0  # job.elapsed_s and the progress line refresh this often during a call
 
 
 def parse_step(parsed: dict[str, Any], *, restricted: bool) -> Any:
@@ -104,6 +110,33 @@ def _progress(step: int, max_steps: int, started: float, cost: float, note: str 
     elapsed = time.monotonic() - started
     line = f"step {step}/{max_steps} · {elapsed:.0f} s · ${cost:.2f}"
     return f"{line} · {note}" if note else line
+
+
+class _ProgressTicker:
+    """Refreshes ``job.elapsed_s`` and the progress line every ``PROGRESS_TICK_SECONDS`` while a
+    model call blocks the step loop (a daemon thread; stopped and joined before the loop goes on,
+    so it never writes after the step's own updates)."""
+
+    def __init__(self, engine: "ChatEngine", conv_id: str, message_id: str, job_id: str, step_no: int, max_steps: int, started: float, cost: float) -> None:
+        self._args = (engine, conv_id, message_id, job_id, step_no, max_steps, started, cost)
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, name=f"assistant-progress-{job_id[:8]}", daemon=True)
+
+    def _run(self) -> None:
+        engine, conv_id, message_id, job_id, step_no, max_steps, started, cost = self._args
+        while not self._stop.wait(PROGRESS_TICK_SECONDS):
+            try:
+                engine._push_progress(conv_id, message_id, job_id, None, _progress(step_no, max_steps, started, cost), step_no, cost, started)
+            except Exception:  # noqa: BLE001 - a progress write never breaks the step
+                log.debug("progress tick failed for %s", job_id, exc_info=True)
+
+    def __enter__(self) -> "_ProgressTicker":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        self._stop.set()
+        self._thread.join(timeout=5)
 
 
 class ChatEngine:
@@ -242,19 +275,20 @@ class ChatEngine:
             )
             metadata = {"fake_script_index": calls_made, "fake_reply": FAKE_DEFAULT_ANSWER, **service.fake_metadata.get("chat", {})}
             try:
-                result = service.call_profile(
-                    "chat",
-                    system=self.system_prompt(restricted=restricted),
-                    user=user_block,
-                    schema=prompts.step_schema(restricted=restricted),
-                    scope=scope,
-                    cancel=cancel,
-                    budgets=budgets,
-                    metadata=metadata,
-                    job_id=job_id,
-                    conversation_id=conv_id,
-                    step=step_no,
-                )
+                with _ProgressTicker(self, conv_id, message_id, job_id, step_no, max_steps, started, cost):
+                    result = service.call_profile(
+                        "chat",
+                        system=self.system_prompt(restricted=restricted),
+                        user=user_block,
+                        schema=prompts.step_schema(restricted=restricted),
+                        scope=scope,
+                        cancel=cancel,
+                        budgets=budgets,
+                        metadata=metadata,
+                        job_id=job_id,
+                        conversation_id=conv_id,
+                        step=step_no,
+                    )
             except BudgetExceeded as exc:
                 record.status = "error"
                 record.error = str(exc)
@@ -323,11 +357,17 @@ class ChatEngine:
             if isinstance(step, BriefStep):
                 hint = (chip.run_id if chip else None) or meta.run_id
                 action, validation = briefs.validate_brief(service, step.brief, run_id_hint=hint)
-                if action is None and not repaired and step_no < max_steps:
+                # one repair: an action that did not type (the next step may be the restricted
+                # one), or a typed action with problems the model can fix (only when the next
+                # step may still emit a brief)
+                untyped = action is None and step_no < max_steps
+                fixable = action is not None and briefs.model_can_fix(action, validation) and step_no + 1 < max_steps
+                if (untyped or fixable) and not repaired:
                     repaired = True
                     record.kind = "brief-repair"
                     self._append_step(conv_id, message_id, record)
-                    tool_results.append(prompts.fence(nonce, {"brief_validation_problems": [p.model_dump() for p in validation.problems], "hint": "fix action.args and send the corrected brief"}, label="validation_error"))
+                    hint_text = "fix action.args and send the corrected brief" if action is None else "the brief failed validation: fix these problems in action.args (entity ids, dotted field paths such as stats.health, overlay keys) and send the corrected brief, or answer/ask if it cannot be done"
+                    tool_results.append(prompts.fence(nonce, {"brief_validation_problems": [p.model_dump() for p in validation.problems], "rejected_action": step.brief.action.model_dump(mode="json"), "hint": hint_text}, label="validation_error"))
                     continue
                 brief = Brief(
                     brief_id=new_id(),
@@ -383,13 +423,30 @@ class ChatEngine:
 
         self.service.store.update_message(conv_id, message_id, mutate)
 
+    def _settle(self, conv_id: str, message_id: str, job_id: str, mutate: Any, *, tolerate_missing: bool = False, **job_changes: Any) -> None:
+        """Final message write, ``meta.active_job_id`` cleared and the job's terminal status, all
+        under the conversation lock (the GET route composes its view under the same lock), so a
+        poll never sees a finished job with a stale active id."""
+        store = self.service.store
+        with store.lock(conv_id):
+            try:
+                store.update_message(conv_id, message_id, mutate)
+            except storage.StorageError:
+                if not tolerate_missing:
+                    raise
+            try:
+                store.update_meta(conv_id, lambda m: setattr(m, "active_job_id", None) if m.active_job_id == job_id else None)
+            except storage.StorageError:
+                pass
+            self.service.update_job(job_id, **job_changes)
+
     def _finish_answer(self, conv_id: str, message_id: str, job_id: str, step: AnswerStep, sources: list[str], as_of: Optional[str], cost: float, chip: Optional[ContextChip]) -> None:
         text = step.text.strip()
         if as_of and as_of not in text:
             text = f"{text}\n\nAs of turn {as_of}."
         refs = list(step.refs)
         if as_of and not any(r.kind == "turn" and r.id == as_of for r in refs):
-            refs.append(AnswerRef(kind="turn", id=as_of, label=f"turn {as_of}"))
+            refs.append(AnswerRef(kind="turn", id=as_of, label=as_of))  # the chip adds the kind
 
         def mutate(m: Message) -> None:
             m.status = "done"
@@ -401,8 +458,7 @@ class ChatEngine:
             m.cost_usd = cost
             m.error = None
 
-        self.service.store.update_message(conv_id, message_id, mutate)
-        self.service.update_job(job_id, status="done", finished_at=utc_now_iso(), cost_usd=cost, progress="")
+        self._settle(conv_id, message_id, job_id, mutate, status="done", finished_at=utc_now_iso(), cost_usd=cost, progress="")
 
     def _finish_ask(self, conv_id: str, message_id: str, job_id: str, step: AskStep, cost: float) -> None:
         def mutate(m: Message) -> None:
@@ -412,8 +468,7 @@ class ChatEngine:
             m.progress = None
             m.cost_usd = cost
 
-        self.service.store.update_message(conv_id, message_id, mutate)
-        self.service.update_job(job_id, status="done", finished_at=utc_now_iso(), cost_usd=cost, progress="")
+        self._settle(conv_id, message_id, job_id, mutate, status="done", finished_at=utc_now_iso(), cost_usd=cost, progress="")
 
     def _finish_brief(self, conv_id: str, message_id: str, job_id: str, brief: Brief, cost: float, as_of: Optional[str]) -> None:
         def mutate(m: Message) -> None:
@@ -424,8 +479,7 @@ class ChatEngine:
             m.progress = None
             m.cost_usd = cost
 
-        self.service.store.update_message(conv_id, message_id, mutate)
-        self.service.update_job(job_id, status="done", finished_at=utc_now_iso(), cost_usd=cost, progress="")
+        self._settle(conv_id, message_id, job_id, mutate, status="done", finished_at=utc_now_iso(), cost_usd=cost, progress="")
 
     def _finish_error(self, conv_id: str, message_id: str, job_id: str, error: str, error_code: Optional[str], *, status: str = "error", cost: float = 0.0) -> None:
         def mutate(m: Message) -> None:
@@ -435,11 +489,8 @@ class ChatEngine:
             m.progress = None
             m.cost_usd = cost
 
-        try:
-            self.service.store.update_message(conv_id, message_id, mutate)
-        except storage.StorageError:
-            pass
-        self.service.update_job(job_id, status="cancelled" if status == "cancelled" else ("interrupted" if status == "interrupted" else "error"), error=error, error_code=error_code, finished_at=utc_now_iso(), cost_usd=cost, progress="")
+        job_status = "cancelled" if status == "cancelled" else ("interrupted" if status == "interrupted" else "error")
+        self._settle(conv_id, message_id, job_id, mutate, tolerate_missing=True, status=job_status, error=error, error_code=error_code, finished_at=utc_now_iso(), cost_usd=cost, progress="")
 
     def _finalize_offline(self, conv_id: str, message_id: str, job_id: str, answer: Message, reason: str) -> None:
         def mutate(m: Message) -> None:
@@ -453,8 +504,7 @@ class ChatEngine:
             m.error_code = "model_unavailable"
             m.ask_options = []
 
-        self.service.store.update_message(conv_id, message_id, mutate)
-        self.service.update_job(job_id, status="done", finished_at=utc_now_iso(), progress="", error=f"model unavailable: {reason}", error_code="model_unavailable")
+        self._settle(conv_id, message_id, job_id, mutate, status="done", finished_at=utc_now_iso(), progress="", error=f"model unavailable: {reason}", error_code="model_unavailable")
 
     # -- context -------------------------------------------------------------------------------
 

@@ -1,6 +1,6 @@
 # Limitations and known issues
 
-State of the prototype on 2026-09-25, after the final fix pass (reload ordering, agent view and the UI display fixes) and its final verification, plus the assistant release of 2026-09-26 (section "The assistant", whose measurements are refreshed by the assistant verification pass). Each item ends with a suggested next step. Severity follows the QA reports: **major** means an operator can get a wrong result without being told; **minor** means it is inconvenient or incomplete, not wrong.
+State of the prototype on 2026-09-25, after the final fix pass (reload ordering, agent view and the UI display fixes) and its final verification, plus the assistant release of 2026-09-26 and its verification pass (section "The assistant": the playtest, browser QA and replay measurements of 2026-09-26). Each item ends with a suggested next step. Severity follows the QA reports: **major** means an operator can get a wrong result without being told; **minor** means it is inconvenient or incomplete, not wrong.
 
 Evidence for the items below is in [TEST_EVIDENCE.md](TEST_EVIDENCE.md) and in `docs/evidence/`.
 
@@ -33,8 +33,8 @@ From the browser re-test of the final code (`docs/evidence/browser_qa.md` §4, p
   - *Next step:* record field-level changes for species edits, as `diff_working` does for file edits.
 - **Runs saved before the final fix pass lack the new cost fields.** Their turn-record call buttons and failed-call log lines show no reasoning tokens, USD cost or "provider billed" note. The full model call record still shows both.
   - *Next step:* fall back to the model call record when a stored event or index lacks the fields, or accept this for old runs.
-- **Frontend lint had 4 warnings (0 errors) before the assistant release; the count is refreshed in `docs/TEST_EVIDENCE.md` after it.** One `react(only-export-components)` in `inspect/common.tsx:38`, two `react(refs)` in `MapView.tsx:490`, where the portal tooltip reads `svgRect.current` during render (placement is correct because each hover change re-renders the tooltip, but a layout change without a hover change could leave it stale until the next mouse move), and one `react(set-state-in-effect)` in `RunPage.tsx:137`. The two `react(jsx-key)` warnings were fixed by the lead.
-  - *Next step:* keep the SVG rect in state (set on hover, scroll and resize) and give the row fragments keys.
+- **Frontend lint: 0 errors, 4 warnings after the assistant fix pass (2026-09-26).** 1 `react(set-state-in-effect)` in `RunPage.tsx:170`; 3 `react(only-export-components)`: `inspect/common.tsx:38` and `InstructionsPage.tsx:26,31`. The six `AssistantDrawer.tsx` warnings present at `bd240df` were removed by restructuring, not by suppress comments. None changes behaviour today; a state set in an effect costs an extra render and can hide an ordering bug. The two `react(refs)` warnings of `MapView.tsx` from before the release no longer appear.
+  - *Next step:* derive the drawer's state during render or set it from the event that changes it; move the non-component exports into their own modules.
 
 Fixed in the final fix pass and confirmed by the browser pass (`browser_qa.md` §1): the next-round order is shown in full; agent view draws the map and occupant list only from the agent's sightings (see the caveat above); the map tooltip is rendered beside the hovered cell, fully inside the window; the occupant list grows to 600 px and shows "N occupants — scroll for more"; action data has a Show/Hide full JSON control; Set stat shows `199.796` with "stored exactly as …" and has a 220 px input. `qa/browser_check.mjs` passed 17 of 17 with no console or page errors on the final code (`qa/out/2026-09-25_20-43-52/`).
 
@@ -70,26 +70,52 @@ Related live-only gaps:
 
 ## The assistant
 
-The built-in assistant (`docs/ASSISTANT.md`) is new; these are its known limits.
+The built-in assistant (`docs/ASSISTANT.md`) and its measured limits. The numbers come from the
+verification pass of 2026-09-26: the ground-truthed playtest (`docs/evidence/assistant_playtest.md`,
+Claude Code CLI 2.1.283, USD 10.93), the browser QA (`docs/evidence/browser_qa_assistant.md`) and the
+offline replay of stored malformed replies.
+
+### Models and answers
 
 - **It depends on the Claude Code CLI.** Every default assistant model runs through the `claude` CLI (Sonnet for chat and Story Mode, Haiku for the storybook and summaries). Without the CLI, or when it is not logged in, the drawer only answers from docs search ("Docs search (AI offline)") and briefs, storybook and Story Mode are unavailable. Other providers can be configured per profile (`EMPYREAN_ASSISTANT_MODEL_*`) but are untested for the assistant.
   - *Next step:* run the assistant playtest against an API provider once credentials exist.
-- **Model tiers are initial choices until the playtest lands.** The defaults (Sonnet chat/author, Haiku narrator/summarizer) come from the design; the ground-truthed comparison of Haiku, Sonnet and Opus per capability is recorded in the "Model tier evidence" table of `docs/ASSISTANT.md` by the verification pass.
-  - *Next step:* read that table; change `EMPYREAN_ASSISTANT_MODEL_*` defaults if the evidence says so.
+- **Thinking is off for every CLI call, and that is the untested variable.** The playtest ran with `config.CLI_MAX_THINKING_TOKENS = 0` (the shipped default for every `claude_cli` call, A-COG-10). Sonnet's two wrong alive counts stated a wrong number first and corrected themselves inside the same answer, which is what a small thinking budget usually prevents; no arm ran with thinking on.
+  - *Next step:* re-run `scripts/assistant_playtest.py chat --arm sonnet` with a small thinking budget for chat steps before promoting Sonnet for analysis.
+- **One chat model key serves help, run analysis, log interpretation and briefs.** On the measured questions Haiku matched Sonnet (help 8/8 each; run analysis 58/60 each) at p50 6.3 s vs 11.3 s and about a third of the cost (USD 0.031 vs 0.089 per question), but Sonnet was better at briefs (5/6 vs 4/6; it produced the only valid arena overlay). The shipped default stays `claude-cli-sonnet-assistant` for the whole chat profile, so plain questions pay Sonnet prices.
+  - *Next step:* a chat sub-profile for answers on Haiku with briefs on Sonnet is the measured cheaper option; it is not implemented.
+- **Log-interpretation counting is the weakest chat category.** "How many turns were lost to malformed replies in rounds A-B" first scored 8/12 (Haiku) and 7/12 (Sonnet) because `search_events` output was capped at 6,000 characters and reported only "capped". Fixed: `search_events` returns `total_matches` / `counts_by_round` over the whole range and takes `from_round` / `to_round` (an uncommitted turn id is now an error instead of silently widening the range), and the chat rules point at the round digest's `counts.lost_turns`. Re-measured on Haiku: 10/12 (one arithmetic slip over correct per-round data, one CLI adapter error "made 4 model requests; at most 3 allowed"); Sonnet was not re-measured. Still under the 90% gate on n = 12, so check counts over long ranges against the Turn record.
+  - *Next step:* after the fix, re-run the `malformed_count` category (`chat --categories malformed_count`).
+- **The narrator can still state a plan as a fact.** Invented survivor names are fixed (the round-end digest now carries names and every narrator call gets a cast list; the regenerated 13 Haiku entries name the real survivors), but a manual read found one entry saying Eos "absorbed" the residue when the digest only had that as her stated plan. The automated faithfulness check does not catch this class; the Turn record has the facts. Entries written before the fix keep their invented names; the storybook is narrative and is not rewritten.
+  - *Next step:* after the fix, press **Regenerate** on affected entries (round-end entries first) and re-check the playtest entries with `scripts/assistant_playtest.py recheck`.
+- **Brief repair is one step and cannot fix every overlay.** Every tier first proposed `field: "health"` for "Set Eos's health to 5"; the chat rules now name the dotted paths (`stats.health`) and the brief validated on the first try on Sonnet and Haiku in the recheck. A brief whose typed action has fixable validation problems now gets one repair step, but Haiku's create-run overlay for an arena "vibe" still invented `plant_species` keys after that step; Sonnet (the default) produced a valid overlay by calling `get_defaults` first. An unapprovable card needs an "Ask for changes" round trip.
+- **Summaries were not exercised.** No playtest conversation passed the 3k-token memory budget and three chapters do not reach the five-chapter story-so-far refresh, so the summarizer profile (Haiku) is an initial choice with no measurement behind it.
+  - *Next step:* a long conversation and a long story in the next playtest.
 - **Answers are model output.** The assistant reads the run's records through tools and stamps "as of turn <id>", but it can still misread them. Agent thoughts are beliefs; the Turn record, events and model-call records are the facts. Storybook entries and Story Mode chapters are narrative and may embellish (the story brief lists what stays faithful).
   - *Next step:* check a surprising answer against the linked turn.
-- **Spend figures are list-price estimates.** The CLI reports a cost per call; when it does not, the ledger estimates from tokens with a price table (`config.ASSISTANT_PRICES`, keyed by the served model). Subscription or discounted pricing is not modelled. Assistant spend is never part of `real_usage` or `real_budget_usd`.
-  - *Next step:* none; limits are there to stop runaway use, not for billing.
-- **Latency.** Each model step is a CLI subprocess of several seconds (7-20 s measured for Haiku decisions); a question that needs tools can take up to 4 steps (90 s cap). The first Dictate after a start without preload waits for the Whisper model to load (about 16 s).
-  - *Next step:* the playtest records p50/p90 per capability; streaming answers are not implemented.
+- **Spend figures are list-price estimates.** The CLI reports a cost per call; when it does not, the ledger estimates from tokens with a price table (`config.ASSISTANT_PRICES`, keyed by the served model). Subscription or discounted pricing is not modelled. Assistant spend is never part of `real_usage` or `real_budget_usd`. The ledger records a call's status before salvage, so a reply the CLI rejected but the engine recovered shows as `malformed` in `usage.jsonl` while the conversation shows the step as `ok`.
+  - *Next step:* none for billing; count format failures from the conversation steps, not the ledger.
+- **Latency (measured).** A message is one to four CLI steps of several seconds each (90 s cap). Haiku answered in p50 6.3 s / p90 9.2 s, Sonnet in p50 11.3 s / p90 22.5 s (Sonnet log questions p90 37 s); a create-run brief with a `get_defaults` step took 20-37 s. The drawer's elapsed counter ticks client-side and the backend refreshes the job's elapsed time every second during a model call. Answers are not streamed.
 - **Cancellation stops after the current step.** Stop kills a running CLI call (`cancelled`), but a call already answered is billed.
-- **Storybook catch-up is manual and serial.** History is narrated only on "Write missing"; one narration job runs per run and background narration yields to agents' CLI calls, so a long run's backlog takes minutes (about USD 0.008 per Haiku call before batching; up to 12 turns per batched call).
+
+### Storybook, Story Mode and Dictate
+
+- **Storybook catch-up is manual and serial.** History is narrated only on "Write missing"; one narration job runs per run and background narration yields to agents' CLI calls. Measured: Haiku USD 0.0011 per entry, Sonnet USD 0.0039, with up to 9 turns in one batched call.
   - *Next step:* none planned; the estimate is shown before it starts.
-- **Story Mode writes chapters sequentially.** Chapters are generated 3 ahead of the reader (or all with "Generate all"); one story job runs at a time and others queue. A 285-turn run is about 285 chapters at one per turn; per-round chapters are one click away.
-- **Dictate needs a secure context and CPU time.** The browser gives microphone access only on `localhost` or HTTPS, so opening the UI by the machine's IP address disables Dictate. Transcription uses the CPU (about 7 s for an 11 s clip with `large-v3-turbo`); one transcription runs at a time and at most 60 s of audio is accepted. The model needs about 1.6 GB of disk.
-  - *Next step:* `EMPYREAN_WHISPER_MODEL=small` on slow machines.
+- **A continuation starts with an empty storybook.** Continuations do not copy the parent run's `assistant/` folder; the continuation's opening entry recalls the parent, and earlier entries stay in the parent run only.
+  - *Next step:* offer to copy (or link) the parent's entries up to the fork turn.
+- **Story Mode writes chapters sequentially.** Chapters are generated 3 ahead of the reader (or all with "Generate all"); one story job runs at a time and others queue. A 285-turn run is about 285 chapters at one per turn; per-round chapters are one click away. The step-0 card's per-turn estimate counts agent turns only (9), while the brief plans the opening and the round end too (11).
+- **Dictate needs a secure context, CPU time and, without preload, a slow first use.** The browser gives microphone access only on a secure origin (`localhost`, `127.0.0.1` or HTTPS), so opening the UI by the machine's IP address disables Dictate with its reason. Transcription runs on the CPU (no GPU here): an 11 s clip takes about 7 s with `large-v3-turbo` (shipped default), about 6 s with `medium` and about 3 s with `small` on 8 cores. One transcription runs at a time and at most 60 s of audio is accepted; the model needs about 1.6 GB of disk. With `EMPYREAN_WHISPER_PRELOAD=0` the model loads on the first Dictate, which then takes about 16 s longer.
+  - *Next step:* `EMPYREAN_WHISPER_MODEL=small` on slow machines; keep the preload on for daily use.
+
+### Storage, tests and QA hooks
+
+- **Assistant folders grow without pruning.** Conversations (`worlds/_assistant/conversations/`), per-run ledgers (`assistant/usage.jsonl`, about 0.7 KB per call) and storybook entries (about 0.7-1.3 KB each) are kept until deleted. Measured in the playtest worlds: 86 short conversations used 293 KB of data (1.1 MB on disk), and one run's 78-call ledger 55 KB. Small next to the run folders themselves, but nothing expires; conversations can be deleted one at a time.
+  - *Next step:* an age-based cleanup of conversations and a size line in the spend popover.
+- **The frontend has no React component tests.** The drawer, brief card, Storybook tab and Story Mode are covered by the pure-logic tests (`src/state/state.test.mjs`, 50 tests) and by the browser check (`qa/browser_check.mjs` steps 18-33), not by component tests; lint reports 4 warnings (see "Minor (UI)").
+  - *Next step:* add component tests for the brief card and the drawer's approve path.
+- **The browser check needs a QA-only server to reach brief cards.** The fake chat model answers from `AssistantService.fake_metadata`, which the served app does not expose; `qa/assistant_fake_server.py` adds `GET/PUT /api/_qa/fake_metadata` and refuses to start unless every assistant profile is fake. Never point it at real data. Against the primary (live) backend the browser check skips the 8 steps that would call a model.
 - **Prompt injection is mitigated, not impossible.** Agent-written text reaches the assistant only inside nonce-fenced data blocks and the model can never execute anything itself (every change is an approved, server-validated brief), but a misleading agent message could still colour an answer.
-- **Conversations are local and unshared.** They live under `worlds/_assistant/`; there is no memory across conversations and no multi-user access. Continuations do not copy a run's `assistant/` folder, so a continuation starts with an empty storybook (its opening cites the parent).
+- **Conversations are local and unshared.** They live under `worlds/_assistant/`; there is no memory across conversations and no multi-user access.
 - **The docs are its knowledge.** A stale doc produces a stale answer. `scripts/check_docs.py` catches structural drift (paths, symbols, routes, variables, labels, assumption ids, test ids) but not a wrong sentence.
   - *Next step:* follow the docs rule in `CLAUDE.md`.
 
@@ -121,7 +147,7 @@ As listed in `docs/ASSUMPTIONS.md`: construction, persistent networks, fields, a
 
 ## Browser support
 
-The UI was tested only in Chromium (Playwright, headless) at 1440x900 and 1100x750. Firefox, Safari, Edge, small screens and touch input have not been tried. The layout assumes a desktop window; the wide inspector turns on at 1360 px and above. The frontend has node unit tests for its pure state modules (`src/state/state.test.mjs`) and no component tests. Clarity (U14) was judged by people from screenshots, not by assertions.
+The UI was tested only in Chromium (Playwright, headless) at 1440x900 and 1100x750, and the assistant steps also at 1200, 1280 and 1920 px wide. Firefox, Safari, Edge, small screens and touch input have not been tried. The layout assumes a desktop window; the wide inspector turns on at 1360 px and above. The frontend has node unit tests for its pure state modules (`src/state/state.test.mjs`, 50 tests) and no component tests. Clarity (U14) was judged by people from screenshots, not by assertions.
 
 - *Next step:* run `qa/browser_check.mjs` in Firefox and WebKit (Playwright supports both), and state a minimum window size in the UI.
 

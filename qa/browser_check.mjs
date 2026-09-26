@@ -1410,7 +1410,10 @@ async function runAssistantSteps(page) {
     "Fake stage_interventions brief with an unknown entity shows its validation problem (Approve disabled); Ask for changes -> corrected brief -> Approve stages it",
     async (rec) => {
       const drawer = await openRailDrawer(page);
-      await setFake({ chat: { fake_script: [briefStep("Boost", "Set compute of the selected agent to 50.", "stage_interventions", { interventions: [{ type: "set_stat", entity_id: "zz99", field: "stats.compute", value: 50 }] })] } });
+      // The engine gives a brief with fixable validation problems ONE repair step, so the fake chat
+      // model must answer the repair call with the same invalid brief for the card to appear.
+      const badBrief = briefStep("Boost", "Set compute of the selected agent to 50.", "stage_interventions", { interventions: [{ type: "set_stat", entity_id: "zz99", field: "stats.compute", value: 50 }] });
+      await setFake({ chat: { fake_script: [badBrief, badBrief] } });
       const reply = await askDrawer(page, "Give the selected agent 50 compute");
       const card = reply.article.locator("section.assistant-brief");
       await waitVisible(card, "the interventions brief card");

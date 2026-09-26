@@ -26,6 +26,9 @@ Public API (every function raises ``storage.StorageError`` for an unknown run or
 * ``get_highlights(run_id, *, from_turn_id, to_turn_id, limit)`` - salience ranked:
   deaths > attacks > messages > skill saves > upgrades > failed actions.
 * ``opening_digest(run_id)`` - setting and cast of the run's first turn (storybook opening).
+* ``cast_map(run_id, turn_id)`` - ``[{id, name, alive}]`` at a turn (the narrator's name table).
+* Round-end digests carry names next to ids: ``living`` / ``upkeep_short`` are ``[{id, name}]``,
+  ``starvation`` is ``[{id, name, health_after}]`` and ``text`` names the survivors.
 * ``run_card(run_id)`` - Story Mode step 0; ``timeline(run_id)`` - lineage-aware turn list.
 * ``digest_sha(payload)`` - stable short hash of a digest.  OWNER: WP3.
 """
@@ -737,6 +740,11 @@ def _agent_turn_digest(ref: TurnRef, record: TurnRecord, events: list[Event], ag
     return _drop_empty(digest)
 
 
+def _named(who: "_Namer", entity_id: str) -> dict[str, Any]:
+    """``{id, name}`` (name omitted for an unknown id) so a narrator never has to guess a name."""
+    return _drop_empty({"id": entity_id, "name": who.name(entity_id)})
+
+
 def _round_end_digest(record: TurnRecord, events: list[Event], agents: dict[str, dict[str, Any]]) -> dict[str, Any]:
     who = _Namer(agents)
     growth: dict[str, Any] = {}
@@ -771,7 +779,8 @@ def _round_end_digest(record: TurnRecord, events: list[Event], agents: dict[str,
             if paid + 1e-9 < owed:
                 upkeep_short.append(str(d.get("agent_id") or e.actor))
         elif e.kind == "starvation":
-            starvation.append({"id": d.get("agent_id") or e.actor, "health_after": _num(d.get("health_after"))})
+            sid = str(d.get("agent_id") or e.actor)
+            starvation.append(_drop_empty({"id": sid, "name": who.name(sid), "health_after": _num(d.get("health_after"))}))
         elif e.kind == "round_ended":
             living = [str(a) for a in (d.get("living_agents") or [])]
     if stage_changes:
@@ -791,7 +800,7 @@ def _round_end_digest(record: TurnRecord, events: list[Event], agents: dict[str,
         parts.append(f"{who(s['id'])} starved (health {s['health_after']}).")
     for death in deaths:
         parts.append(f"{who(death['id'])} died ({death.get('cause')}).")
-    parts.append(f"{len(living)} agents alive.")
+    parts.append(f"{len(living)} agents alive" + (f": {', '.join(who(a) for a in living)}." if living else "."))
     digest = {
         "turn_id": record.turn_id,
         "kind": "round_end",
@@ -801,14 +810,22 @@ def _round_end_digest(record: TurnRecord, events: list[Event], agents: dict[str,
         "seeds": seeds or None,
         "germinated": germinated or None,
         "upkeep_paid": _num(upkeep_paid),
-        "upkeep_short": upkeep_short,
+        "upkeep_short": [_named(who, a) for a in upkeep_short],
         "starvation": starvation,
         "deaths": deaths,
-        "living": living,
+        "living": [_named(who, a) for a in living],
         "operator": _operator(events),
         "text": " ".join(parts),
     }
     return _drop_empty(digest)
+
+
+def cast_map(run_id: str, turn_id: Optional[str] = None) -> list[dict[str, Any]]:
+    """Every agent of the run as ``[{id, name, alive}]`` at ``turn_id`` (default: the current
+    turn), in id order: the narrator's name table, so it never has to invent a name for an id."""
+    ref = _resolve(run_id, turn_id)
+    agents = _load_agents(ref.rdir, ref.turn_id)
+    return [{"id": aid, "name": a.get("name") or aid, "alive": bool(a.get("alive"))} for aid, a in agents.items()]
 
 
 def _init_digest(record: TurnRecord, events: list[Event], agents: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -1578,6 +1595,7 @@ __all__ = [
     "TREND_METRICS",
     "TurnRef",
     "agent_dossier",
+    "cast_map",
     "clear_cache",
     "digest_sha",
     "get_highlights",

@@ -13,7 +13,7 @@
 
 import type { AnswerRef } from "../../api/assistantTypes";
 import type { Block, Inline, Segment } from "../../state/assistantFormat";
-import { formatAnswer } from "../../state/assistantFormat";
+import { formatAnswer, refChipText } from "../../state/assistantFormat";
 
 /** What a click on a link asks the drawer to do (the drawer resolves handlers and navigation). */
 export type RefAction =
@@ -155,7 +155,7 @@ export function RefChips(props: { refs: AnswerRef[]; onAction(action: RefAction)
     <div className="assistant-refs" aria-label="References">
       {props.refs.map((ref, i) => {
         const action = refAction(ref);
-        const text = ref.label || ref.id;
+        const text = refChipText([REF_KIND_LABEL[ref.kind], ref.kind], ref.label, ref.id);
         return action ? (
           <button key={i} type="button" className={`assistant-ref assistant-ref-${ref.kind}`} title={`${REF_KIND_LABEL[ref.kind]} ${ref.id}`} onClick={() => props.onAction(action)}>
             <span className="assistant-ref-kind">{REF_KIND_LABEL[ref.kind]}</span> {text}

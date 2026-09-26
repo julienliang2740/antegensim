@@ -943,3 +943,41 @@ test("suggestions follow the context and the chip mirrors the store", () => {
   assert.equal(assistantBrief.searchDocSections("attack death residue")[0].id, "conflict");
   assert.deepEqual(assistantBrief.searchDocSections("zz"), []);
 });
+
+test("progressNote keeps the backend's step note and drops its stale seconds and cost", () => {
+  assert.equal(assistantBrief.progressNote("step 1/4 · 0 s · $0.00"), null);
+  assert.equal(assistantBrief.progressNote("step 2/4 · 3 s · $0.01 · reading the run"), "reading the run");
+  assert.equal(assistantBrief.progressNote("step 2/4 · 3 s · $0.01 · a · b"), "a · b");
+  assert.equal(assistantBrief.progressNote("step 3 · 0 s · $0.00"), null);
+  assert.equal(assistantBrief.progressNote("queued"), "Queued…");
+  assert.equal(assistantBrief.progressNote("Summarising the log"), "Summarising the log");
+  assert.equal(assistantBrief.progressNote(""), null);
+  assert.equal(assistantBrief.progressNote(null), null);
+  assert.equal(assistantBrief.progressNote(undefined), null);
+});
+
+test("effectStatusFor returns an approved brief's run status only for the run on screen", () => {
+  const status = { run_id: "run_1", staged_intervention_count: 1 };
+  const effect = { run_id: "run_1", run_summary: null, status, staged_ids: ["iv_0001"], rounds_done: null, rounds_requested: null, message: "", executed_at: null };
+  assert.equal(assistantBrief.effectStatusFor(effect, "run_1"), status);
+  assert.equal(assistantBrief.effectStatusFor(effect, "run_2"), null);
+  assert.equal(assistantBrief.effectStatusFor(effect, null), null);
+  assert.equal(assistantBrief.effectStatusFor({ ...effect, status: null }, "run_1"), null);
+  assert.equal(assistantBrief.effectStatusFor(null, "run_1"), null);
+  assert.equal(assistantBrief.effectStatusFor(undefined, "run_1"), null);
+});
+
+test("refChipText drops a leading copy of the chip's kind", () => {
+  assert.equal(assistantFormat.refChipText(["turn", "turn"], "turn r00002_t01_a04", "r00002_t01_a04"), "r00002_t01_a04");
+  assert.equal(assistantFormat.refChipText(["turn", "turn"], "Turn: r00002_end", "r00002_end"), "r00002_end");
+  assert.equal(assistantFormat.refChipText(["turn", "turn"], "turn:r00002_end", "r00002_end"), "r00002_end");
+  assert.equal(assistantFormat.refChipText(["docs", "doc"], "docs SYSTEM.md#economy", "SYSTEM.md#economy"), "SYSTEM.md#economy");
+  assert.equal(assistantFormat.refChipText(["docs", "doc"], "doc SYSTEM.md", "SYSTEM.md"), "SYSTEM.md");
+  // not a prefix word, or nothing after it: unchanged
+  assert.equal(assistantFormat.refChipText(["turn", "turn"], "turnover in round 3", "r00003_end"), "turnover in round 3");
+  assert.equal(assistantFormat.refChipText(["entity", "entity"], "entity", "a04"), "entity");
+  assert.equal(assistantFormat.refChipText(["entity", "entity"], "Eos (a04)", "a04"), "Eos (a04)");
+  // no label: the id
+  assert.equal(assistantFormat.refChipText(["run", "run"], null, "run_1"), "run_1");
+  assert.equal(assistantFormat.refChipText(["run", "run"], "  ", "run_1"), "run_1");
+});

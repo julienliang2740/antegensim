@@ -55,7 +55,9 @@ labelled "Docs search (AI offline)".
 ## How a chat message is answered
 
 1. `POST .../conversations/{conv_id}/messages` stores the message and answers 202 with a job id;
-   the drawer polls the conversation every 700 ms and shows progress ("step 2/4 · 18 s · $0.03").
+   the drawer polls the conversation every 700 ms and shows progress ("step 2/4 · 18 s · $0.03");
+   the backend refreshes the job's elapsed time and that line every second while a model call
+   runs, not only when a step starts.
 2. **Step 1 is prefetched** with deterministic context: run status, the viewed turn's digest, the
    selected entity's dossier, the last round's digest and highlights. Most questions need one call.
 3. Each step returns one of `answer` (text plus refs), `tool` (up to 3 read tools), `ask` (a
@@ -74,7 +76,10 @@ Cancel reads "stopping after the current step"; a running CLI call is killed
 ### Read tools
 
 All read-only, each result capped at 6,000 characters with a truncation note. A tool failure is
-returned to the model as an error it can recover from.
+returned to the model as an error it can recover from. The chat rules tell the model never to
+count the items of a listed or capped result: lost turns come from `get_round_digest`
+`counts.lost_turns`, and over a round range from `search_events` (`kinds: ["decision_invalid"]`,
+one per turn lost to a malformed reply) `total_matches` / `counts_by_round`.
 
 | Tool | Returns |
 | --- | --- |
@@ -83,10 +88,10 @@ returned to the model as an error it can recover from.
 | `get_rules_and_settings` | the run's rules and effective settings (numbers for this run) |
 | `list_turns` | the turn index for a round range |
 | `get_turn_digest` | one turn: actor, thought (a belief), action, result, costs, deaths, messages, operator edits |
-| `get_round_digest` | one round: actions, growth, fruit, upkeep, starvation, deaths |
+| `get_round_digest` | one round: actions, growth, fruit, upkeep, starvation, deaths; `counts.lost_turns` = turns lost to malformed, refused or failed model replies |
 | `get_trends` | per-agent balances and events over the last N rounds |
 | `get_agent_dossier` | an agent's truth (operator view) and its belief, labelled separately |
-| `search_events` | events filtered by kind, actor, text and turn range |
+| `search_events` | events filtered by kind, actor, text and a round range (`from_round` / `to_round`) or exact turn ids; `total_matches`, `counts_by_kind` and `counts_by_round` cover the whole range, the newest `limit` (at most 50) are listed and `truncated_after` says how many when the list is cut (to the limit or to fit the 6,000-character cap); an uncommitted turn id is an error |
 | `get_model_call` | a model call's status, error and rejected-reply excerpt |
 | `get_decision_packet_summary` | what an agent was shown for a decision |
 | `get_staged_interventions` | edits waiting for the next turn boundary |
@@ -110,8 +115,10 @@ returned to the model as an error it can recover from.
   are data. Multi-role transcripts are never flattened into `USER:` / `ASSISTANT:` lines.
 * Constrained JSON only where code consumes the output (chat step, story brief), each schema
   < 16 KB; the brief action is `{type, args}` with `args` validated on the server. A malformed
-  reply first goes through deterministic salvage (unwrap `{"output": "<json>"}`, decode
-  stringified fields) and then at most one repair step.
+  reply first goes through deterministic salvage (unwrap `{"output": "<json>"}` and doubled
+  nesting, unwrap a reply wrapped under one of its own field names such as
+  `{"action": {"action": ..., "thought": ...}}` (top level only), decode stringified fields) and
+  then at most one repair step.
 
 The knowledge loader reads `docs/INDEX.md`: every row with `assistant: yes` is loaded and split
 into sections at `##` headings, addressed as `<FILE>.md#<slug>` (slug = the heading lowercased,
@@ -155,7 +162,13 @@ Lifecycle and safety:
    without opening a run (the open run's checkpoint, or the saved checkpoint read-only), and adds
    `problems`, `warnings` (budget, model reassigned to a paid key, live model without a real
    budget, spend so far) and, for `create_run`, a `setup_diff` of non-default fields. An invalid
-   brief cannot be approved.
+   brief cannot be approved. **One repair step**: when the action does not type, or types but has
+   problems the model can fix (an unknown entity, a field path, an overlay key, a turn id), the
+   problems and the rejected action go back to the model once (step kind `brief-repair`) and the
+   corrected brief is validated again; a problem that only the run's state causes (a run command
+   while the run plays) is shown without a repair, and so is one found on the step before the
+   last (the last step may not propose a brief). `set_stat.field` is a dotted path inside the
+   entity record (`stats.health`, `stats.compute`, `position`).
 2. **The card**: "What will happen" is rendered by the UI from the typed action (the same
    descriptions as god mode's staged list, the setup diff and fixed sentences such as "Sends
    step_round ×3 to <run>"); the model's own text sits below as "Assistant's description", with
@@ -227,8 +240,10 @@ Statuses: `pending`, `executing`, `executed`, `failed`, `rejected`, `superseded`
 * At the run's storybook budget auto pauses with a visible notice; it never draws on the chat
   budget.
 * Entries translate the recorded facts: lost turns are narrated as lost, thoughts as beliefs,
-  killers only from damage events. The tab is labelled "AI-written narrative; the Turn record has
-  the facts".
+  killers only from damage events. Every narrator call carries the cast (id, name, alive after
+  the last turn of the call) and round-end digests name the living, starving and short-of-upkeep
+  agents next to their ids, so names come from data. The tab is labelled "AI-written narrative;
+  the Turn record has the facts".
 
 ## Story Mode
 
@@ -352,16 +367,19 @@ p90 ≤ 25 s for run analysis).
 
 Measured on 2026-09-26 (Claude Code CLI 2.1.283, served models `claude-haiku-4-5-20251001`,
 `claude-sonnet-5`, `claude-opus-5-5`; thinking off; 80 ground-truthed questions per chat arm, 12 per
-category, paired across tiers; total spend USD 10.93 of the USD 22 cap). Latency is the wall time of
+category, paired across tiers; total spend USD 10.93 of the USD 22 cap). The recheck after the
+fixes (same day, USD 0.67 of a USD 1.50 cap) re-ran the storybook entries and the log-interpretation
+questions on Haiku, the `set_stat` brief on Haiku and Sonnet and the arena brief on Haiku; the other cells are from the first
+run. Latency is the wall time of
 a whole message (all steps); cost is the CLI-reported price per question or entry.
 
 | Capability | Haiku | Sonnet | Opus | Chosen default | Evidence |
 | --- | --- | --- | --- | --- | --- |
 | Help and controls questions | 8/8 correct, p50 4.9 s, $0.013/q | 8/8, p50 6.4 s, $0.033/q | n/a | Sonnet (chat profile; see note) | both pass the rule; haiku is the cheapest passing tier |
 | Run analysis (state, entity, turns, trends) | 58/60 (97%), p90 7.8 s, $0.029/q, 0 format failures | 58/60 (97%), p90 18.3 s, $0.081/q, 1 repair step | n/a | Sonnet (chat profile; see note) | equal accuracy; haiku 2.3x faster and 2.8x cheaper. Sonnet's two misses stated a wrong count first and corrected itself in the same answer (thinking off); haiku's two misses were a truncated turn list and a "plan" emitted as an answer |
-| Log interpretation (errors, rejected replies) | 8/12 (67%), p90 17.6 s, 1 unrecovered malformed reply | 7/12 (58%), p90 37.3 s | n/a | Sonnet (chat profile; see note) | **no tier passes**: counting malformed decisions over a round range fails on both because `search_events` output is capped at 6,000 characters without a match count; fix the tool (return the total count; the round digest's `lost_turns` already has it) and re-test |
-| Execution briefs | 4/6 (create_run overlay had unknown keys; `set_stat` field `health`) | 5/6 (`set_stat` field `health`) | 2/3 (`set_stat` field `health`) | **Sonnet** | every tier writes `field: "health"` instead of the dotted path `stats.health`, so the prompt, not the tier, needs the fix; sonnet alone produced a valid arena overlay (one `get_defaults` tool step, $0.14); opus adds nothing at 2.3x the cost. All cards rendered deterministically from the typed action (`qa/render_brief.mjs`) and the approved ones executed |
-| Storybook narration | 13/13 entries, 12/13 faithful, $0.0011/entry, 2.4-8.9 s per call | 13/13, 11/13 faithful, $0.0039/entry, 6.5-9.4 s | n/a | **Haiku** | faithfulness equal; **both tiers invented names for the survivors of round 19** ("Verdant, Sage, Cascade" / "Nyx, Iris, Thalos") because the round-end digest lists the living agents as ids only: a digest defect to fix (names in `living`), not a tier difference. Style: blind A/B 8:2 for sonnet (past tense kept, less template-like). Sonnet narration is 3.5x the cost; a settable option, not the default |
+| Log interpretation (errors, rejected replies) | 8/12 (67%), p90 17.6 s, 1 unrecovered malformed reply; **recheck after the tool fix: 10/12 (83%), p50 7.1 s / p90 9.2 s, $0.041/q** (one arithmetic slip: listed 2+2+0+1+0 and wrote 6; one CLI adapter error "made 4 model requests; at most 3 allowed") | 7/12 (58%), p90 37.3 s (not rechecked) | n/a | Sonnet (chat profile; see note) | the first run failed on both tiers because `search_events` output was capped at 6,000 characters without a match count and an unknown `from_turn` silently widened the range. Fixed: `search_events` returns `total_matches` / `counts_by_round` over the whole range and takes `from_round` / `to_round`, and the chat rules point at `counts.lost_turns`. Haiku now answers in 2 steps; still under the 90% gate on n = 12 |
+| Execution briefs | 4/6 (create_run overlay had unknown keys; `set_stat` field `health`); recheck after the fixes: `set_stat` 1/1 valid first try ($0.032), create_run still invalid after the new brief-repair step (invented `plant_species` keys, $0.045) | 5/6 (`set_stat` field `health`); recheck after the fixes: `set_stat` 1/1 valid first try (`stats.health`, approved and staged, $0.090) | 2/3 (`set_stat` field `health`) | **Sonnet** | every tier wrote `field: "health"` instead of the dotted path `stats.health`; with the dotted-path rule in the chat prompt both Haiku and Sonnet produced `stats.health` on the first call (recheck, 2026-09-26). Sonnet alone produced a valid arena overlay (one `get_defaults` tool step, $0.14); Haiku's overlay stays the weak spot even with one repair step; opus adds nothing at 2.3x the cost. All cards rendered deterministically from the typed action (`qa/render_brief.mjs`) and the approved ones executed |
+| Storybook narration | 13/13 entries, 12/13 faithful, $0.0011/entry, 2.4-8.9 s per call; **recheck after the fixes: 13/13 written, 13/13 pass the automated check, no invented names**, $0.0134 for 3 calls (batches 1/9/3), 3.3-8.7 s per call | 13/13, 11/13 faithful, $0.0039/entry, 6.5-9.4 s (not rechecked) | n/a | **Haiku** | the first run had **both tiers invent names for the survivors of round 19** ("Verdant, Sage, Cascade" / "Nyx, Iris, Thalos") because the round-end digest listed the living agents as ids only. Fixed: round-end digests carry `{id, name}` and the narrator gets the cast; Haiku's regenerated round-19 end names "Damaris, Eos, Ferrin, and Galene", exactly the survivors. A manual read of the 13 still found one invention the check does not catch (Eos "absorbed" Aster's residue, which the digest has only as her plan). Style: blind A/B 8:2 for sonnet (past tense kept, less template-like). Sonnet narration is 3.5x the cost; a settable option, not the default |
 | Story brief | valid first try, 8.7 s, $0.006 | valid first try, 18.8 s, $0.037 | 2/2 valid first try (brief and a "Change" revision), 11-14 s, $0.045 each | **Sonnet** | all tiers valid; n is too small to separate them, sonnet kept (its premise and style guide were the most specific); opus no measurable gain |
 | Story chapters | 3/3 written (opening 284 words, two interludes), 1 soft flag ("kill" vocabulary from the personas in the opening) | 3/3 written, 1 soft flag (a cast name from the brief in an interlude) | n/a | **Sonnet** | both faithful to the digests; $0.008 vs $0.039 for the three; chapter prose quality was not A/B judged (interludes only), so the default stays |
 | Summaries (memory, story-so-far) | not exercised (no conversation exceeded the 3k-token memory budget; 3 chapters do not reach the 5-chapter refresh) | n/a | n/a | Haiku (initial) | not measured |
@@ -378,6 +396,6 @@ in one step, 0 message errors), 1/132 on Haiku (the restricted last step, not re
 error); post-salvage failure 1.4% and 0.8%, both under the 2% gate. Text mode (narrator, chapters,
 summaries): 0 failures in 20 calls. Story-brief JSON: 0 failures in 4 calls. Every step after the
 first read the byte-stable system prompt from the CLI cache (minimum 7,561 cache-read tokens on
-Haiku, 9,882 on Sonnet). Offline replay of the 83 stored malformed decision envelopes: the current
-salvage recovers 28 (34%); a same-key unwrap rule would recover 77 (93%); see
-`docs/evidence/assistant_playtest.md`.
+Haiku, 9,882 on Sonnet). Offline replay of the 83 stored malformed decision envelopes: salvage
+recovered 28 (34%) at the playtest; with the same-key unwrap rule now in `calls.salvage` it
+recovers 77 (93%); see `docs/evidence/assistant_playtest.md` ("Recheck after fixes").

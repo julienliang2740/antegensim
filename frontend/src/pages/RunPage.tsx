@@ -454,12 +454,16 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   const failedTurn = status.last_error ? latestFailedTurn(feed.events, committedSeq) : null;
   const allFake = allModelsFake(live.data?.settings ?? null, models.data);
 
-  const tabs: { id: Tab; label: string; title: string }[] = [
-    { id: "inspect", label: "Inspector", title: "Occupants of the selected cell and the selected entity" },
-    { id: "turn", label: "Turn record", title: `What happened in turn ${viewed.turn.turn_id}` },
-    { id: "god", label: `God mode${stagedList.length ? ` (${stagedList.length})` : ""}`, title: `God mode${stagedList.length ? `: ${stagedList.length} staged edit(s)` : ""}` },
-    { id: "rules", label: "Rules", title: "Rules & settings (read-only)" },
-    { id: "storybook", label: "Storybook", title: "The story so far, written by the assistant as turns are saved" },
+  // Tab labels: `short` replaces `long` when the tabs row is narrow (App.css container queries on .tabs-row:
+  // "md" below 420 px, "sm" below 385 px), so all five tabs stay on one line without scrolling; the accessible
+  // name (`label`) is always the full one.
+  const stagedSuffix = stagedList.length ? ` (${stagedList.length})` : "";
+  const tabs: { id: Tab; label: string; long: string; short?: string; shortAt?: "md" | "sm"; suffix?: string; title: string }[] = [
+    { id: "inspect", label: "Inspector", long: "Inspector", title: "Occupants of the selected cell and the selected entity" },
+    { id: "turn", label: "Turn record", long: "Turn record", short: "Turn", shortAt: "sm", title: `What happened in turn ${viewed.turn.turn_id}` },
+    { id: "god", label: `God mode${stagedSuffix}`, long: "God mode", short: "God", shortAt: "sm", suffix: stagedSuffix, title: `God mode${stagedList.length ? `: ${stagedList.length} staged edit(s)` : ""}` },
+    { id: "rules", label: "Rules", long: "Rules", title: "Rules & settings (read-only)" },
+    { id: "storybook", label: "Storybook", long: "Storybook", short: "Story", shortAt: "md", title: "The story so far, written by the assistant as turns are saved" },
   ];
   const activeTab = tabs.find((t) => t.id === tab) ?? tabs[0];
   const docked = layout.threeColumn && layout.reservedW > 0;
@@ -604,18 +608,20 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
                 id={`tab-${t.id}`}
                 aria-selected={tab === t.id}
                 aria-controls={`panel-${t.id}`}
+                aria-label={t.label}
                 title={t.title}
                 className={`tab${tab === t.id ? " tab-active" : ""}`}
                 onClick={() => setTab(t.id)}
               >
-                {t.id === "storybook" ? (
+                {t.short ? (
                   <>
-                    <span className="tab-label-long">Storybook</span>
-                    <span className="tab-label-short">Story</span>
+                    <span className={`tab-label-long tab-long-${t.shortAt}`}>{t.long}</span>
+                    <span className={`tab-label-short tab-short-${t.shortAt}`}>{t.short}</span>
                   </>
                 ) : (
-                  t.label
+                  t.long
                 )}
+                {t.suffix ?? null}
               </button>
             ))}
           </div>

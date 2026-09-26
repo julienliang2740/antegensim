@@ -151,7 +151,11 @@ def test_interventions_brief_problem_then_repaired_brief(assistant_client, assis
     conv_id = new_conversation(assistant_client, run_id)
     ctx = run_context(run_id, tab="god", selected_entity_id="a01", selected_entity_kind="agent")
     bad = {"kind": "brief", "brief": {"title": "Boost", "summary": "Set compute of the selected agent to 50.", "steps": [], "warnings": [], "action": {"type": "stage_interventions", "args": {"interventions": [{"type": "set_stat", "entity_id": "zz99", "field": "stats.compute", "value": 50}]}}}}
-    view = ask(assistant_client, assistant, conv_id, "give the selected agent 50 compute", [bad], ctx)
+    # the typed action has a problem the model can fix: one brief-repair step shows it the problems;
+    # the scripted model repeats the same brief, which is then shown with its problems
+    view = ask(assistant_client, assistant, conv_id, "give the selected agent 50 compute", [bad, bad], ctx)
+    assert [s["kind"] for s in last_assistant(view)["steps"]] == ["brief-repair", "brief"]
+    assert len(view["briefs"]) == 1
     brief = view["briefs"][-1]
     assert brief["status"] == "pending" and brief["validation"]["ok"] is False and brief["target_run_id"] == run_id  # run id filled from the context
     assert brief["validation"]["problems"] == [{"path": "interventions[0].entity_id", "message": "unknown entity 'zz99'"}]

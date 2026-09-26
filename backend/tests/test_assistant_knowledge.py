@@ -177,6 +177,9 @@ def test_step_schema_matches_the_adapters() -> None:
         ({"kind": "tool", "calls": '[{"name": "list_runs", "args": {}}]'}, None, {"kind": "tool", "calls": [{"name": "list_runs", "args": {}}]}),
         ({"kind": "brief", "brief": {"title": "t", "summary": "s", "action": '{"type": "open_run", "args": "{\\"run_id\\": \\"r\\"}"}'}}, None, {"kind": "brief", "brief": {"title": "t", "summary": "s", "action": {"type": "open_run", "args": {"run_id": "r"}}}}),
         (None, 'Sure! Here you go:\n```json\n{"kind": "answer", "text": "x"}\n```', {"kind": "answer", "text": "x"}),
+        # the whole reply wrapped under one of its own field names (49 of 83 stored CLI envelopes)
+        ({"action": {"thought": "t", "action": {"name": "observe", "args": {}}}}, None, {"thought": "t", "action": {"name": "observe", "args": {}}}),
+        ({"output": '{"brief": {"kind": "brief", "brief": {"title": "t"}}}'}, None, {"kind": "brief", "brief": {"title": "t"}}),
     ],
 )
 def test_salvage_repairs_common_envelope_shapes(parsed, text, expected) -> None:
@@ -189,3 +192,7 @@ def test_salvage_leaves_good_objects_alone() -> None:
     assert calls.salvage(good, None) == (good, False)
     assert calls.salvage(None, "no object here") == (None, False)
     assert calls.salvage({"single": "plain string"}, None) == ({"single": "plain string"}, False)
+    # the same-key unwrap is for the reply object only: a nested single-key dict stays as sent
+    nested = {"kind": "brief", "brief": {"title": "t", "summary": "s", "action": {"type": "create_run", "args": {"overlay": {"rules": {"rules": 1}}}}}}
+    assert calls.salvage(nested, None) == (nested, False)
+    assert calls.salvage({"action": {"name": "observe"}}, None) == ({"action": {"name": "observe"}}, False)  # no same key inside

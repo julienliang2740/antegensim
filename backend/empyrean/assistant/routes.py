@@ -127,8 +127,9 @@ def build_core_router(service: "AssistantService") -> APIRouter:
 
     @router.get(ASSISTANT_PREFIX + "/conversations/{conv_id}", response_model=ConversationView)
     def get_conversation(conv_id: str) -> ConversationView:
-        view = service.store.load(conv_id)
-        view.job = service.conversation_job(conv_id, view.meta.active_job_id)
+        with service.store.lock(conv_id):  # the engine settles message, meta and job under this lock
+            view = service.store.load(conv_id)
+            view.job = service.conversation_job(conv_id, view.meta.active_job_id)
         return view
 
     @router.patch(ASSISTANT_PREFIX + "/conversations/{conv_id}", response_model=ConversationMeta)

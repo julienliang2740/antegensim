@@ -86,8 +86,9 @@ def _decode_json_string(value: Any) -> Any:
     return decoded if isinstance(decoded, (dict, list)) else _MISSING
 
 
-def _salvage_once(obj: dict[str, Any]) -> dict[str, Any]:
-    """One pass of the deterministic repairs; returns the same object when nothing applied."""
+def _salvage_once(obj: dict[str, Any], *, top: bool = True) -> dict[str, Any]:
+    """One pass of the deterministic repairs; returns the same object when nothing applied.
+    ``top``: the same-key unwrap applies only to the reply object itself, never inside it."""
     if len(obj) == 1:
         (key, value), = obj.items()
         decoded = _decode_json_string(value)
@@ -95,6 +96,8 @@ def _salvage_once(obj: dict[str, Any]) -> dict[str, Any]:
             return decoded
         if isinstance(value, dict) and "kind" not in obj and ("kind" in value or key in _WRAPPER_KEYS):
             return dict(value)  # doubled nesting: {"step": {"kind": ...}}
+        if top and isinstance(value, dict) and key in value:
+            return dict(value)  # wrapped under one of its own fields: {"action": {"action": ..., "thought": ...}}
     out: dict[str, Any] = {}
     changed = False
     for key, value in obj.items():
@@ -103,7 +106,7 @@ def _salvage_once(obj: dict[str, Any]) -> dict[str, Any]:
             out[key] = decoded
             changed = True
         elif isinstance(value, dict) and value:
-            inner = _salvage_once(value)
+            inner = _salvage_once(value, top=False)
             out[key] = inner
             changed = changed or inner is not value
         else:
@@ -114,7 +117,9 @@ def _salvage_once(obj: dict[str, Any]) -> dict[str, Any]:
 def salvage(parsed: Optional[dict[str, Any]], text: Optional[str]) -> tuple[Optional[dict[str, Any]], bool]:
     """Deterministic repair of common CLI envelope shapes BEFORE any re-call (A-AST-4):
     a JSON object recovered from prose, single-key string wrappers such as
-    ``{"output": "<json>"}``, doubled nesting (``{"step": {"kind": ...}}``) and stringified
+    ``{"output": "<json>"}``, doubled nesting (``{"step": {"kind": ...}}``), the whole reply
+    wrapped under one of its own field names (``{"action": {"action": ..., "thought": ...}}``,
+    top level only) and stringified
     fields (``"brief": "{...}"``, ``"calls": "[...]"``) at any depth.  Returns ``(object,
     changed)``; ``object`` is None when nothing decodes to a dict.  Schema-agnostic: the
     engine validates the result with the step adapters and repairs once more via the model."""

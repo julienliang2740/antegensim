@@ -41,6 +41,9 @@ cd qa && node browser_check.mjs                                 # or: npm run ch
 | `QA_RUN_NAME` | `qa browser <timestamp>` | Name typed into the run name field, if the form has one |
 | `QA_SKIP_ERROR_STEP` | unset | `1` skips the error-state step (it creates an extra run) |
 
+The assistant steps have their own variables (`QA_ASSISTANT`, `QA_ONLY_ASSISTANT`, `QA_RUN_ID`,
+`QA_INSECURE_HOST`) and their own QA backend; see "Assistant, Storybook and Story Mode steps" below.
+
 To keep QA runs out of your normal `worlds/` folder and away from dev servers that are
 already running, use other ports and a scratch worlds dir:
 
@@ -55,6 +58,8 @@ script itself aborted. `log.json` is written after every step, so it is there ev
 when the script is interrupted.
 
 ## What it checks
+
+Steps 1-17 (the simulation UI); steps 18-33 are in the assistant section below.
 
 | # | Step id | Check | Requirement |
 | --- | --- | --- | --- |
@@ -97,24 +102,64 @@ The script creates runs in the backend's worlds dir. Their names start with
 
 ## Assistant, Storybook and Story Mode steps (rev 4)
 
-The assistant release adds browser steps that use fake models only (no spend): start the
-backend with the assistant on fake keys so every profile is free and deterministic:
+The assistant release adds 16 browser steps (18-33) that never spend money. Run them against the
+QA backend `qa/assistant_fake_server.py`: it builds the same app as `python -m empyrean.main`, forces
+every assistant profile (chat, narrator, author, summarizer) to `fake-assistant`, refuses to start
+otherwise, turns the Whisper preload off, serves on port 8020 with the worlds folder
+`qa/worlds-assistant/`, and adds `GET/PUT /api/_qa/fake_metadata` so the script can tell the fake chat
+model what to answer (a brief, refs, a slow step). The plain server has no such hook, so there the fake
+chat model only ever gives its default answer and the brief steps cannot run.
 
 ```bash
-cd backend && EMPYREAN_API_PORT=8011 EMPYREAN_WORLDS_DIR=/tmp/qa-worlds \
-  EMPYREAN_ASSISTANT_MODEL_CHAT=fake-assistant EMPYREAN_ASSISTANT_MODEL_NARRATOR=fake-assistant \
-  EMPYREAN_ASSISTANT_MODEL_AUTHOR=fake-assistant EMPYREAN_ASSISTANT_MODEL_SUMMARIZER=fake-assistant \
-  EMPYREAN_WHISPER_PRELOAD=0 ../.venv/bin/python -m empyrean.main
+# QA backend: every assistant profile forced to fake-assistant, whisper preload off, port 8020,
+# worlds qa/worlds-assistant, plus GET/PUT /api/_qa/fake_metadata to script the fake chat model
+.venv/bin/python qa/assistant_fake_server.py
+cd frontend && EMPYREAN_API_PROXY=http://127.0.0.1:8020 npx vite --port 5180 --strictPort
+cd qa && BASE_URL=http://127.0.0.1:5180 API_URL=http://127.0.0.1:8020 node browser_check.mjs
 ```
 
-What they cover (the step ids are in `browser_check.mjs` and its `log.json`): the drawer opens
-from the launcher (**Assistant**), a question gets an answer, a create-run brief is approved and
-the run opens, entries appear in the **Storybook** tab, a Story Mode flow from the entry page
-(**Story Mode**) through the brief to the first chapter, the **Dictate** button's disabled state
-and its reason, the run-page tabs row stays one line (height under 34 px at 1280, 1440 and 1920 px
-with "God mode (3)"), the docked drawer leaves the map at least its minimum width, and a
-first-time user script ("What is Empyrean and how do I start?" through a create-run brief).
-Labels the script looks for are the ones in `docs/CONTROLS.md`; change both together.
+Against the primary servers (`cd qa && node browser_check.mjs`) the free assistant steps run and every
+step that would call a model skips itself, so the script never spends against a live backend.
+
+| # | Step id | Check |
+| --- | --- | --- |
+| 18 | `assistant-preflight` | Capabilities, whether every profile is fake, whether the fake hook exists, the storybook auto rule for the QA run |
+| 19 | `assistant-entry-drawer` | Entry page: the **Assistant** pill opens a floating drawer with focus in the composer; × and Alt+A close it and focus returns |
+| 20 | `assistant-run-docked` | Run page: the rail-header **Assistant** button docks the drawer; no overlap with the map or side column, map at least 360 px, no horizontal scroll |
+| 21 | `assistant-run-floating` | **Float** leaves the map box exactly as with the drawer closed; **Dock** again; docked at 1280 px, floating at 1200 px |
+| 22 | `assistant-tabs-row` | With "God mode (3)", the run-page tabs row is one line under 34 px at 1280, 1440 and 1920 px, drawer closed and docked |
+| 23 | `assistant-ask-answer` | A question with "Include what I'm looking at" gets the default fake answer, shows its context chip and is scoped to the run (model call) |
+| 24 | `assistant-progress-and-refs` | A scripted slow answer: the progress line ticks with Cancel; entity and turn chips select and open history (scripted) |
+| 25 | `assistant-first-time-user` | "New here? Ask the assistant" prefills the question; the scripted answer carries docs and control chips (scripted) |
+| 26 | `assistant-create-run-brief` | A scripted `create_run` brief: the card's deterministic lines and settings diff; **Approve: create run** creates the run paused and opens it (scripted) |
+| 27 | `assistant-interventions-brief` | A `stage_interventions` brief with an unknown entity cannot be approved; **Ask for changes**; the corrected brief supersedes it and stages the edit with origin `assistant` (scripted) |
+| 28 | `assistant-godmode-badge` | "Open God mode (1 staged)" opens the God mode tab with the assistant's staged edit (scripted) |
+| 29 | `assistant-storybook-readonly` | The **Storybook** tab of the old-check run, read only (never presses Write missing); Auto per the default rule |
+| 30 | `assistant-storybook` | Two **Run turn** clicks on the brief-created run write two entries in the Storybook tab (model calls: the fake narrator) |
+| 31 | `assistant-escape-record-viewer` | With the record viewer open, Escape closes the drawer first and the viewer stays open |
+| 32 | `story-mode` | **Story Mode** from the entry page: run picker, step-0 card, story brief with both estimates, Accept, chapter 1 in the reader, Export Markdown (model calls) |
+| 33 | `assistant-dictate` | The **Dictate** button: enabled on secure origins when speech is ready; on a non-secure origin disabled with its reason |
+
+"Scripted" steps need the fake-metadata hook and skip with that reason without it; they and the
+"model call(s)" steps run only when every profile is fake (8 steps: 23-28, 30 and 32). The others spend
+nothing and run against any backend with the assistant.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `QA_ASSISTANT` | `auto` | `auto`: free assistant steps always, steps that call a model only when every profile is fake; `0`: skip all assistant steps; `1`: require fake profiles (fail otherwise) |
+| `QA_ONLY_ASSISTANT` | unset | `1` runs only the assistant steps, against the run named by `QA_RUN_ID` |
+| `QA_RUN_ID` | unset | An existing run with model turns for `QA_ONLY_ASSISTANT=1` |
+| `QA_INSECURE_HOST` | `qa-insecure.test` | Host name mapped to 127.0.0.1 in a second browser to check Dictate on a non-secure origin. The Vite server must list it in `server.allowedHosts` (a config passed with `--config`); otherwise that sub-check is recorded as not run |
+
+`http://127.0.0.1` is a secure context in Chromium, like `localhost`, so Dictate is enabled there; the
+disabled state with its reason appears only on a non-loopback origin (the machine's IP address, or the
+`QA_INSECURE_HOST` alias). Labels the script looks for are the ones in `docs/CONTROLS.md`; change both
+together. The latest results are in `docs/evidence/browser_qa_assistant.md`.
+
+Two helpers of the assistant playtest (`scripts/assistant_playtest.py`) live here too:
+`qa/render_brief.mjs` renders a stored brief's "What will happen" lines with the real frontend
+`describeAction` (stdin JSON in, JSON out), and `qa/playtest_shots.mjs` takes the playtest screenshots
+through the UI (fake keys, no spend; backend on the playtest worlds copy).
 
 ## Resilience harness
 

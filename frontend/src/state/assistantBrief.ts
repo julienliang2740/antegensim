@@ -14,8 +14,8 @@
  * what the user reads and what the button offers.
  */
 
-import type { ApiErrorCode, Intervention, RunCommand } from "../api/types";
-import type { BriefAction, ContextChip, SetupDiffEntry } from "../api/assistantTypes";
+import type { ApiErrorCode, Intervention, RunCommand, RunStatus } from "../api/types";
+import type { BriefAction, BriefEffect, ContextChip, SetupDiffEntry } from "../api/assistantTypes";
 import { describeIntervention } from "../components/inspect/logic";
 import type { AssistantContext } from "./assistantContext";
 
@@ -43,6 +43,35 @@ export function formatElapsed(seconds: number): string {
 export function progressLine(step: number, maxSteps: number, elapsedS: number, costUsd: number): string {
   const stepText = maxSteps > 0 ? `step ${Math.max(step, 1)}/${maxSteps}` : `step ${Math.max(step, 1)}`;
   return `${stepText} · ${formatElapsed(elapsedS)} · ${formatUsd(costUsd)}`;
+}
+
+/**
+ * The part of the backend's progress text worth showing under the ticking
+ * progress line: the step note after "step k/N · N s · $x" ("reading the
+ * run"), "Queued…" for the queued placeholder, else null.  The backend writes
+ * that text once per step, so its elapsed seconds and cost are stale while a
+ * step runs; the drawer computes those itself (progressLine) and never prints
+ * the backend's numbers.
+ */
+export function progressNote(progress: string | null | undefined): string | null {
+  const text = (progress ?? "").trim();
+  if (!text) return null;
+  if (/^queued\b/i.test(text)) return "Queued…";
+  const parts = text.split(" · ");
+  if (!/^step \d+(\/\d+)?$/.test(parts[0])) return text;
+  const note = parts.slice(3).join(" · ").trim();
+  return note || null;
+}
+
+/**
+ * The run status an approved brief returned, when it belongs to `runId` (the
+ * run on screen, whose page applies it at once so counts such as the staged
+ * edits never wait for the next status poll); else null.
+ */
+export function effectStatusFor(effect: BriefEffect | null | undefined, runId: string | null | undefined): RunStatus | null {
+  const status = effect?.status ?? null;
+  if (!status || !runId) return null;
+  return status.run_id === runId ? status : null;
 }
 
 /** A short readable value for diff entries ("no limit" for null, JSON otherwise). */

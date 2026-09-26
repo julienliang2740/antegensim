@@ -279,6 +279,22 @@ def test_a_new_run_without_on_run_created_stays_off(service, manager, fake_model
     wait_for(lambda: service.storybook.read_entry(worker.run_id, OPENING_ID) is not None and storybook_idle(service, worker.run_id), what="opening")
 
 
+def test_every_narrator_turn_call_carries_the_cast_map(service, manager, fake_model) -> None:
+    worker = new_run(manager, agent_count=6)
+    service.storybook.on_run_created(worker.run_id, None)
+    play_rounds(worker, 1)
+    ids = eligible(worker.run_id)
+    wait_for(lambda: service.storybook.status(worker.run_id).entry_count == len(ids) and storybook_idle(service, worker.run_id), what="entries")
+    turn_calls = [r for r in fake_model.narrator_requests() if turns_in(r) != [OPENING_ID]]
+    assert turn_calls
+    names = [c["name"] for c in digest.cast_map(worker.run_id)]
+    for request in turn_calls:
+        user = request.messages[-1].content
+        line = next(ln for ln in user.splitlines() if ln.startswith("Cast (every agent: id, name, alive after turn "))
+        assert turns_in(request)[-1] in line and all(f'"name":"{n}"' in line for n in names) and '"alive":true' in line
+    assert "never make up a name" in fake_model.narrator_requests()[0].messages[0].content
+
+
 def test_backlog_is_batched_per_round(service, manager, fake_model) -> None:
     worker = new_run(manager, agent_count=6)
     service.storybook.on_run_created(worker.run_id, None)

@@ -14,11 +14,11 @@ import pytest
 from pydantic import ValidationError
 
 from empyrean import config
-from empyrean.assistant import digest, engine as engine_mod, logbuffer
+from empyrean.assistant import calls as calls_mod, digest, engine as engine_mod, logbuffer
 from empyrean.assistant.engine import FAKE_DEFAULT_ANSWER, OFFLINE_LABEL, parse_step
 from empyrean.assistant.models import ContextChip
 from empyrean.assistant.store import ConversationBusy
-from empyrean.schemas import ModelRef
+from empyrean.schemas import Decision, ModelRef
 
 
 def wait_job(service, job_id: str, timeout: float = 20.0):
@@ -90,6 +90,7 @@ def test_plain_answer_with_refs_and_as_of_stamp(assistant, manager, default_requ
     assert message.text.startswith("a03 believes it is alive.") and "As of turn r00000_init." in message.text
     assert message.as_of_turn_id == "r00000_init"
     assert [r.id for r in message.refs] == ["a03", "r00000_init"]
+    assert message.refs[-1].label == "r00000_init"  # bare turn id: the chip adds the kind
     assert len(message.steps) == 1 and message.steps[0].kind == "answer" and message.steps[0].status == "ok"
     # step 1 was prefetched: status, viewed turn, selected entity, last round, highlights (no tool call needed)
     names = [c[0] for c in fake_digest]
@@ -136,6 +137,20 @@ def test_malformed_reply_gets_one_repair_step(assistant) -> None:
     assert message.status == "done" and message.text.startswith("Repaired.")
     assert [(s.kind, s.status) for s in message.steps] == [("repair", "error"), ("answer", "ok")]
     assert message.steps[0].error_code == "schema_mismatch"
+
+
+def test_golden_same_key_wrapped_cli_envelope_is_unwrapped() -> None:
+    """Shape of 49 of the 83 stored malformed claude_cli decision replies (the decision wrapped
+    under its own ``action`` field, as the CLI's StructuredOutput input): salvage unwraps it and
+    the result validates as a Decision without a repair call."""
+    text = '{"action": {"thought": "Round 3: I need to scout. Let me observe (-1,0).", "notebook_update": "## Damaris (a04) Survival Log", "action": {"name": "observe", "args": {"point": {"x": -1, "y": 0}}}}}'
+    obj, changed = calls_mod.salvage(None, text)
+    assert changed is True and set(obj) == {"thought", "notebook_update", "action"}
+    decision = Decision.model_validate(obj)
+    assert decision.action.name == "observe"
+    # and through a string wrapper as well
+    obj2, _ = calls_mod.salvage({"output": text}, None)
+    assert obj2 == obj
 
 
 def test_schema_mismatch_after_salvage_gets_one_repair_then_fails(assistant) -> None:
@@ -291,3 +306,129 @@ def test_engine_never_flattens_roles_and_uses_one_user_message(assistant, monkey
     assert seen[1].messages[1].content.startswith("Fence id for this request: ")
     assert isinstance(ModelRef.model_validate({"key": "k", "provider": "fake", "model_id": "fake-assistant"}), ModelRef)
     assert engine_mod.MEMORY_RECENT_MESSAGES >= 2
+
+
+def _spy_requests(monkeypatch) -> list[Any]:
+    from empyrean import model as model_mod
+
+    seen: list[Any] = []
+    original = model_mod.call_model
+
+    def spy(request, registry=None, *, cancel=None):
+        seen.append(request)
+        return original(request, registry, cancel=cancel)
+
+    monkeypatch.setattr(model_mod, "call_model", spy)
+    return seen
+
+
+def _set_stat_brief(field: str, entity: str = "a05") -> dict[str, Any]:
+    args = {"interventions": [{"type": "set_stat", "entity_id": entity, "field": field, "value": 5}]}
+    return {"kind": "brief", "brief": {"title": "Heal", "summary": f"Set {entity} health to 5.", "steps": [], "warnings": [], "action": {"type": "stage_interventions", "args": args}}}
+
+
+def test_brief_with_fixable_validation_problems_gets_one_repair_step(assistant, manager, default_request, monkeypatch) -> None:
+    run_id = manager.create_run(default_request).run_id
+    conv = assistant.store.create(run_id)
+    chip = ContextChip(page="run", run_id=run_id, live_turn_id="r00000_init", shown_turn_id="r00000_init", tab="god", run_state="paused")
+    seen = _spy_requests(monkeypatch)
+    message, job, view = ask(assistant, conv.conversation_id, "Set Eos's health to 5", [_set_stat_brief("health"), _set_stat_brief("stats.health")], chip)
+    assert message.status == "done" and job.status == "done"
+    assert [(s.kind, s.status) for s in message.steps] == [("brief-repair", "ok"), ("brief", "ok")]
+    assert len(view.briefs) == 1 and view.briefs[0].validation.ok is True and view.briefs[0].status == "pending"
+    assert view.briefs[0].action["interventions"][0]["field"] == "stats.health"
+    repair_prompt = seen[1].messages[1].content
+    assert "brief_validation_problems" in repair_prompt and "unknown field path" in repair_prompt and "rejected_action" in repair_prompt
+    assert seen[1].messages[0].content == seen[0].messages[0].content  # the repair step is not the restricted one
+
+
+def test_brief_problems_the_model_cannot_fix_are_shown_without_a_repair(assistant, manager, default_request) -> None:
+    run_id = manager.create_run(default_request.model_copy(update={"play_delay_seconds": 0.5})).run_id
+    worker = manager.require(run_id)
+    worker.submit("play")
+    try:
+        conv = assistant.store.create(run_id)
+        # run_turn while the run plays: a run-state problem another model call cannot fix
+        cmd = {"kind": "brief", "brief": {"title": "Step", "summary": "Run one turn.", "steps": [], "warnings": [], "action": {"type": "run_command", "args": {"run_id": run_id, "command": "run_turn"}}}}
+        message, _job, view = ask(assistant, conv.conversation_id, "run a turn", [cmd])
+        assert [s.kind for s in message.steps] == ["brief"]
+        assert view.briefs[-1].validation.ok is False and view.briefs[-1].validation.problems[0].path == "command"
+    finally:
+        worker.submit("pause")
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline and worker.status().state not in ("paused", "finished", "error"):
+            time.sleep(0.02)
+
+
+def test_brief_problem_on_the_step_before_the_last_is_shown_not_repaired(assistant, manager, default_request) -> None:
+    run_id = manager.create_run(default_request).run_id
+    conv = assistant.store.create(run_id)
+    tool = {"kind": "tool", "calls": [{"name": "list_runs", "args": {}}], "note": "n"}
+    bad = _set_stat_brief("health")
+    bad["brief"]["action"]["args"]["run_id"] = run_id
+    message, _job, view = ask(assistant, conv.conversation_id, "heal", [tool, tool, bad])
+    assert [s.kind for s in message.steps] == ["tool", "tool", "brief"]  # step 4 could not emit a brief
+    assert view.briefs[-1].validation.ok is False
+
+
+def test_progress_and_elapsed_tick_while_a_model_call_runs(assistant, monkeypatch) -> None:
+    monkeypatch.setattr(engine_mod, "PROGRESS_TICK_SECONDS", 0.1)
+    conv = assistant.store.create(None)
+    assistant.fake_metadata["chat"] = {"fake_script": [{"kind": "answer", "text": "slow", "refs": []}], "fake_options": {"sleep_ms": 1800}}
+    _u, msg, job = assistant.engine.start_message(conv.conversation_id, "slow", None)
+    time.sleep(1.3)
+    running = assistant.get_job(job.job_id)
+    pending = assistant.store.message(conv.conversation_id, msg.message_id)
+    assert running is not None and running.status == "running" and running.elapsed_s >= 1.0
+    assert pending.status == "running" and pending.progress is not None and pending.progress.startswith("step 1/") and " · 0 s · " not in pending.progress
+    job = wait_job(assistant, job.job_id)
+    final = assistant.store.message(conv.conversation_id, msg.message_id)
+    assert job.status == "done" and final.status == "done" and final.progress is None  # no tick after the finish
+
+
+def test_finished_job_never_shows_a_stale_active_job_id(assistant) -> None:
+    conv = assistant.store.create(None)
+    for i in range(5):
+        assistant.fake_metadata["chat"] = {"fake_script": [{"kind": "answer", "text": f"a{i}", "refs": []}]}
+        _u, _m, job = assistant.engine.start_message(conv.conversation_id, f"q{i}", None)
+        while True:  # poll the way the GET route composes its view: both reads under the conversation lock
+            with assistant.store.lock(conv.conversation_id):
+                meta = assistant.store.meta(conv.conversation_id)
+                current = assistant.get_job(job.job_id)
+            if current is not None and current.status not in ("queued", "running"):
+                assert meta.active_job_id is None, "a finished job with a stale active id"
+                break
+            time.sleep(0.001)
+
+
+def test_search_events_counts_the_whole_range_and_says_when_the_list_is_cut(assistant, manager, default_request) -> None:
+    import json as _json
+
+    from empyrean import storage
+    from empyrean.assistant import tools
+
+    request = default_request.model_copy(update={"play_delay_seconds": 0.0})
+    run_id = manager.create_run(request).run_id
+    worker = manager.require(run_id)
+    for k in range(1, 4):
+        worker.submit("step_round")
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline and not (worker.status().state == "paused" and worker.status().current_turn_id == f"r{k:05d}_end"):
+            time.sleep(0.01)
+        assert worker.status().current_turn_id == f"r{k:05d}_end"
+    upkeep = sum(1 for e in storage.list_turns(run_id) for ev in storage.read_turn_events(run_id, e.turn_id) if ev.kind == "upkeep")
+    assert upkeep >= 3
+    res = tools.run_tool(assistant, "search_events", {"run_id": run_id, "kinds": ["upkeep"], "limit": 2})
+    assert res.ok and not res.truncated
+    p = res.payload
+    assert p["total_matches"] == upkeep and p["counts_by_kind"] == {"upkeep": upkeep} and sum(p["counts_by_round"].values()) == upkeep
+    assert len(p["matches"]) == 2 and p["truncated_after"] == 2 and "total_matches" in p["note"]
+    one = tools.run_tool(assistant, "search_events", {"run_id": run_id, "kinds": ["upkeep"], "from_round": 2, "to_round": 2})
+    assert one.ok and one.payload["rounds"] == [2, 2] and list(one.payload["counts_by_round"]) == ["2"] and "truncated_after" not in one.payload
+    # everything, 50 listed: the list shrinks to fit the output cap, the totals survive
+    big = tools.run_tool(assistant, "search_events", {"run_id": run_id, "limit": 50})
+    assert big.ok and not big.truncated and big.payload["total_matches"] > len(big.payload["matches"])
+    assert len(_json.dumps(big.payload, ensure_ascii=False, sort_keys=True)) <= config.ASSISTANT_TOOL_OUTPUT_MAX_CHARS
+    # a turn id that is not committed is an error, never a silently widened range
+    bad = tools.run_tool(assistant, "search_events", {"run_id": run_id, "from_turn": "r00002_t01"})
+    assert bad.ok is False and "from_round" in bad.payload["error"]

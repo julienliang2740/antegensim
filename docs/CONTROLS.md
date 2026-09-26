@@ -138,11 +138,16 @@ at 1280 px and wider the assistant drawer docks on the right (*new*).
 | Area | Label | Effect | API | States |
 | --- | --- | --- | --- | --- |
 | Tabs | **Inspector** | Occupants of the selected cell and the selected entity | | |
-| Tabs | **Turn record** | What happened in the viewed turn (facts, deterministic) | `GET /api/runs/{run_id}/turns/{turn_id}` | |
-| Tabs | **God mode** | Stage edits (the tab shows the staged count) | | |
+| Tabs | **Turn record** | What happened in the viewed turn (facts, deterministic) | `GET /api/runs/{run_id}/turns/{turn_id}` | reads "Turn" when the tabs row is narrower than 385 px |
+| Tabs | **God mode** | Stage edits (the tab shows the staged count, e.g. "God mode (3)") | | reads "God (3)" when the tabs row is narrower than 385 px |
 | Tabs | **Rules** | Rules and settings in force (read-only) | `GET /api/runs/{run_id}/rules`, `/settings`, `/assumptions` | |
-| Tabs (*new*) | **Storybook** | The AI-written narrative of the run | `GET /api/runs/{run_id}/assistant/storybook` | |
+| Tabs (*new*) | **Storybook** | The AI-written narrative of the run | `GET /api/runs/{run_id}/assistant/storybook` | reads "Story" when the tabs row is narrower than 420 px (the default 390 px column) |
 | Tabs | **Wider panel** | Widen the right column (God mode and Rules are always wide) | | |
+
+The five tabs sit on one line and fit the column at every width from the 300 px minimum up: the labels
+follow the width of the tabs row itself (not the window), with smaller type below 470 px and the short
+labels above; the accessible name and the tooltip always carry the full label. Only on a phone-width
+column narrower than about 280 px does the row scroll sideways.
 
 #### Inspector tab
 

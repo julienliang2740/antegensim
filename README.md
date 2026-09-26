@@ -277,6 +277,12 @@ Run these from the repository root:
 
 # frontend: unit tests of the pure state modules, type-check, lint, build
 (cd frontend && node src/state/state.test.mjs && npx tsc -p tsconfig.app.json --noEmit && npm run lint && npm run build)
+
+# assistant: replay stored malformed CLI replies through the salvage (no model call)
+.venv/bin/python scripts/assistant_replay_malformed.py
+
+# assistant playtest across model tiers: LIVE, costs money (the 2026-09-26 pass cost about USD 11)
+EMPYREAN_ALLOW_LIVE=1 .venv/bin/python scripts/assistant_playtest.py chat --arm haiku --max-spend 3.5
 ```
 
 `EMPYREAN_LIVE_MODELS` takes a comma-separated list of registry keys that have credentials configured. The Whisper tests read a sample clip from `EMPYREAN_WHISPER_TEST_AUDIO` / `EMPYREAN_WHISPER_SAMPLE` or the default fixture path and skip when it is missing; `EMPYREAN_TEST_ENDPOINT` and `EMPYREAN_TEST_DEPLOYMENT` are placeholders the adapter unit tests use for the Azure registry entry. No test ever calls a paid model unless `EMPYREAN_LIVE_TESTS=1`.
@@ -290,6 +296,14 @@ cd qa && node browser_check.mjs                  # uses BASE_URL=http://127.0.0.
 ```
 
 It creates runs (named `qa browser …`) in the backend's worlds folder. To keep them apart from your own runs, point it at a second instance (see [Running](#running)) with `BASE_URL` and `API_URL`. Exit status: 0 when every step passed, 1 when a step failed, 2 when the script aborted. See `qa/README.md` for all options.
+
+Against a backend with live assistant models the script skips the assistant steps that would call a model, so it never spends. To run all of them for free, use the QA backend, which forces every assistant profile to `fake-assistant` and lets the script choose the fake answers:
+
+```bash
+.venv/bin/python qa/assistant_fake_server.py                                        # port 8020, worlds qa/worlds-assistant
+cd frontend && EMPYREAN_API_PROXY=http://127.0.0.1:8020 npx vite --port 5180 --strictPort
+cd qa && BASE_URL=http://127.0.0.1:5180 API_URL=http://127.0.0.1:8020 node browser_check.mjs
+```
 
 ## Scope
 

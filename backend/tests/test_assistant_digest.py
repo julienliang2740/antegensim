@@ -101,8 +101,9 @@ def test_sample_round_end_and_round_digest(sample_run) -> None:
     assert end["growth"] == {"plants": 12, "energy_in": 144, "essence_in": 12}
     assert end["fruit"] == {"removed": {"consumed": 2}}
     assert end["upkeep_paid"] == 8 and "upkeep_short" not in end
-    assert end["living"] == [f"a0{i}" for i in range(1, 9)]
-    assert "8 agents alive" in end["text"]
+    assert [x["id"] for x in end["living"]] == [f"a0{i}" for i in range(1, 9)]
+    assert end["living"][0] == {"id": "a01", "name": "Aster"} and all(x.get("name") for x in end["living"])
+    assert "8 agents alive: Aster (a01), " in end["text"]  # the narrator gets names, never bare ids
     rd = digest.round_digest(sample_run, 11)
     assert rd["complete"] is True and rd["order"][:3] == ["a07", "a08", "a04"]
     assert [t["turn_id"] for t in rd["turns"]] == ["r00011_t03_a04"]
@@ -116,6 +117,39 @@ def test_sample_round_end_and_round_digest(sample_run) -> None:
         digest.round_digest(sample_run, 3)
     with pytest.raises(ValueError):
         digest.round_digest(sample_run, 11, detail="huge")
+
+
+def test_round_end_names_starving_short_and_living_agents() -> None:
+    from empyrean.schemas import Event, TurnRecord
+
+    agents = {"a04": {"id": "a04", "name": "Damaris", "alive": True}, "a05": {"id": "a05", "name": "Eos", "alive": True}, "a08": {"id": "a08", "name": "Halcyon", "alive": False}}
+    record = TurnRecord.model_construct(turn_id="r00019_end", kind="round_end", round=19, action_result=None)
+
+    def ev(seq: int, kind: str, details: dict, actor: str = "world") -> Event:
+        return Event(seq=seq, turn_id="r00019_end", round=19, turn=None, actor=actor, kind=kind, summary=kind, details=details)
+
+    events = [
+        ev(1, "upkeep", {"agent_id": "a05", "paid": 1, "owed": 2}),
+        ev(2, "upkeep", {"agent_id": "a08", "paid": 0, "owed": 2}),
+        ev(3, "starvation", {"agent_id": "a08", "health_after": 0}),
+        ev(4, "round_ended", {"round": 19, "living_agents": ["a04", "a05"], "deaths": ["a08"]}),
+    ]
+    end = digest._round_end_digest(record, events, agents)
+    assert end["living"] == [{"id": "a04", "name": "Damaris"}, {"id": "a05", "name": "Eos"}]
+    assert end["upkeep_short"] == [{"id": "a05", "name": "Eos"}, {"id": "a08", "name": "Halcyon"}]
+    assert end["starvation"] == [{"id": "a08", "name": "Halcyon", "health_after": 0}]
+    assert "2 agents alive: Damaris (a04), Eos (a05)." in end["text"] and "Halcyon (a08) starved" in end["text"]
+    unknown = digest._round_end_digest(record, [ev(5, "round_ended", {"living_agents": ["zz9"]})], agents)
+    assert unknown["living"] == [{"id": "zz9"}]  # no name to give: the id alone, never an invented one
+
+
+def test_cast_map_lists_every_agent_with_alive_flag(sample_run) -> None:
+    cast = digest.cast_map(sample_run, "r00011_end")
+    assert [c["id"] for c in cast] == [f"a0{i}" for i in range(1, 9)]
+    assert cast[0] == {"id": "a01", "name": "Aster", "alive": True}
+    assert digest.cast_map(sample_run) == cast  # default: the current turn
+    with pytest.raises(storage.StorageError):
+        digest.cast_map(sample_run, "r00099_end")
 
 
 def test_sample_dossier_separates_truth_and_belief(sample_run) -> None:

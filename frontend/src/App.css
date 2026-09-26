@@ -966,14 +966,17 @@ body.is-resizing-y * {
   min-height: 0;
 }
 
+/* The tabs row is a size container: the labels and padding below follow its width, not the window's. */
 .tabs-row {
+  container: run-tabs / inline-size;
   display: flex;
   align-items: flex-end;
   gap: 6px;
   border-bottom: 2px solid var(--border-strong);
 }
 
-/* One line, always: five tabs scroll sideways instead of wrapping to a second row (the width toggle sits in the panel header). */
+/* One line, always: the five tabs fit the row at every column width from MIN_SIDE_W (300 px) up, by the container
+   queries below; below that (phones) they scroll sideways instead of wrapping (the width toggle sits in the panel header). */
 .tabs {
   display: flex;
   flex-wrap: nowrap;
@@ -1043,11 +1046,36 @@ body.is-resizing-y * {
   display: none;
 }
 
-@media (max-width: 419px) {
-  .tab-label-long {
+/* Narrower than the full labels at 13 px (451 px with "God mode (3)"): smaller type and padding. */
+@container run-tabs (max-width: 469px) {
+  .tabs {
+    gap: 2px;
+  }
+  .tab {
+    font-size: 12px;
+    padding: 5px 5px;
+  }
+}
+
+/* Default column (390 px): "Story" for "Storybook". */
+@container run-tabs (max-width: 419px) {
+  .tab-long-md {
     display: none;
   }
-  .tab-label-short {
+  .tab-short-md {
+    display: inline;
+  }
+}
+
+/* Narrowest column (300 px, e.g. 1280 px with the drawer docked): "Turn", "God" as well. */
+@container run-tabs (max-width: 384px) {
+  .tab {
+    padding: 5px 4px;
+  }
+  .tab-long-sm {
+    display: none;
+  }
+  .tab-short-sm {
     display: inline;
   }
 }

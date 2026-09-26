@@ -61,7 +61,8 @@ antegensim/
     src/api/client.ts  typed fetch wrappers (core routes) and the shared request() helper
     src/api/assistant.ts, story.ts, assistantSpeech.ts   assistant route wrappers (rev 4)
   scripts/             run_sim.py (headless driver), check_docs.py (docs checker), scenarios/
-  qa/                  browser_check.mjs (Playwright), resilience/ (crash and restart scenarios)
+  qa/                  browser_check.mjs (Playwright), assistant_fake_server.py (QA backend on fake
+                       assistant keys), render_brief.mjs, resilience/ (crash and restart scenarios)
   worlds/              run data (gitignored); worlds/_assistant/ holds global assistant data
   docs/                INDEX.md lists every document (this file, SYSTEM, GLOSSARY, CONTROLS,
                        ASSISTANT, ASSUMPTIONS, CODE_MAP, TEST_PLAN, TEST_EVIDENCE, LIMITATIONS),
@@ -1436,6 +1437,16 @@ ecology (absorption, deaths, residue) is not exercised by the fakes alone.
 * Browser checks (QA, required): create/resume, edit cards (validation problems shown by
   path), run turn/play/pause/step round, history arrows + return to live, god mode settings,
   crowded coordinate click/hover, error-state recovery.
+* Assistant browser checks (rev 4, `qa/browser_check.mjs` steps 18-33, fake models only): drawer
+  entry, docking and floating; the run-page tabs row on one line under 34 px; a question with its
+  context chip; progress and refs; a create-run brief approved into a run; an interventions brief
+  with a validation problem, Ask for changes and a superseding brief; the God mode badge; the
+  Storybook tab; Escape order with the record viewer; Story Mode to the first chapter; Dictate on
+  secure and non-secure origins. The scripted steps need the QA backend `qa/assistant_fake_server.py`,
+  which forces every assistant profile to `fake-assistant` and adds `GET/PUT /api/_qa/fake_metadata`
+  (it sets `AssistantService.fake_metadata`, the per-profile metadata the fake adapter answers
+  from). That hook is QA-only: it is not part of the API in section 9 and the served app never
+  has it. Against a backend with live assistant keys the steps that would call a model skip.
 * Storage growth (fix pass): a turn dir's `entities/knowledge/` holds only the changed stores
   and `world.json.knowledge_files` covers every agent; `read_knowledge` of an unchanged agent at
   any turn equals the file the map points at.
