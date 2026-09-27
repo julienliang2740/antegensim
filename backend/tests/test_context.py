@@ -750,6 +750,15 @@ def test_stable_rules_identity_prices_and_no_prescribed_goals():
     )
 
 
+def test_stable_rules_explain_simultaneous_decisions_and_speed_order():
+    """A-SCHED-5 reaches the agent: everyone decides at round start, actions resolve in speed
+    order and are checked when they resolve, news of the round arrives next round."""
+    text = context.stable_rules_text(RulesConfig(), make_agent(), ContextSettings(), 1.0)
+    assert "All living agents decide at the same time at round start" in text
+    assert "resolve one by one in speed order (highest first, ties random)" in text
+    assert "before your action resolves and is checked" in text and "What the others do this round reaches you at your next decision" in text
+
+
 def test_stable_rules_explain_the_attack_cap_its_price_and_ranged_rules():
     """A-ACT-19 reaches the agent: the damage cap per attack, what is charged, the cap's upgrade
     price, and (when a run turns the range flags off) that attack and query reach further."""

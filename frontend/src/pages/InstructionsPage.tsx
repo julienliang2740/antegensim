@@ -399,7 +399,7 @@ export function InstructionsPage(props: { section?: string | null }) {
             <tr>
               <td>Speed</td>
               <td>{N.speed}</td>
-              <td>Higher speed acts earlier in each round.</td>
+              <td>Higher speed resolves earlier in each round: the faster agent gets a contested fruit or strikes first.</td>
             </tr>
             <tr>
               <td>Vision / communication range</td>
@@ -841,8 +841,14 @@ RETURN "completed"`}
             a shuffle drawn from the run's seed, so runs are reproducible. Speed never grants extra turns, and a speed upgrade counts from the next round.
           </li>
           <li>
-            <strong>A turn.</strong> If a skill is running, it continues to its next action. If the agent is waiting, the turn passes. Otherwise the agent's
-            model receives its decision packet and returns a decision, which the engine checks and applies.
+            <strong>Everyone decides at once.</strong> At the start of a round every agent that will think gets its decision packet, built from what it knows
+            at that moment, and all the model calls run at the same time, so a round takes about as long as one call. Nobody sees what the others chose.
+          </li>
+          <li>
+            <strong>A turn.</strong> The decisions then resolve one agent at a time in speed order. If a skill is running, it continues to its next action. If
+            the agent is waiting, the turn passes. Otherwise its round decision is checked against the world as the faster agents left it and applied: if a
+            faster agent already took the fruit, moved away or killed the target, the action fails (<code>empty_source</code>, <code>target_gone</code>,{" "}
+            <code>out_of_range</code>). An agent killed before its turn does not act. Messages and damage from this round reach an agent at its next decision.
           </li>
           <li>
             <strong>Round end.</strong> After the last turn: plants grow and take in source inflow, fruit and seeds appear, seeds germinate, residue decays (off

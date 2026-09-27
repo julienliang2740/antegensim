@@ -15,7 +15,8 @@ import re
 import json
 import threading
 import time
-from typing import Any, Optional
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Iterator, Optional
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
@@ -380,6 +381,7 @@ class FakeModel:
 
     def __init__(self) -> None:
         self.script: list[dict[str, Any]] = []  # per-call result specs, consumed in order
+        self.by_agent: dict[str, list[dict[str, Any]]] = {}  # per-agent specs, used before ``script``
         self.calls: list[ModelRequest] = []
         self.block: Optional[threading.Event] = None  # when set, call_model waits on it
         self.in_call = threading.Event()
@@ -390,12 +392,16 @@ class FakeModel:
     def redact(self, text: Optional[str], registry: Any = None) -> Optional[str]:
         return text
 
-    def call_model(self, request: ModelRequest, registry: Any) -> ModelResult:
+    def call_model(self, request: ModelRequest, registry: Any, cancel: Optional[threading.Event] = None) -> ModelResult:
         self.calls.append(request)
         self.in_call.set()
         if self.block is not None:
             self.block.wait(5)
-        spec = self.script.pop(0) if self.script else {"status": "ok", "parsed": OBSERVE}
+        mine = self.by_agent.get(str(request.metadata.get("agent_id")))
+        if mine:
+            spec = mine.pop(0)
+        else:
+            spec = self.script.pop(0) if self.script else {"status": "ok", "parsed": OBSERVE}
         status = spec.get("status", "ok")
         parsed = spec.get("parsed")
         return ModelResult(
@@ -590,6 +596,13 @@ class FakeStorage:
     def read_assumptions(self, run_id: str) -> list:
         return self._run(run_id)["assumptions"]
 
+    def model_call_ids_in_round(self, run_id: str, round_no: int) -> set[str]:
+        ids: set[str] = set()
+        for cp in self.runs[run_id]["checkpoints"].values():
+            if cp.turn.round == round_no:
+                ids.update(r.call_id for r in cp.model_calls)
+        return ids
+
     def list_turns(self, run_id: str, from_round: Optional[int] = None, to_round: Optional[int] = None) -> list:
         return list(self._run(run_id)["order"])
 
@@ -617,14 +630,19 @@ class Fakes:
 
 
 @pytest.fixture()
-def fakes(monkeypatch: pytest.MonkeyPatch) -> Fakes:
+def fakes(monkeypatch: pytest.MonkeyPatch) -> Iterator[Fakes]:
     f = Fakes()
     monkeypatch.setattr(runner, "world", f.world)
     monkeypatch.setattr(runner, "skills", f.skills)
     monkeypatch.setattr(runner, "context", f.context)
     monkeypatch.setattr(runner, "model", f.model)
     monkeypatch.setattr(runner, "storage", f.storage)
-    return f
+    # Round decisions (A-SCHED-5) run on one worker here, so the scripted replies are consumed
+    # in the round's order; test_round_decisions.py covers the concurrent pool.
+    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="test-decide")
+    monkeypatch.setattr(runner, "decision_pool", lambda: pool)
+    yield f
+    pool.shutdown(wait=True)
 
 
 @pytest.fixture()
@@ -669,6 +687,15 @@ def run_turn(worker: runner.RunWorker) -> Checkpoint:
     worker.submit("run_turn")
     wait_idle(worker)
     return worker.checkpoint
+
+
+def wait_calls(fakes: Fakes, count: int, timeout: float = 5.0) -> None:
+    """Round decisions run on the pool: wait until ``count`` calls were made, then check it is exact."""
+    deadline = time.time() + timeout
+    while len(fakes.model.calls) < count and time.time() < deadline:
+        time.sleep(0.005)
+    time.sleep(0.02)
+    assert len(fakes.model.calls) == count
 
 
 def kinds(cp: Checkpoint) -> list[str]:
@@ -737,8 +764,10 @@ def test_run_turn_commits_one_agent_turn_and_clears_pending_file(manager: runner
     assert completed.costs.compute == pytest.approx(0.3) and completed.details["uncharged_compute"] == 0
     # pending file written before the call (status pending), rewritten with the result, removed at commit
     run = fakes.storage.runs[worker.run_id]
-    assert run["pending_writes"][:2] == [("mc_r00001_t01_a01_01", "pending"), ("mc_r00001_t01_a01_01", "completed")]
-    assert run["pending"] == {}
+    own = [w for w in run["pending_writes"] if w[0] == "mc_r00001_t01_a01_01"]
+    assert own[:2] == [("mc_r00001_t01_a01_01", "pending"), ("mc_r00001_t01_a01_01", "completed")]
+    # A-SCHED-5: every agent decided at round start; the other five calls wait for their turns
+    assert sorted(run["pending"]) == [f"mc_r00001_t0{i}_a0{i}_01" for i in range(2, 7)]
     # the request carried the fake-adapter metadata
     metadata = fakes.model.calls[0].metadata
     assert metadata["agent_id"] == "a01" and metadata["fake_script_index"] == 0 and metadata["fake_options"] == {}
@@ -848,11 +877,12 @@ def test_infra_failure_enters_error_uncharged_and_rerun_uses_call_02(manager: ru
     assert any(e.kind == "error" for e in cp.events)
     failed_event = next(e for e in cp.events if e.kind == "model_call_failed")
     assert failed_event.details["infra"] is True and failed_event.costs.compute == 0
-    assert run["pending"] == {}
+    assert not [c for c in run["pending"] if c.startswith("mc_r00001_t01_a01")]
     assert worker.status().last_error is None
     assert cp.world.agents["a02"].stats.compute == 77 and cp.turn.interventions[0].ok
     assert worker.checkpoint.world.agents["a01"].stats.compute == pytest.approx(200 - 0.3 - 1.0)
-    assert fakes.model.calls[1].metadata["fake_script_index"] == 0  # same script index on the re-run
+    rerun = next(c for c in fakes.model.calls if c.request_id == "mc_r00001_t01_a01_02")  # the round's other calls ran on the pool
+    assert rerun.request_id == "mc_r00001_t01_a01_02" and rerun.metadata["fake_script_index"] == 0  # same script index
 
 
 def test_agent_output_failure_charges_and_applies_no_action(manager: runner.RunManager, fakes: Fakes) -> None:
@@ -903,9 +933,14 @@ def test_dead_agent_gets_a_skipped_dead_checkpoint(manager: runner.RunManager, f
     worker.checkpoint.world.agents["a03"].alive = False  # dies after the order was fixed (A-SCHED-2)
     cp = run_turn(worker)
     assert cp.turn.turn_id == "r00001_t02_a03" and cp.turn.decision_source == "skipped_dead"
-    assert cp.turn.model_call_ids == [] and cp.turn.action is None
-    assert kinds(cp) == ["turn_started"] and cp.events[0].details == {"decision_source": "skipped_dead"}
-    assert len(fakes.model.calls) == 1
+    assert cp.turn.action is None
+    # A-SCHED-5: a03 decided at round start; the unused call is recorded, never charged
+    assert cp.turn.model_call_ids == ["mc_r00001_t02_a03_01"]
+    assert kinds(cp) == ["turn_started", "model_call_failed"] and cp.events[0].details == {"decision_source": "skipped_dead"}
+    unused = cp.model_calls[0]
+    assert unused.status == "failed" and unused.error == runner.DEAD_BEFORE_TURN_MESSAGE and unused.charged_compute == 0
+    assert cp.events[1].details["infra"] is False and cp.events[1].costs.compute == 0
+    wait_calls(fakes, 5)
 
 
 def test_unaffordable_packet_is_a_resource_skip(manager: runner.RunManager, fakes: Fakes) -> None:
@@ -917,7 +952,8 @@ def test_unaffordable_packet_is_a_resource_skip(manager: runner.RunManager, fake
     skip = cp.events[-1]
     assert skip.details["reason"] == "below the minimum packet" and skip.details["compute"] == pytest.approx(0.1)
     assert cp.turn.packet_id == "pk_r00001_t01_a01" and cp.decision_packets[0].affordable is False
-    assert fakes.model.calls == []
+    wait_calls(fakes, 5)
+    assert [c.metadata["agent_id"] for c in fakes.model.calls] == ["a02", "a03", "a04", "a05", "a06"]  # none for a01
     skip_records = [r for r in cp.knowledge["a01"].records if r.content.get("reason") == "resource_skip"]
     assert len(skip_records) == 1 and "could not afford" in skip_records[0].text
     # knowledge boundary: the exact balance stays in the event/packet, never in the record
@@ -937,7 +973,7 @@ def test_wait_turn_consumes_the_turn_without_a_model_call(manager: runner.RunMan
     cp = run_turn(worker)
     assert cp.turn.turn_id == "r00002_t01_a01" and cp.turn.decision_source == "wait"
     assert cp.turn.model_call_ids == [] and cp.world.agents["a01"].wait_turns_remaining == 0
-    assert len(fakes.model.calls) == 6
+    wait_calls(fakes, 6 + 5)  # round 2 decided at its start, without the waiting a01
 
 
 def test_step_round_ends_with_the_round_end_checkpoint(manager: runner.RunManager, fakes: Fakes) -> None:
@@ -1157,7 +1193,7 @@ def test_open_run_carries_interrupted_pending_call_into_the_next_commit(manager:
     cp = run_turn(worker)
     assert cp.turn.model_call_ids == ["mc_r00001_t01_a01_01", "mc_r00001_t01_a01_02"]
     assert cp.model_calls[0].status == "failed" and cp.model_calls[0].error == "interrupted (outcome uncertain)"
-    assert fakes.storage.runs[run_id]["pending"] == {}
+    assert not [c for c in fakes.storage.runs[run_id]["pending"] if c.startswith("mc_r00001_t01_a01")]
     assert cp.world.agents["a01"].stats.compute == pytest.approx(200 - 0.3 - 1.0)  # charged exactly once
 
 
@@ -1177,7 +1213,14 @@ def test_events_since_live_view_and_feed_epoch(manager: runner.RunManager, fakes
     manager.close_run(run_id)
     reopened = manager.open_run(run_id)
     assert reopened.status().feed_epoch != epoch
-    assert [e.seq for e in reopened.events_since(0, 100)] == seqs  # disk fallback covers seqs before the ring
+    feed = reopened.events_since(0, 100)
+    assert [e.seq for e in feed][: len(seqs)] == seqs  # disk fallback covers seqs before the ring
+    # A-SCHED-5: closing mid-round cancelled the other agents' round calls; they come back as
+    # interrupted: the next turn's is carried at once (its event is in the feed), the other four
+    # wait for their own turns (the status ledger already counts all five)
+    extra = feed[len(seqs):]
+    assert [e.kind for e in extra] == ["model_call_failed"] and extra[0].details["call_id"] == "mc_r00001_t02_a02_01"
+    assert reopened.status().real_usage.interrupted_calls == 5
 
 
 def test_knowledge_and_effective_settings_views(manager: runner.RunManager, fakes: Fakes) -> None:
@@ -1259,7 +1302,10 @@ def test_host_budget_reached_enters_error_without_charging(manager: runner.RunMa
     assert worker.status().state == "paused"
     worker.submit("play")  # legal again, but the pre-call budget check stops it before any provider call
     assert wait_idle(worker) == "error"
-    assert worker.status().last_error == "host budget exhausted" and len(fakes.model.calls) == 1
+    # the round's six calls started together at round start (the budget was not reached then);
+    # the re-run of a01 is stopped by the pre-call check without another call
+    assert worker.status().last_error == "host budget exhausted"
+    wait_calls(fakes, 6)
     worker.submit("pause")
     worker.stage_intervention(TypeAdapter(runner.Intervention).validate_python({"type": "update_run_settings", "clear_real_budget": True}))
     cp = run_turn(worker)
@@ -1428,7 +1474,7 @@ def test_failed_turn_after_a_charged_call_discards_the_charge(manager: runner.Ru
     fakes.world.apply_action = _boom  # type: ignore[assignment]
     worker.submit("run_turn")
     assert wait_idle(worker) == "error"
-    assert worker.status().real_usage.calls == 1  # visible while uncommitted
+    assert worker.status().real_usage.calls == 6  # visible while uncommitted: a01's and the round's other five
     fakes.world.apply_action = original  # type: ignore[assignment]
     worker.submit("pause")
     cp = run_turn(worker)
@@ -1460,8 +1506,11 @@ def test_uncommitted_usage_is_persisted_only_by_the_commit_that_holds_the_call(m
     worker.submit("run_turn")
     assert wait_idle(worker) == "error"
     fakes.world.apply_action = original  # type: ignore[assignment]
+    deadline = time.time() + 5
+    while worker.status().real_usage.input_tokens < 6000 and time.time() < deadline:
+        time.sleep(0.005)  # the round's last calls may still be answering on the pool
     view = worker.status().real_usage
-    assert view.calls == 1 and view.input_tokens == 1000
+    assert view.calls == 6 and view.input_tokens == 6000  # a01's failed attempt and the round's other five calls
     voice = TypeAdapter(runner.Intervention).validate_python({"type": "voice", "recipients": {"mode": "broadcast_all"}, "text": "hi"})
     worker.stage_intervention(voice)  # persists the manifest
     on_disk = fakes.storage.read_manifest(run_id).real_usage
@@ -1471,12 +1520,23 @@ def test_uncommitted_usage_is_persisted_only_by_the_commit_that_holds_the_call(m
     view = worker.status().real_usage
     # One rule for both ledger helpers (fix pass): every record counts in ``calls``, an
     # interrupted one ALSO in ``interrupted_calls`` (a subset, as the UI's label reads).
-    assert view.calls == 1 and view.interrupted_calls == 1 and view.input_tokens == 1000
+    # all six pending files come back as interrupted: a01's is carried into the next commit, the
+    # other five wait for their own turns of the round (A-SCHED-6)
+    assert view.calls == 6 and view.interrupted_calls == 6 and view.input_tokens == 6000
     cp = run_turn(worker)
     ledger = fakes.storage.read_manifest(run_id).real_usage
     assert ledger.calls == 2 and ledger.interrupted_calls == 1
     assert ledger.input_tokens == sum(r.result.usage.billed_input_tokens for r in cp.model_calls if r.result) == 2000
-    assert worker.status().real_usage == ledger
+    # the committed ledger plus the five interrupted calls and the five new round calls still waiting
+    deadline = time.time() + 5
+    while worker.status().real_usage.input_tokens < ledger.input_tokens + 10000 and time.time() < deadline:
+        time.sleep(0.005)
+    live = worker.status().real_usage
+    assert live.calls == ledger.calls + 10 and live.interrupted_calls == 6 and live.input_tokens == ledger.input_tokens + 10000
+    for _ in range(6):  # the rest of the round: every interrupted call lands in its own turn, once
+        run_turn(worker)
+    ledger = fakes.storage.read_manifest(run_id).real_usage
+    assert ledger.calls == 12 and ledger.interrupted_calls == 6 and worker.status().real_usage == ledger
 
 
 def test_close_returns_at_once_and_reopen_waits_for_the_last_commit(manager: runner.RunManager, fakes: Fakes) -> None:
@@ -1569,7 +1629,7 @@ def test_op_cap_spans_a_resumed_and_a_fresh_skill_in_one_turn(manager: runner.Ru
     """Design: at most max_ops_per_turn interpreter steps per agent turn.  A resumed skill
     that ends without an action falls through to a model decision (A-SKILL-11); a fresh
     run_skill in that decision continues from the ops already spent this turn."""
-    fakes.model.script = [{"status": "ok", "parsed": {"action": {"name": "run_skill", "args": {"skill": "b", "arguments": []}}}}]
+    fakes.model.by_agent["a01"] = [{"status": "ok", "parsed": {"action": {"name": "run_skill", "args": {"skill": "b", "arguments": []}}}}]
     worker = create_worker(manager)
     agent = worker.checkpoint.world.agents["a01"]
     for name in ("a", "b"):

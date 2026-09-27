@@ -56,7 +56,7 @@ Every model call goes `calls.call_profile` -> `model.call_model`; every route is
 | `backend/tests/conftest.py` | fixtures (`worlds_dir`, `registry`, `manager`, `client`, `api`, `no_retry_sleep`), the `live` marker gate |
 | `backend/tests/e2e_support.py` | `backend/tests/e2e_support.py::E2EApi`, `backend/tests/e2e_support.py::base_request` for the end-to-end tests |
 | `backend/tests/test_world.py`, `test_skills.py`, `test_context.py`, `test_model.py`, `test_runner.py`, `test_storage.py`, `test_api.py` | unit tests per module |
-| `backend/tests/test_e2e_run.py`, `test_e2e_rules.py`, `test_e2e_context.py`, `test_e2e_godmode.py`, `test_e2e_boundaries.py` | end-to-end through the public API; the provider boundary |
+| `backend/tests/test_e2e_run.py`, `test_e2e_rules.py`, `test_e2e_context.py`, `test_e2e_godmode.py`, `test_e2e_boundaries.py`, `test_e2e_round_decisions.py` | end-to-end through the public API; the provider boundary; simultaneous round decisions (A-SCHED-5/6) |
 | `backend/tests/test_integration_rev3.py` | the revision-3 contract changes |
 | `backend/tests/test_run_archive.py` | run archive and delete: `archive.json`, the `?archived=` filter, 409 `run_in_use`, world-folder cleanup, recovery keeps the marker |
 | `backend/tests/test_assistant_contracts.py` | the rev-4 shared contracts |

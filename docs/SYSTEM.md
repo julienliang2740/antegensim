@@ -11,11 +11,13 @@ in `docs/INTERFACES.md`; words are defined in `docs/GLOSSARY.md`; every button i
 ## Overview
 
 Empyrean is a local, turn-based artificial-life world in which every agent is a language model.
-A run holds 6 to 64 agents (8 prefilled) on a grid. Time advances in **rounds**; in each round
-every living agent gets exactly one **turn**, in initiative order (highest speed first). On its
-turn an agent either continues a running saved **skill** or makes one paid **model decision**:
-the engine builds a bounded **decision packet** from what that agent knows, the model returns one
-JSON decision, and the world engine checks it and applies exactly one action with its costs.
+A run holds 6 to 64 agents (8 prefilled) on a grid. Time advances in **rounds**. At the start of
+a round every agent that will think makes its paid **model decision** at the same time: the engine
+builds each agent's bounded **decision packet** from what that agent knows at round start and all
+the model calls run at once (a round costs about one call's latency, however many agents think).
+Then every living agent gets exactly one **turn**, in initiative order (highest speed first): it
+either continues a running saved **skill** or uses its round decision, and the world engine checks
+the action against the world as it is at that moment and applies exactly one action with its costs.
 After the last turn a **round-end** step grows plants, spawns fruit and seeds, charges upkeep and
 resolves deaths.
 
@@ -69,15 +71,33 @@ speed and alive, never its compute or essence.
 1. At round start the initiative is fixed once: living agent ids sorted, shuffled with the run's
    single seeded RNG, then stable-sorted by speed (highest first). Speed only sets the order; it
    never grants extra turns or longer moves.
-2. Each living agent gets one turn, saved as `r{round:05d}_t{index:02d}_{agent_id}`.
+2. Right after, every agent decides at once (A-SCHED-5): each living agent that is not waiting and
+   has no running skill (or whose running skill an unread arrival listed in
+   `rules.skills.interrupt_on` interrupts) gets its packet built from the world and its knowledge
+   as they are now, and all these model calls run together on a process-wide pool
+   (`EMPYREAN_MODEL_CONCURRENCY`, shared by every open run). Nobody sees what the others decided.
+3. Each living agent then gets one turn, saved as `r{round:05d}_t{index:02d}_{agent_id}`, and its
+   round decision resolves there: the action is checked against the world as the faster agents
+   left it. Speed therefore resolves conflicts: of two agents after one fruit the faster absorbs it
+   and the slower gets `empty_source` or `target_gone`; of two agents attacking each other the
+   faster strikes first, and a slower agent killed before its turn never acts. News that arrives
+   during the round (messages, damage, transfers) is read at the next round's decision. A running
+   skill acts at the agent's turn without a call; if it ends there without an action the agent
+   makes a model decision at that moment (A-SKILL-11).
    An agent that died earlier in the round gets a `skipped_dead` turn record; an agent removed by
-   the operator gets `skipped_removed`; agents placed during a round act from the next round.
-3. After the last turn the round-end step runs and is saved as `r{round:05d}_end`, in this fixed
+   the operator gets `skipped_removed`; agents placed during a round act from the next round. The
+   round decision of an agent that died or was removed is recorded in that turn as an unused call
+   (failed, never charged; A-SCHED-6).
+4. After the last turn the round-end step runs and is saved as `r{round:05d}_end`, in this fixed
    order: plant growth (age, stage, energy/essence inflow), fruit spawning, seed spawning,
    germination, residue decay, upkeep and starvation, deaths, cleanup of empty or rotten entities.
-4. A run finishes when no agent is alive or `max_rounds` is reached (no limit by default).
+5. A run finishes when no agent is alive or `max_rounds` is reached (no limit by default).
 
-Staged god-mode edits are applied at turn boundaries, before the next turn (or round) starts.
+Staged god-mode edits are applied at turn boundaries, before the next turn (or round) starts. An
+edit applied between two turns of a round voids the round decisions still waiting (each recorded
+as an unused call in its agent's turn, never charged) and the rest of the round decides again from
+the edited world. Closing a run mid-round (leaving its page) cancels the waiting calls; they come
+back as interrupted calls when the run is opened and the rest of the round decides again.
 
 ## One agent turn
 
@@ -87,11 +107,12 @@ Staged god-mode edits are applied at turn boundaries, before the next turn (or r
    decision in the same turn.
 2. **Wait**: an agent that chose `wait(n)` passes this turn without a model call (upkeep still
    applies).
-3. **Model decision** otherwise:
-   * the engine builds the decision packet within the agent's input token cap and within what it
-     can afford; if it cannot afford the minimum packet the turn is skipped (`resource_skip`,
-     decision source `skipped_unaffordable`);
-   * `model.call_model` sends it (the run shows `waiting_model` meanwhile);
+3. **Model decision** otherwise, made at round start together with everyone else's (A-SCHED-5):
+   * the engine built the decision packet at round start, within the agent's input token cap and
+     within what it could afford; if it cannot afford the minimum packet the turn is skipped
+     (`resource_skip`, decision source `skipped_unaffordable`);
+   * `model.call_model` sent it at round start, on the shared pool; at the agent's turn the run
+     waits for that answer if it is not in yet (the run shows `waiting_model` meanwhile);
    * cognition is charged from the reported (or estimated) tokens;
    * the reply passes the **format gate** (`model.parse_decision`): strict JSON Decision with
      exactly one action. A failing reply loses the turn (`decision_invalid`; cognition is still
@@ -384,7 +405,11 @@ story-so-far; Haiku). Details, budgets and routes: `docs/ASSISTANT.md`.
 
 ## Common misreadings
 
-* Speed only sets turn order; it gives no extra actions and no longer moves.
+* Speed only sets turn order; it gives no extra actions and no longer moves. But because every
+  agent decides at round start and the actions resolve in speed order, being faster decides who
+  gets a contested fruit, who strikes first, and who escapes before a slower attack resolves.
+* Agents decide from the world at round start: a message or an attack from a faster agent in the
+  same round is seen at the next round's decision, not the current one.
 * Vision and communication range start at 0: agents see and talk only on their own point, and
   `observe` of the own point is the only legal observe at the start.
 * Absorbing compute consumes the whole fruit and keeps only the absorption fraction (20%): a

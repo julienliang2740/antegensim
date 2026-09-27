@@ -10,9 +10,12 @@ Owns
   controls").
 * Turn orchestration exactly as documented in docs/INTERFACES.md section 8:
   apply staged edits at the boundary BEFORE a new round's initiative is
-  established (spec "Turn orchestration" step 1), pick the
-  next scheduled agent, resume a skill or build a packet and call
-  ``model.call_model``, run the format gate, process skill saves/deletes and
+  established (spec "Turn orchestration" step 1), make the round's decisions at
+  round start (A-SCHED-5: every thinking agent's packet built from the world as
+  it is then and all ``model.call_model`` calls run at once on the process-wide
+  ``decision_pool``), pick the next scheduled agent, resume a skill or take its
+  round decision (or decide now: a skill that fell through, the re-run of a failed
+  turn), run the format gate, process skill saves/deletes and
   the notebook, execute exactly one world action through ``world.apply_action``,
   deliver notices and feedback to ``context``, then commit through ``storage``.
 * Round-end processing (``world.end_round``) as its own committed checkpoint.
@@ -64,6 +67,14 @@ copy.  API threads call only ``submit``, ``status``, ``live_view``,
 ``staged``, ``unstage``, ``reload_working``, ``effective_settings``,
 ``knowledge`` and ``close``.  Illegal commands raise ``RunnerError``.
 
+Round decisions (A-SCHED-5) run on ``decision_pool`` threads.  A pool thread only
+calls ``model.call_model`` for one planned ``ModelCallRecord``, then sets that
+record's result / status / finished_at and rewrites its pending file; the worker
+reads the record only after the call's future is done.  API threads may read such
+a record meanwhile (status ledger, model-call lookup) and see it before or after
+the result lands.  Pool threads never take the worker's locks, never wait on the
+worker and never submit to the pool, so the shared pool cannot deadlock.
+
 Two locks: ``self._lock`` (an RLock) guards every in-memory field that API
 threads read and is only ever held briefly; ``self._io_lock`` serialises the
 few file writes that the worker (commit) and API threads (staging, reload)
@@ -98,6 +109,7 @@ import threading
 import traceback
 import uuid
 from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
@@ -158,6 +170,11 @@ PROVIDER_FAILURE_PREFIX = "provider failure: "
 HOST_BUDGET_MESSAGE = "host budget exhausted"
 INTERRUPTED_MESSAGE = "interrupted (outcome uncertain)"
 DISCARDED_CHARGE_MESSAGE = "turn failed after the call; charge discarded"
+# A-SCHED-5/6: a decision made at round start whose turn never used it.
+DEAD_BEFORE_TURN_MESSAGE = "discarded: the agent died before its turn in the round came"
+REMOVED_BEFORE_TURN_MESSAGE = "discarded: the agent was removed before its turn in the round came"
+EDITED_BEFORE_TURN_MESSAGE = "discarded: an operator edit changed the world before this decision's turn; the agent decides again"
+STALE_PLAN_MESSAGE = "discarded: the decision was made for a round that is over"
 UNSERIALIZABLE_REPLY_NOTE = "reply dropped: it could not be stored"
 TRACEBACK_EXCERPT_LINES = 5
 
@@ -437,6 +454,40 @@ def assign_card_ids(cards: list[AgentCard]) -> list[AgentCard]:
 
 
 @dataclass
+class _Plan:
+    """One agent's decision for the round, made at round start (A-SCHED-5).
+
+    ``source`` is "model" (a model call was prepared, and started when affordable) or
+    "skill" (a running skill resumes at the agent's turn; no call).  ``interrupt`` lists
+    the unread arrival kinds that stop the running skill at the turn (A-SKILL-9, evaluated
+    at round start).  ``future`` resolves to the call's ModelResult; the pool thread also
+    stores the result on ``record`` and rewrites the pending file."""
+
+    agent_id: str
+    turn_id: str
+    source: str
+    interrupt: list[str] = field(default_factory=list)
+    packet: Optional[DecisionPacketRecord] = None
+    record: Optional[ModelCallRecord] = None
+    future: Optional["Future[ModelResult]"] = None
+    cancel: threading.Event = field(default_factory=threading.Event)  # set when the decision is voided or the worker stops
+
+
+_DECISION_POOL: Optional[ThreadPoolExecutor] = None
+_DECISION_POOL_LOCK = threading.Lock()
+
+
+def decision_pool() -> ThreadPoolExecutor:
+    """The process-wide pool that runs every round's model calls at once
+    (config.MODEL_CALL_CONCURRENCY workers, shared by all open runs)."""
+    global _DECISION_POOL
+    with _DECISION_POOL_LOCK:
+        if _DECISION_POOL is None:
+            _DECISION_POOL = ThreadPoolExecutor(max_workers=config.MODEL_CALL_CONCURRENCY, thread_name_prefix="empyrean-decide")
+        return _DECISION_POOL
+
+
+@dataclass
 class _TurnWork:
     """Everything one turn attempt accumulates on its deep copy before commit."""
 
@@ -506,6 +557,19 @@ class RunWorker:
         self._carried_events: list[Event] = []
         self._interrupted_call_ids: set[str] = set()  # recovered pending calls (ledger: interrupted_calls)
         self._pending: Optional[tuple[ModelCallRecord, Optional[DecisionPacketRecord]]] = None
+        # A-SCHED-5: the decisions of the round in progress, made at round start, keyed by
+        # agent id; each agent's turn takes its own.  ``_plans_round`` is the round they belong to.
+        self._plans: dict[str, _Plan] = {}
+        self._plans_round: Optional[int] = None
+        # What the round decisions were built from: (committed turn id, ids of the edits applied at
+        # that boundary).  A re-run of that boundary (after an error) with the same edits keeps them.
+        self._plans_basis: Optional[tuple[str, tuple[str, ...]]] = None
+        self._issued_call_ids: set[str] = set()  # every call id this worker handed out (never reused)
+        # Round calls being voided: kept visible to the status ledger until they are recorded.
+        self._voiding: dict[str, ModelCallRecord] = {}
+        # Unused or interrupted round calls waiting for the turn they were made for (so each is
+        # recorded in its own agent's turn): turn id -> [(record, event made at recovery or None)].
+        self._leftovers: dict[str, list[tuple[ModelCallRecord, Optional[Event]]]] = {}  # event always None today
         self._active: Optional[tuple[str, int, Optional[int], Optional[str]]] = None
         self._work: Optional[_TurnWork] = None
         self._code_revision = ""
@@ -553,6 +617,12 @@ class RunWorker:
             result = record.result
             usage = result.usage.model_dump(mode="json") if result else {}
             self._interrupted_call_ids.add(record.call_id)
+            self._issued_call_ids.add(record.call_id)
+            if self._waits_for_its_turn(self.checkpoint, record):
+                # an interrupted round decision of a later turn: recorded (and its event made,
+                # so event seqs keep increasing along the chain) in that turn
+                self._leftovers.setdefault(record.turn_id, []).append((record, None))
+                continue
             event = self._new_event(
                 turn_id=record.turn_id,
                 round_no=record.round,
@@ -577,6 +647,20 @@ class RunWorker:
         self._thread = threading.Thread(target=self._loop, name=f"empyrean-{self.run_id}", daemon=True)
         self._thread.start()
 
+    def _waits_for_its_turn(self, checkpoint: Checkpoint, record: ModelCallRecord) -> bool:
+        """True for a recovered call made for a LATER turn of the round in progress (or of the
+        round about to start) than the next turn: it waits for that turn (or the round end, when
+        the turn never comes).  The next turn's call and older ones are carried as before."""
+        scheduler = checkpoint.turn.scheduler
+        if scheduler.round_complete:
+            round_no = scheduler.round + 1
+            order = self._next_round_order or []
+            next_id = boundary_of(round_no, order, 0)[3] if order else None
+        else:
+            round_no = scheduler.round
+            next_id = boundary_of(round_no, scheduler.order, scheduler.next_index)[3]
+        return record.round == round_no and record.turn_id != next_id
+
     def stop(self, wait: bool = True) -> None:
         """Request pause and tell the thread to exit once the current command settles
         (an active turn still finishes and commits).  With ``wait`` the caller blocks
@@ -588,6 +672,12 @@ class RunWorker:
                 self._pause_flag = True
                 self._state = "pause_requested"
             self._wake.set()
+            # The worker exits after its active turn: the round calls of the later turns are
+            # cancelled now (the active turn's own call is left to finish), A-SCHED-6.
+            awaited = self._pending[0].call_id if self._pending is not None else None
+            for plan in self._plans.values():
+                if plan.record is None or plan.record.call_id != awaited:
+                    plan.cancel.set()
         self._queue.put(None)
         thread = self._thread
         if thread is None or not thread.is_alive():
@@ -714,9 +804,17 @@ class RunWorker:
         )
 
     def _uncommitted_calls_locked(self) -> list[ModelCallRecord]:
-        """Call records not yet in a committed checkpoint: the carried ones (a failed or
-        interrupted attempt) and those of the turn in progress, each once."""
+        """Call records not yet in a committed checkpoint, each once: the carried ones (a failed
+        or interrupted attempt), the round decisions not yet taken by their turns, those being
+        voided, the unused / interrupted ones waiting for their own turns (A-SCHED-5/6), and
+        those of the turn in progress."""
         records: dict[str, ModelCallRecord] = {r.call_id: r for r in self._carried_calls}
+        for plan in self._plans.values():  # round calls not yet taken by their turn (A-SCHED-5)
+            if plan.record is not None and plan.future is not None:
+                records[plan.record.call_id] = plan.record
+        for waiting in self._leftovers.values():
+            records.update({r.call_id: r for r, _ in waiting})
+        records.update(self._voiding)
         work = self._work
         if work is not None:
             records.update({r.call_id: r for r in work.model_calls})
@@ -806,6 +904,7 @@ class RunWorker:
             candidates = list(self.checkpoint.model_calls)
             if self._pending is not None:
                 candidates.append(self._pending[0])
+            candidates.extend(p.record for p in self._plans.values() if p.record is not None)
         for record in candidates:
             if record.call_id == call_id:
                 return record
@@ -816,6 +915,7 @@ class RunWorker:
             candidates = list(self.checkpoint.decision_packets)
             if self._pending is not None and self._pending[1] is not None:
                 candidates.append(self._pending[1])
+            candidates.extend(p.packet for p in self._plans.values() if p.packet is not None)
         for packet in candidates:
             if packet.packet_id == packet_id:
                 return packet
@@ -1000,6 +1100,7 @@ class RunWorker:
                         self._last_error = self._last_error or "worker loop failure"
                         self._active_command = None
         finally:
+            self._abandon_plans()
             self._settle_stopped()
 
     def _drive(self, command: str) -> None:
@@ -1201,15 +1302,32 @@ class RunWorker:
                 scheduler.next_index += 1
             else:
                 scheduler.round_complete = True
+            self._discard_plans(work, STALE_PLAN_MESSAGE)  # the round's later turns never come
+            self._flush_leftovers(work, everything=True)
             self._emit(work, "system", "run_finished", f"run finished: {reason}", {"reason": reason})
             self._commit(work)
             return "finished"
         if work.kind == "round_end":
+            self._discard_plans(work, STALE_PLAN_MESSAGE)
+            self._flush_leftovers(work, everything=True)
             self._round_end(work)
         else:
+            basis = (committed.turn.turn_id, tuple(sorted(r.intervention.id or "" for r in work.interventions)))
+            if work.interventions:
+                with self._lock:
+                    same = self._plans_round == work.round and self._plans_basis == basis
+                if not same:
+                    # A-SCHED-6: an edit applied at this boundary voids the round decisions still
+                    # waiting (also those a failed attempt of this boundary made before other edits
+                    # were staged); the rest of the round decides again from the edited world.
+                    self._discard_plans(work, EDITED_BEFORE_TURN_MESSAGE)
+            self._ensure_plans(work, basis)
             scheduler.next_index += 1
             if removed_agent or work.agent_id not in w.agents:
-                self._skipped_turn(work, "skipped_removed", f"{work.agent_id} was removed by the operator; turn skipped")
+                self._skipped_turn(
+                    work, "skipped_removed", f"{work.agent_id} was removed by the operator; turn skipped",
+                    self._take_plan(work), REMOVED_BEFORE_TURN_MESSAGE,
+                )
             else:
                 self._agent_turn(work)
         return "finished" if work.finished_reason else "committed"
@@ -1281,16 +1399,26 @@ class RunWorker:
         return None
 
     def _carry_into(self, work: _TurnWork) -> None:
-        """Recovered / failed call records and their events join this turn's checkpoint."""
+        """Recovered / failed call records and their events join this turn's checkpoint.
+        An event made for another turn (an interrupted round decision of a later agent,
+        A-SCHED-5) is re-stamped to this turn, whose files hold it; its ``call_id`` still
+        names the turn the call was made for."""
         with self._lock:
             calls = list(self._carried_calls)
             events = list(self._carried_events)
+        for event in events:
+            if event.turn_id != work.turn_id:
+                event.turn_id, event.round, event.turn = work.turn_id, work.round, work.turn_index
         work.model_calls.extend(calls)
         work.events.extend(events)
 
-    def _skipped_turn(self, work: _TurnWork, source: str, summary: str) -> None:
+    def _skipped_turn(self, work: _TurnWork, source: str, summary: str, plan: Optional[_Plan] = None, discard_reason: str = "") -> None:
+        """Commit a turn that takes no decision; an unused round decision of the agent
+        (A-SCHED-5) is recorded in it after ``turn_started``."""
         work.decision_source = source
         self._emit(work, work.agent_id or "world", "turn_started", summary, {"decision_source": source})
+        self._flush_leftovers(work)
+        self._discard_plan(work, plan, discard_reason or STALE_PLAN_MESSAGE)
         self._commit(work)
 
     def _round_end(self, work: _TurnWork) -> None:
@@ -1333,14 +1461,16 @@ class RunWorker:
         agent_id = work.agent_id or ""
         agent = w.agents[agent_id]
         label = f"{agent.name} ({agent_id})"
+        plan = self._take_plan(work)
         if not agent.alive:
-            self._skipped_turn(work, "skipped_dead", f"{label} is dead; turn {work.turn_index} of round {w.round} skipped")
+            self._skipped_turn(work, "skipped_dead", f"{label} is dead; turn {work.turn_index} of round {w.round} skipped", plan, DEAD_BEFORE_TURN_MESSAGE)
             return
         if agent.wait_turns_remaining > 0:
             agent.wait_turns_remaining -= 1
-            self._skipped_turn(work, "wait", f"{label} is waiting ({agent.wait_turns_remaining} more turns)")
+            self._skipped_turn(work, "wait", f"{label} is waiting ({agent.wait_turns_remaining} more turns)", plan)
             return
         self._emit(work, agent_id, "turn_started", f"{label} begins turn {work.turn_index} of round {w.round}")
+        self._flush_leftovers(work)
         store = work.cp.knowledge.get(agent_id)
         if store is None:
             store = context.new_knowledge(agent_id)
@@ -1350,30 +1480,270 @@ class RunWorker:
             # A-SKILL-9: only unread ARRIVALS interrupt (messages, damage, voice, transfers
             # received); the runner's own feedback records about the agent's last decision
             # (cognition charge, op-budget yield, ...) are created unread but are not news.
-            interrupt_on = set(w.rules.skills.interrupt_on)
-            unread_kinds = {r.kind for r in context.unread_records(store) if not is_runner_feedback(r)}
-            if interrupt_on & unread_kinds:
+            # A-SCHED-5: the check was made at round start together with every decision, so
+            # news that arrives during the round interrupts at the next round.
+            interrupting = list(plan.interrupt) if plan is not None else self._interrupt_kinds(w, agent, store)
+            if plan is not None and plan.source == "skill":
+                interrupting = []
+            if interrupting:
                 agent.skill_execution = skills.stop_execution(execution, "interrupted")  # A-SKILL-9
                 self._emit(
                     work,
                     agent_id,
                     "skill_finished",
-                    f"{agent_id} skill {execution.root_skill} interrupted by new {', '.join(sorted(interrupt_on & unread_kinds))}",
+                    f"{agent_id} skill {execution.root_skill} interrupted by new {', '.join(interrupting)}",
                     {"skill": execution.root_skill, "ops": 0, "cost": 0.0, "status": "stopped", "error": "interrupted"},
                 )
             else:
                 work.decision_source = "skill"
                 if self._skill_step(work, agent_id, execution, thought=None, fresh=False):
+                    self._discard_plan(work, plan if plan is not None and plan.source == "model" else None, STALE_PLAN_MESSAGE)
                     self._finish_agent_turn(work)
                     return
-                # A-SKILL-11: the skill ended without an action; a model decision follows in this turn
+                # A-SKILL-11: the skill ended without an action; a model decision follows in
+                # this turn, made now from the world as it is (not the round-start decision).
+                if plan is not None and plan.source == "skill":
+                    plan = None
+        elif plan is not None and plan.source == "skill":
+            plan = None  # the skill stopped since round start (cannot happen without an edit)
         work.decision_source = "model"
-        self._model_decision(work, agent_id)
+        self._model_decision(work, agent_id, plan)
         self._finish_agent_turn(work)
+
+    @staticmethod
+    def _interrupt_kinds(w: WorldState, agent: Agent, store: Any) -> list[str]:
+        """A-SKILL-9: the unread arrival kinds listed in ``rules.skills.interrupt_on``."""
+        interrupt_on = set(w.rules.skills.interrupt_on)
+        unread_kinds = {r.kind for r in context.unread_records(store) if not is_runner_feedback(r)}
+        return sorted(interrupt_on & unread_kinds)
+
+    # -- round decisions (A-SCHED-5 / A-SCHED-6) ------------------------------------
+
+    def _fresh_call_id(self, turn_id: str, work: _TurnWork) -> str:
+        """``mc_{turn_id}_{n:02d}`` with ``n`` past every id already used for ``turn_id``:
+        in this attempt, in carried records, and every id this worker started a call with (a
+        discarded or interrupted decision of the round is committed in another turn's folder).
+        An id is taken for good only when its call starts (``_start_call_record``)."""
+        used = [_call_index(r.call_id) for r in work.model_calls if r.turn_id == turn_id]
+        with self._lock:
+            used += [_call_index(r.call_id) for r in self._carried_calls if r.turn_id == turn_id]
+            prefix = f"mc_{turn_id}_"
+            used += [_call_index(c) for c in self._issued_call_ids if c.startswith(prefix)]
+        return f"mc_{turn_id}_{(max(used) + 1 if used else 1):02d}"
+
+    def _start_call_record(self, record: ModelCallRecord) -> None:
+        """Write the pending file BEFORE the call and take its id for good."""
+        storage.write_pending_model_call(self.run_id, record)
+        with self._lock:
+            self._issued_call_ids.add(record.call_id)
+
+    def _ensure_plans(self, work: _TurnWork, basis: tuple[str, tuple[str, ...]]) -> None:
+        """Make the round's decisions when they are missing: at the first turn of a round,
+        and after a reopen, an operator edit or an error left the round without them.
+        Decisions are made for the agents from the current scheduler position on."""
+        with self._lock:
+            ready = self._plans_round == work.round
+        if ready:
+            return
+        self._discard_plans(work, STALE_PLAN_MESSAGE)
+        if self._plans_round is None:
+            try:  # a fresh worker: ids a previous process committed in this round stay taken
+                committed = storage.model_call_ids_in_round(self.run_id, work.round)
+            except Exception:  # noqa: BLE001 - only weakens the id guard
+                committed = set()
+            with self._lock:
+                self._issued_call_ids |= committed
+        self._plan_round(work, work.scheduler.next_index)
+        with self._lock:
+            self._plans_basis = basis
+
+    def _plan_round(self, work: _TurnWork, from_index: int) -> None:
+        """A-SCHED-5: every agent scheduled from ``from_index`` on decides NOW, from the world
+        and its knowledge as they are, and all model calls start at once on the shared pool.
+        Skipped here (decided at their own turn): dead or removed agents, waiting agents.  A
+        running skill resumes at the agent's turn unless an unread arrival interrupts it."""
+        w = work.world
+        order = list(work.scheduler.order)
+        plans: dict[str, _Plan] = {}
+        can_spend = not self._budget_reached(work)
+        pool = decision_pool() if can_spend else None
+        for index in range(from_index, len(order)):
+            agent_id = order[index]
+            agent = w.agents.get(agent_id)
+            if agent is None or not agent.alive or agent.wait_turns_remaining > 0:
+                continue
+            _kind, turn_index, _agent, turn_id = boundary_of(work.round, order, index)
+            store = work.cp.knowledge.get(agent_id) or context.new_knowledge(agent_id)
+            interrupt: list[str] = []
+            execution = agent.skill_execution
+            seen_as: Optional[Agent] = None
+            if execution is not None and execution.status == "running":
+                interrupt = self._interrupt_kinds(w, agent, store)
+                if not interrupt:
+                    plans[agent_id] = _Plan(agent_id=agent_id, turn_id=turn_id, source="skill")
+                    continue
+                # the skill will be stopped at the turn (A-SKILL-9): the packet shows it stopped
+                seen_as = agent.model_copy(update={"skill_execution": skills.stop_execution(copy.deepcopy(execution), "interrupted")})
+            packet, record = self._prepare_call(work, agent_id, store, turn_id, turn_index, self._fresh_call_id(turn_id, work), seen_as)
+            plans[agent_id] = _Plan(agent_id=agent_id, turn_id=turn_id, source="model", interrupt=interrupt, packet=packet, record=record)
+        # Every packet is built before the first call starts, so a failure while building one
+        # never leaves paid calls running that nothing tracks.
+        for plan in plans.values():
+            if plan.source == "model" and plan.packet is not None and plan.record is not None and plan.packet.affordable and pool is not None:
+                self._start_call_record(plan.record)
+                plan.future = pool.submit(self._call_for_plan, plan.record, plan.cancel)
+        with self._lock:
+            self._plans = plans
+            self._plans_round = work.round
+
+    def _call_for_plan(self, record: ModelCallRecord, cancel: threading.Event) -> ModelResult:
+        """Pool thread: make the call, keep the result on the record and in its pending file
+        (so a crash before the agent's turn still reports the usage).  ``cancel`` is the
+        decision's own event: set when it is voided or the worker stops."""
+        if cancel.is_set():  # voided while queued behind other calls: never start it
+            return ModelResult(request_id=record.call_id, ok=False, status="error", provider=record.provider, model_id=record.model_id,
+                               error="cancelled before the call started", error_code="cancelled")
+        result = model.call_model(record.request, self.registry, cancel=cancel)
+        record.result = result
+        record.finished_at = utc_now_iso()
+        record.status = "completed" if result.status == "ok" else "failed"
+        record.error = result.error if result.status != "ok" else None
+        try:
+            storage.write_pending_model_call(self.run_id, record)
+        except Exception:  # noqa: BLE001 - the worker rewrites the file when the turn takes the result
+            log.exception("could not rewrite pending call %s", record.call_id)
+        return result
+
+    def _take_plan(self, work: _TurnWork) -> Optional[_Plan]:
+        """Remove and return this turn's round decision (None when there is none)."""
+        with self._lock:
+            if self._plans_round != work.round:
+                return None
+            plan = self._plans.pop(work.agent_id or "", None)
+        if plan is not None and plan.turn_id != work.turn_id:
+            self._discard_plan(work, plan, STALE_PLAN_MESSAGE)
+            return None
+        return plan
+
+    def _discard_plans(self, work: _TurnWork, reason: str) -> None:
+        """Void every round decision not taken yet (their calls are recorded, never charged)."""
+        with self._lock:
+            plans = list(self._plans.values())
+            self._plans = {}
+            self._plans_round = None
+            self._plans_basis = None
+            for plan in plans:
+                if plan.record is not None and plan.future is not None:
+                    self._voiding[plan.record.call_id] = plan.record
+        for plan in plans:
+            plan.cancel.set()  # a voided decision's call is cancelled, not waited out
+        for plan in plans:
+            self._discard_plan(work, plan, reason)
+
+    def _discard_plan(self, work: _TurnWork, plan: Optional[_Plan], reason: str) -> None:
+        """A round decision that will never be used: its call is cancelled and waited for (so
+        its usage is known) and recorded as ``failed`` with the reason (removed / dead when that
+        is why, else ``reason``), charged 0, with one ``model_call_failed`` event (infra false)
+        by that agent.  It is recorded in this checkpoint when this is the round end, or the
+        agent's own turn after ``turn_started``; otherwise it waits for the agent's turn in the
+        round (``_flush_leftovers``), so every agent event of an agent turn stays the acting
+        agent's and follows its ``turn_started`` (INTERFACES section 7)."""
+        if plan is None or plan.record is None or plan.future is None:
+            return
+        plan.cancel.set()
+        record = plan.record
+        try:
+            result = plan.future.result()
+        except Exception as exc:  # noqa: BLE001 - call_model never raises; be safe anyway
+            log.exception("round call %s failed in the pool", record.call_id)
+            result = ModelResult(request_id=record.call_id, ok=False, status="error", provider=record.provider,
+                                 model_id=record.model_id, error=self._redact(f"{type(exc).__name__}: {exc}"))
+        agent = work.world.agents.get(record.agent_id)
+        if agent is None:
+            reason = REMOVED_BEFORE_TURN_MESSAGE
+        elif not agent.alive:
+            reason = DEAD_BEFORE_TURN_MESSAGE
+        record.result = result
+        record.finished_at = record.finished_at or utc_now_iso()
+        record.status = "failed"
+        record.error = reason
+        record.charged_compute = 0.0
+        rates = work.world.rules.cognition
+        billed_input = result.usage.billed_input_tokens
+        if result.usage.source == "estimate":
+            billed_input = math.ceil(billed_input * rates.usage_estimate_safety_factor)
+        record.uncharged_compute = context.cognition_cost(rates, record.mind_multiplier, billed_input, result.usage.output_tokens)
+        own_turn_started = record.turn_id == work.turn_id and any(e.kind == "turn_started" for e in work.events)
+        with self._lock:
+            self._voiding.pop(record.call_id, None)
+            if work.kind == "agent_turn" and not own_turn_started:
+                self._leftovers.setdefault(record.turn_id, []).append((record, None))
+                return
+        self._record_unused(work, record)
+
+    def _record_unused(self, work: _TurnWork, record: ModelCallRecord, event: Optional[Event] = None) -> None:
+        """Add an unused round call (and its event, made now unless recovery made it) to ``work``."""
+        work.model_calls.append(record)
+        if event is not None:
+            if event.turn_id != work.turn_id:
+                event.turn_id, event.round, event.turn = work.turn_id, work.round, work.turn_index
+            work.events.append(event)
+            return
+        result = record.result
+        interrupted = record.call_id in self._interrupted_call_ids
+        details: dict[str, Any] = {
+            "call_id": record.call_id,
+            "status": result.status if result else ("interrupted" if interrupted else "failed"),
+            "usage": result.usage.model_dump(mode="json") if result else {},
+            "latency_ms": result.latency_ms if result else 0.0,
+            "attempts": result.attempts if result else 0,
+            "provider_cost_usd": result.provider_cost_usd if result else None,
+            "error": record.error,
+            "infra": interrupted,
+        }
+        if interrupted:
+            details["interrupted"] = True
+            summary = f"{record.agent_id} call {record.call_id} to {record.model_key} was interrupted (outcome uncertain)"
+        else:
+            summary = f"{record.agent_id} call {record.call_id} to {record.model_key} was not used: {record.error}"
+        self._emit(work, record.agent_id, "model_call_failed", summary, details)
+
+    def _flush_leftovers(self, work: _TurnWork, everything: bool = False) -> None:
+        """Record the unused / interrupted round calls waiting for this turn (all of them at
+        the round end or a mid-round finish)."""
+        with self._lock:
+            if everything:
+                waiting = [item for items in self._leftovers.values() for item in items]
+                self._leftovers = {}
+            else:
+                waiting = self._leftovers.pop(work.turn_id, [])
+        for record, event in waiting:
+            self._record_unused(work, record, event)
+
+    def _abandon_plans(self) -> None:
+        """The worker is stopping: cancel the round calls not taken yet and wait for them, so
+        their pending files hold the final usage before the writer lock is released (they are
+        recovered as interrupted calls when the run is opened again)."""
+        with self._lock:
+            plans = list(self._plans.values())
+            self._plans = {}
+            self._plans_round = None
+        waiting = [p.future for p in plans if p.future is not None]
+        if not waiting:
+            return
+        for plan in plans:
+            plan.cancel.set()
+        for future in waiting:
+            try:
+                future.result()
+            except Exception:  # noqa: BLE001
+                log.exception("round call failed while stopping run %s", self.run_id)
 
     def _finish_agent_turn(self, work: _TurnWork) -> None:
         reason = self._finish_reason(work)
         if reason == "all_dead":
+            self._discard_plans(work, DEAD_BEFORE_TURN_MESSAGE)
+            self._flush_leftovers(work, everything=True)  # the round's later turns never come
             work.finished_reason = reason
             self._emit(work, "system", "run_finished", f"run finished: {reason}", {"reason": reason})
         self._commit(work)
@@ -1508,12 +1878,6 @@ class RunWorker:
 
     # -- model decision ----------------------------------------------------------
 
-    def _next_call_id(self, work: _TurnWork) -> str:
-        """``mc_{turn_id}_{n:02d}``; ``n`` continues past ids already used for this turn id
-        (carried failed/interrupted records), so a re-run gets ``_02``."""
-        used = [_call_index(r.call_id) for r in work.model_calls if r.turn_id == work.turn_id]
-        return f"mc_{work.turn_id}_{(max(used) + 1 if used else 1):02d}"
-
     def _budget_reached(self, work: _TurnWork) -> bool:
         """A-COG-7: the run's real provider cost (committed ledger plus the uncommitted
         records of this turn: carried and just answered) reached ``settings.real_budget_usd``."""
@@ -1525,24 +1889,82 @@ class RunWorker:
         spent += sum((r.result.provider_cost_usd or 0.0) for r in work.model_calls if r.result is not None)
         return spent > 0 and spent >= budget
 
-    def _model_decision(self, work: _TurnWork, agent_id: str) -> None:
-        """Packet -> pending record -> call -> charge -> format gate -> decision."""
+    def _prepare_call(
+        self, work: _TurnWork, agent_id: str, store: Any, turn_id: str, turn_index: Optional[int], call_id: str,
+        seen_as: Optional[Agent] = None,
+    ) -> tuple[DecisionPacketRecord, ModelCallRecord]:
+        """Build the decision packet and the pending call record for ``agent_id``'s turn
+        ``turn_id`` from ``work``'s world and the agent's knowledge as they are now (``seen_as``:
+        the agent as its turn will find it, e.g. with an interrupted skill).  Pure: nothing is
+        emitted, charged, written or marked read."""
         w = work.world
-        agent = w.agents[agent_id]
-        store = work.cp.knowledge[agent_id]
+        agent = seen_as if seen_as is not None else w.agents[agent_id]
         settings = work.cp.settings
         model_key = settings.effective_model_key(agent_id)
         effective = settings.effective_context(agent_id)
         ref = self.registry.get(model_key)
         mind = w.rules.cognition.multiplier_for(model_key)
         overhead = model.request_overhead_tokens(model_key, self.registry)
-        situation = context.build_situation(agent, store, w.rules, effective, w.round, work.turn_id)
-        packet_id = f"pk_{work.turn_id}"
+        situation = context.build_situation(agent, store, w.rules, effective, w.round, turn_id)
+        packet_id = f"pk_{turn_id}"
         packet = context.build_packet(
-            agent, store, situation, w.rules, effective, ref.capabilities, mind, agent.stats.compute, overhead, work.turn_id, packet_id, w.round
+            agent, store, situation, w.rules, effective, ref.capabilities, mind, agent.stats.compute, overhead, turn_id, packet_id, w.round
         )
+        request = ModelRequest(
+            request_id=call_id,
+            model_key=model_key,
+            messages=list(packet.messages),
+            response_schema=decision_json_schema(),
+            max_output_tokens=packet.generation_allowance or effective.generation_allowance,
+            timeout_seconds=config.MODEL_TIMEOUT_SECONDS,
+            max_retries=config.MODEL_MAX_RETRIES,
+            purpose="decision",
+            metadata={
+                "agent_id": agent_id,
+                "turn_id": turn_id,
+                "round": w.round,
+                "situation": situation.model_dump(mode="json"),
+                "fake_script": settings.fake_scripts.get(agent_id),
+                "fake_script_index": agent.model_call_count,
+                "fake_options": settings.fake_options.get(agent_id, {}),
+            },
+        )
+        record = ModelCallRecord(
+            call_id=call_id,
+            turn_id=turn_id,
+            round=w.round,
+            turn=turn_index,
+            agent_id=agent_id,
+            purpose="decision",
+            model_key=model_key,
+            provider=ref.provider,
+            model_id=ref.model_id,
+            ref_snapshot=ref,
+            status="pending",
+            started_at=utc_now_iso(),
+            request=request,
+            packet_id=packet_id,
+            reservation_compute=packet.reservation_compute,
+            mind_multiplier=mind,
+        )
+        return packet, record
+
+    def _model_decision(self, work: _TurnWork, agent_id: str, plan: Optional[_Plan] = None) -> None:
+        """Packet -> pending record -> call -> charge -> format gate -> decision.  With a round
+        decision (``plan``, A-SCHED-5) the packet was built and the call started at round start
+        and this only waits for the answer; without one the agent decides now."""
+        w = work.world
+        agent = w.agents[agent_id]
+        store = work.cp.knowledge[agent_id]
+        if plan is not None and plan.packet is not None and plan.record is not None:
+            packet, record, future = plan.packet, plan.record, plan.future
+        else:
+            packet, record = self._prepare_call(work, agent_id, store, work.turn_id, work.turn_index, self._fresh_call_id(work.turn_id, work))
+            future = None
+        model_key = record.model_key
+        call_id = record.call_id
         work.packets.append(packet)
-        work.packet_id = packet_id
+        work.packet_id = packet.packet_id
         if not packet.affordable:
             reason = packet.unaffordable_reason or "packet unaffordable"
             self._emit(
@@ -1564,67 +1986,30 @@ class RunWorker:
             )
             work.decision_source = "skipped_unaffordable"
             return
-        if self._budget_reached(work):
-            raise _TurnFailure(HOST_BUDGET_MESSAGE)
-        call_id = self._next_call_id(work)
-        request = ModelRequest(
-            request_id=call_id,
-            model_key=model_key,
-            messages=list(packet.messages),
-            response_schema=decision_json_schema(),
-            max_output_tokens=packet.generation_allowance or effective.generation_allowance,
-            timeout_seconds=config.MODEL_TIMEOUT_SECONDS,
-            max_retries=config.MODEL_MAX_RETRIES,
-            purpose="decision",
-            metadata={
-                "agent_id": agent_id,
-                "turn_id": work.turn_id,
-                "round": w.round,
-                "situation": situation.model_dump(mode="json"),
-                "fake_script": settings.fake_scripts.get(agent_id),
-                "fake_script_index": agent.model_call_count,
-                "fake_options": settings.fake_options.get(agent_id, {}),
-            },
-        )
-        record = ModelCallRecord(
-            call_id=call_id,
-            turn_id=work.turn_id,
-            round=w.round,
-            turn=work.turn_index,
-            agent_id=agent_id,
-            purpose="decision",
-            model_key=model_key,
-            provider=ref.provider,
-            model_id=ref.model_id,
-            ref_snapshot=ref,
-            status="pending",
-            started_at=utc_now_iso(),
-            request=request,
-            packet_id=packet_id,
-            reservation_compute=packet.reservation_compute,
-            mind_multiplier=mind,
-        )
-        storage.write_pending_model_call(self.run_id, record)
+        if future is None:
+            if self._budget_reached(work):
+                raise _TurnFailure(HOST_BUDGET_MESSAGE)
+            self._start_call_record(record)
         work.model_calls.append(record)
         self._emit(
             work,
             agent_id,
             "model_call_pending",
-            f"{agent_id} waiting for {model_key} ({ref.provider}/{ref.model_id})",
-            {"call_id": call_id, "model_key": model_key, "provider": ref.provider, "model_id": ref.model_id, "reservation_compute": packet.reservation_compute},
+            f"{agent_id} waiting for {model_key} ({record.provider}/{record.model_id})",
+            {"call_id": call_id, "model_key": model_key, "provider": record.provider, "model_id": record.model_id, "reservation_compute": packet.reservation_compute},
             pending=True,
         )
         with self._lock:
             self._pending = (record, packet)
         self._set_state("waiting_model")
         try:
-            result = model.call_model(request, self.registry)
+            result = future.result() if future is not None else model.call_model(record.request, self.registry)
         finally:
             with self._lock:
                 self._pending = None
             self._set_state("turn_active")
         record.result = result
-        record.finished_at = utc_now_iso()
+        record.finished_at = record.finished_at or utc_now_iso()
         record.status = "completed" if result.status == "ok" else "failed"
         record.error = result.error if result.status != "ok" else None
         if record.status == "failed" and not record.error:
@@ -2691,12 +3076,12 @@ class RunManager:
             closing = list(self._closing.values())
             self._workers.clear()
             self._closing.clear()
-        for worker in workers:
+        for worker in workers:  # every worker is told first, so their waiting round calls are all cancelled at once
             try:
-                worker.stop()
+                worker.stop(wait=False)
             except Exception:  # noqa: BLE001
                 log.exception("could not stop worker %s", worker.run_id)
-        for worker in closing:
+        for worker in workers + closing:
             worker.join()
 
     # -- listing and history (thin storage wrappers, live overlay) ------------------

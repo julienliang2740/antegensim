@@ -1121,16 +1121,31 @@ _turn():
   check finish: no living agents (or max_rounds reached at a round boundary, evaluated BEFORE the new round starts)
   if scheduler.round_complete: start the round: world.round += 1, order = world.compute_initiative (the RNG consumed once), next_index = 0,
      round_complete = False; if the first agent differs from the provisional one re-stamp the events/records; event round_started
-  if finished: commit a final checkpoint under the boundary id if needed (agent-turn kind, slot consumed — pinned below), status = finished, event run_finished; return
-  if round-end turn: outcome = world.end_round(world); route notices; events; scheduler.round_complete = True; commit; return
-  next_index += 1; a scheduled id no longer in world.agents commits a skipped_removed checkpoint (A-SCHED-4)
-  agent turn:
-     event turn_started
-     if not agent.alive: decision_source = skipped_dead; commit; return
+  if finished: record every waiting round decision and leftover (A-SCHED-6); commit a final checkpoint under the boundary id if needed (agent-turn kind, slot consumed — pinned below), status = finished, event run_finished; return
+  if round-end turn: record every waiting round decision and leftover (A-SCHED-6); outcome = world.end_round(world); route notices; events; scheduler.round_complete = True; commit; return
+  round decisions (A-SCHED-5), at an agent-turn boundary:
+     basis = (committed turn id, ids of the edits applied at this boundary)
+     if edits were applied at this boundary and the round's decisions were not made on this same basis (the re-run of the boundary that
+        made them, after an error, with the same edits keeps them): void every waiting round decision (A-SCHED-6): each call is cancelled
+        through its own cancel event, waited for, and recorded in its agent's turn after turn_started (reason: removed / dead / edited)
+     if the round has no decisions yet (its first turn, or after an open, an edit or a void): plan from next_index (basis remembered):
+        for each scheduled agent from next_index that exists, is alive and is not waiting:
+           if its skill is running and no unread interrupt_on arrival (same rule as below): plan "skill" (no call)
+           else: situation + packet built NOW from the world and knowledge as they are (an interrupted skill shown stopped); call id mc_{that agent's turn id}_{n} past every id
+              this worker started (a fresh worker first reads storage.model_call_ids_in_round); when the packet is affordable and the host
+              budget is not reached (every packet is built before the first call starts): write the pending record, submit
+              model.call_model(cancel=the decision's own event, set when it is voided or the worker stops) to the process-wide pool
+              (config.MODEL_CALL_CONCURRENCY workers shared by every open run); the pool thread stores the result on the record and rewrites
+              its pending file
+  next_index += 1; a scheduled id no longer in world.agents commits a skipped_removed checkpoint (A-SCHED-4; its unused decision recorded after turn_started, reason removed)
+  agent turn: take the agent's round decision (if any)
+     event turn_started; record the unused / interrupted round calls waiting for THIS turn id (leftovers, A-SCHED-6)
+     if not agent.alive: decision_source = skipped_dead; record its unused round decision (failed, charged 0, error "discarded: ...", model_call_failed infra false); commit; return
      if agent.wait_turns_remaining > 0: wait_turns_remaining -= 1; decision_source = wait; commit; return
      resumed = False
      if agent.skill_execution and agent.skill_execution.status == "running":
-          if any unread record kind in rules.skills.interrupt_on (the runner's own feedback records — content keys
+          if the round decision is "skill": no interrupt this round (arrivals during the round count next round)
+          elif any unread record kind in rules.skills.interrupt_on (decided at round start; the runner's own feedback records — content keys
              cognition_charged / reason / skill — never count, only arrivals do): skills.stop_execution(state, "interrupted"); event skill_finished; (fall through to a model decision)
           else:
             resumed = True; decision_source = skill; outcome = skills.run_until_action(...) with state.ops_this_turn seeded from the ops already spent this agent turn (the cap is per turn, a fresh run_skill after a fall-through continues the count); charge interpreter cost (total_interpreter_spent); event skill_step
@@ -1138,11 +1153,13 @@ _turn():
             if outcome.invalid_action: event action (result invalid_argument, cost 0); last_action/last_result; record_action_result; commit; return
             if state.status == "running" (op budget yield): event skill_step; action_result = None; commit; return
             else (finished/stopped/error): event skill_finished/skill_error; on error: last_result = ActionResult(ok=False, reason="skill_error"), system knowledge record; then CONTINUE into a model decision in this same turn (A-SKILL-11)
-     packet: situation = context.build_situation(...); settings = effective; capabilities = registry; overhead = model.request_overhead_tokens
+     packet: the round decision's packet (built at round start); without one (a skill that fell through, A-SKILL-11; the re-run of a failed turn)
+          build it now: situation = context.build_situation(...); settings = effective; capabilities = registry; overhead = model.request_overhead_tokens
           packet = context.build_packet(..., compute_available=agent.stats.compute, overhead_tokens=overhead); store packet record
           if not packet.affordable: event resource_skip (exact reason and balance); balance-free system knowledge record; decision_source = skipped_unaffordable; commit; return
-     model call: record = ModelCallRecord(status=pending, ref_snapshot) -> storage.write_pending_model_call; event model_call_pending; status = waiting_model
-          result = model.call_model(request, registry); status = turn_active; rewrite the pending file with the result
+     model call: the round decision's record and future; without one: host budget check, record = ModelCallRecord(status=pending, ref_snapshot) -> storage.write_pending_model_call
+          event model_call_pending; status = waiting_model
+          result = the future's result (or model.call_model(request, registry) now); status = turn_active; rewrite the pending file with the result
           if settings.real_budget_usd reached (committed ledger + this turn's uncommitted records) -> error "host budget exhausted" (the call record and events are carried); the ledger itself is updated at commit
           if result.status in INFRA_STATUSES: event model_call_failed(infra=true); NO charge; NO mark_read; run -> error (last_error "provider failure: <status>"); return   (A-COG-5)
           agent.model_call_count += 1; context.mark_read(packet.digest_record_ids)   (A-KNOW-5)
@@ -1198,7 +1215,14 @@ Recovery on open (`RunManager.open_run`): `storage.recover_run` → leftover pen
 `ModelCallRecord(status="failed", error="interrupted (outcome uncertain)", charged 0)` with a
 `model_call_failed` event (`infra: true, interrupted: true`); their usage is added to
 `manifest.real_usage` (`interrupted_calls`). The worker keeps them and carries them into the
-next committed turn (same turn id re-run; the new call gets the next index). The turn is
+next committed turn (same turn id re-run; the new call gets the next index). A-SCHED-5: a
+recovered record made for a later agent turn than the next one, in the round in progress or (at a
+round boundary) the round about to start, instead waits for that turn and is recorded there (or at
+the round end when that turn never comes; its `model_call_failed` event is made then, so event seqs
+keep increasing along the chain); the status ledger shows it meanwhile. Stopping a worker (close,
+shutdown) cancels the waiting round calls of the later turns at once, lets the active turn's own
+call finish, and waits for all of them before the writer lock is freed, so their pending files hold
+the final usage; `RunManager.shutdown` tells every worker first and then joins them. The turn is
 re-run from the last complete checkpoint, so no committed action is repeated. Recovery from
 `error` inside a process works the same way (the failed attempt's call record and `error`
 event are carried; a call the attempt had answered and charged is carried as `failed`,
@@ -1609,6 +1633,23 @@ Applied for the attack damage cap (A-ACT-19):
   the run-start record, the believed-self line and the query(self) description name `attack_cap`.
 * `types.ts`: `AgentStats.attack_cap`, `BelievedSelf.attack_cap`, `UpgradeSchedule.attack_cap_*`,
   `UpgradeAttribute` / `UPGRADE_ATTRIBUTES` += `attack_cap`.
+
+Applied for simultaneous round decisions (A-SCHED-5, A-SCHED-6; 2026-09-27): the runner makes every
+agent's model decision of a round at round start from the world as it is then and runs the calls at
+once on `runner.decision_pool()` (`config.MODEL_CALL_CONCURRENCY`, env `EMPYREAN_MODEL_CONCURRENCY`,
+default 16, shared by every open run); the turns resolve in initiative order as before, each action
+checked against the world as the faster agents left it. Formats are unchanged: one `agent_turn`
+checkpoint per scheduled agent, the same ids, events, packet and call records; a round decision's
+`model_call_pending` / `model_call_completed` events are emitted at the agent's own turn. New:
+unused round decisions are `failed` call records (charged 0, measured cost as `uncharged_compute`,
+`error` = `runner.DEAD_BEFORE_TURN_MESSAGE` / `REMOVED_BEFORE_TURN_MESSAGE` /
+`EDITED_BEFORE_TURN_MESSAGE` / `STALE_PLAN_MESSAGE`) with one `model_call_failed` event (infra
+false), recorded in the agent's own turn of the round; `storage.model_call_ids_in_round(run_id,
+round)` seeds the call-id guard of a freshly opened worker; `RunStatus.real_usage` also counts the
+round calls not yet taken by their turns; `GET .../model_calls/{call_id}` and
+`.../decision_packets/{packet_id}` of the live turn also find them. The A-SKILL-9 interrupt check
+moved to round start; the A-SKILL-11 fall-through decision is made at that moment. The agent's
+stable rules explain the new timing.
 
 Applied for 64 agents (2026-09-27): `schemas.MIN_AGENT_CARDS = 6` / `MAX_AGENT_CARDS = 64` bound
 `RunCreateRequest.agents` (was `max_length=12`) and `config.MIN_AGENTS` / `MAX_AGENTS` re-export them, with

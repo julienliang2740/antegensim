@@ -34,7 +34,8 @@ assistant (part of its always-loaded knowledge). Numbers are shipped defaults; s
 * **Attack cap** (`attack_cap`): the most damage one attack can deal (50 to start, +25 per
   upgrade, priced like attack). A larger budget is cut to attack cap ÷ attack and only that is
   charged; a target with more health needs several hits (A-ACT-19).
-* **Speed**: initiative order only.
+* **Speed**: initiative order only: the order in which the round's decisions resolve, so the
+  faster agent gets a contested fruit or strikes first (A-SCHED-5). Never extra turns.
 * **Vision range / communication range**: Manhattan distance for observe/query and send/broadcast
   (0 at the start: own point only).
 * **Compute absorption / essence absorption**: the fraction kept when absorbing (0.20 / 0.10).
@@ -53,7 +54,14 @@ assistant (part of its always-loaded knowledge). Numbers are shipped defaults; s
 
 ## Time and turns
 
-* **Round**: every living agent acts once, then the round-end step.
+* **Round**: every agent that thinks decides at round start (all at once), then every living agent
+  acts once in initiative order, then the round-end step.
+* **Round decision** (A-SCHED-5): an agent's model decision for the round, made at round start
+  from the world and its knowledge as they were then; all of a round's model calls run at the
+  same time (`EMPYREAN_MODEL_CONCURRENCY`). It resolves at the agent's turn, checked against the
+  world as the faster agents left it. An **unused decision** (the agent died or was removed before
+  its turn, or an operator edit landed mid-round) is recorded as a failed call, never charged
+  (A-SCHED-6).
 * **Turn**: one committed step: `init`, `agent_turn` or `round_end`.
 * **Turn id**: `r00000_init`, `r{round:05d}_t{index:02d}_{agent}`, `r{round:05d}_end`.
 * **Initiative**: the per-round order (sorted ids, seeded shuffle, stable sort by speed).

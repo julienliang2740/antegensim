@@ -1441,8 +1441,10 @@ def _world_block(rules: RulesConfig) -> str:
         "and the region edge block moves; water can be crossed but grows nothing.",
         f"- Distances are Manhattan; range 0 means your own point only. {sense}send and broadcast reach agents "
         f"within your communication_range.{reach}",
-        "- Time runs in rounds. Each living agent gets one world-action turn per round; higher speed acts earlier. "
-        "After all turns, plants grow and make fruit and seeds, upkeep is paid and deaths resolve.",
+        "- Time runs in rounds. All living agents decide at the same time at round start, from what they know "
+        "then; the actions then resolve one by one in speed order (highest first, ties random), so a faster agent "
+        "may take the fruit, move or kill before your action resolves and is checked. What the others do this round "
+        "reaches you at your next decision. After all turns, plants grow and make fruit and seeds, upkeep is paid and deaths resolve.",
         "- Compute is energy: world actions, thinking (every model decision) and skill interpretation spend it. "
         "Essence is a vital resource held up to essence_capacity and spent on upgrades. At 0 health you die.",
         f"- Upkeep: {_num(rules.upkeep.compute_per_round)} compute per round at round end; if you cannot pay it "

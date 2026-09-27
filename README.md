@@ -69,6 +69,7 @@ Backend options (environment variables or `.env`):
 | `EMPYREAN_LOG_LEVEL` | `INFO` | Backend log level |
 | `EMPYREAN_FSYNC` | `1` | `0` skips fsync of turn files: commits are about 2.5x faster and a process crash is still safe, but a power loss is not |
 | `EMPYREAN_FSYNC_WORKERS` | `8` | Threads that fsync turn files in parallel |
+| `EMPYREAN_MODEL_CONCURRENCY` | `16` | Model calls that run at once, shared by every open run in the process. Every agent decides at round start and the round's calls run together, so a round costs about one call's latency (A-SCHED-5). Each `claude_cli` call is a ~250 MB subprocess: lower it on a small machine |
 | `EMPYREAN_CODE_REVISION` | `dev` | Label written into each manifest and turn record |
 | `EMPYREAN_API_PROXY` (frontend) | `http://127.0.0.1:8000` | Where the Vite dev server sends `/api` |
 | `EMPYREAN_ASSISTANT_MODEL_CHAT` | `claude-cli-sonnet-assistant` | Model key of the assistant drawer |

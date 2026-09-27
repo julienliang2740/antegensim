@@ -324,6 +324,11 @@ DEFAULT_PLAY_DELAY_SECONDS = 0.2
 
 MODEL_TIMEOUT_SECONDS = 90.0  # per attempt
 MODEL_MAX_RETRIES = 2  # retries after the first attempt (timeouts / retryable HTTP only)
+# Decision concurrency (A-SCHED-5): every agent that thinks in a round gets its model call
+# at round start, and all of them run at once on one process-wide thread pool of this size
+# (shared by every open run in the process), so a round costs about one call's latency.
+# Lower it on a small machine: each claude_cli call is a subprocess of ~250 MB.
+MODEL_CALL_CONCURRENCY = max(1, int(_env("EMPYREAN_MODEL_CONCURRENCY", "16")))
 RETRY_BACKOFF_SECONDS = [1.0, 2.0]  # before retry 1, retry 2, ...
 RETRY_AFTER_MAX_SECONDS = 10.0  # honour Retry-After up to this
 ERROR_TEXT_MAX_CHARS = 500  # every stored error string is redacted and capped
@@ -807,7 +812,7 @@ ASSUMPTIONS: dict[str, Assumption] = {
         key="rules.skills.interrupt_on",
         default=[],
         citation="Spec: 'Purpose and scope' (unresolved rules must be configurable); Design: 'Observe query and action feedback' (events available at the skill-resume boundary)",
-        rationale="An unread record of a listed kind stops the running skill at its resume boundary ('interrupted') and the agent takes a model decision that turn; default off.",
+        rationale="An unread record of a listed kind stops the running skill at its resume boundary ('interrupted') and the agent takes a model decision that turn; default off. The check is made at round start with every decision (A-SCHED-5), so an arrival during the round interrupts at the next round.",
     ),
     "A-SKILL-10": Assumption(
         key="events inside skills",
@@ -817,7 +822,7 @@ ASSUMPTIONS: dict[str, Assumption] = {
     ),
     "A-SKILL-11": Assumption(
         key="skill ends on a resumed turn without an action",
-        default="the skill event is emitted (interpreter ops charged first) and the agent continues into a normal model decision in the SAME turn; a run_skill from a model decision that ends without an action uses the turn",
+        default="the skill event is emitted (interpreter ops charged first) and the agent continues into a normal model decision in the SAME turn, made at that moment from the world as it is (not a round-start decision, A-SCHED-5); a run_skill from a model decision that ends without an action uses the turn",
         citation="Design: 'Turns speed and skill execution' ('Chaining five moves in a saved skill therefore takes five turns')",
         rationale="Design example 1 uses exactly 3 agent turns; the 4th turn is a model decision.",
     ),
@@ -979,7 +984,7 @@ ASSUMPTIONS: dict[str, Assumption] = {
     ),
     "A-SCHED-2": Assumption(
         key="agents that die mid-round",
-        default="skipped when their turn comes; a dead agent gets a 'skipped_dead' turn record only if it was scheduled",
+        default="skipped when their turn comes; a dead agent gets a 'skipped_dead' turn record only if it was scheduled; its round-start decision (A-SCHED-5) is recorded there as an unused call (failed, never charged)",
         citation="Spec: 'Turn orchestration' step 2 ('Select the next living agent')",
         rationale="Order is fixed at round start; dead agents are skipped, not removed.",
     ),
@@ -988,6 +993,18 @@ ASSUMPTIONS: dict[str, Assumption] = {
         default="when no living agents remain, or max_rounds reached; run_turn/play in 'finished' apply staged edits and re-check the condition (stays finished if it still holds)",
         citation="Spec: 'Sessions and run controls' ('until paused or the run stops')",
         rationale="Status 'finished' with finished_reason; place_entity or update_run_settings can revive a run.",
+    ),
+    "A-SCHED-5": Assumption(
+        key="decision timing within a round",
+        default="simultaneous: at round start every living agent that is not waiting and has no running skill (or whose skill an unread arrival interrupts) gets its packet built from the world and its knowledge as they are then, and all these model calls run at once (process-wide pool of EMPYREAN_MODEL_CONCURRENCY); the turns then resolve one by one in initiative order (A-SCHED-1), each action checked against the world as it is at that turn",
+        citation="Operator request 2026-09-27 (async batch rounds: speed resolves conflicts, a round of 20 agents costs about one call's latency); Design: 'Turns speed and skill execution' (one turn per round, speed orders the turns)",
+        rationale="Conflicts (two agents after one fruit, mutual attacks) are resolved by speed: the faster action lands first and the slower one fails its legality check (empty_source, target_gone, out_of_range, dead). Running skills act at their turn without a call; a skill that ends there falls through to a decision made at that moment (A-SKILL-11).",
+    ),
+    "A-SCHED-6": Assumption(
+        key="round decisions that are never used",
+        default="cancelled and recorded as failed calls (charged 0, measured cost as uncharged_compute) in the agent's own turn of the round after its turn_started (or the round end / final checkpoint): an agent that died or was removed before its turn; every waiting decision when an operator edit is applied at a boundary after the decisions were made (the rest of the round decides again from the edited world, new call ids); closing a run mid-round cancels the waiting calls, which come back as interrupted when the run is opened",
+        citation="Spec: 'avoid duplicate usage accounting'; INTERFACES section 7 (agent events of an agent turn are the acting agent's)",
+        rationale="Every billed call reaches the ledger exactly once and no call id is reused; nobody is charged for a decision that could not be acted on.",
     ),
     "A-SCHED-4": Assumption(
         key="removed and placed agents vs the round order",

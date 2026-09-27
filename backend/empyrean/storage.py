@@ -1073,6 +1073,28 @@ def write_pending_model_call(run_id: str, record: ModelCallRecord) -> None:
     atomic_write_json(pending_dir / f"{name}.json", record, fsync=True)
 
 
+def model_call_ids_in_round(run_id: str, round_no: int) -> set[str]:
+    """Every model call id already committed in the turns of round ``round_no`` (read from
+    each turn's ``model_calls/index.json``).  The runner seeds its call-id counter with it
+    when it plans a round on a freshly opened worker, so a decision made for a turn whose
+    earlier (interrupted or discarded) call was committed in another turn of the round never
+    reuses that id.  Unreadable indexes are skipped."""
+    rdir = find_run_dir(run_id)
+    ids: set[str] = set()
+    for entry in list_turns(run_id, round_no, round_no):
+        path = rdir / TURNS_DIR / _check_name(entry.turn_id, "turn id") / MODEL_CALLS_DIR / MODEL_CALLS_INDEX
+        if not path.exists():
+            continue
+        try:
+            rows = read_json(path)
+        except Exception:  # noqa: BLE001 - a damaged index only weakens the id guard
+            continue
+        for row in rows if isinstance(rows, list) else []:
+            if isinstance(row, dict) and isinstance(row.get("call_id"), str):
+                ids.add(row["call_id"])
+    return ids
+
+
 def list_pending_model_calls(run_id: str) -> list[ModelCallRecord]:
     """Pending call files as stored (status "pending", or with the result once the call
     returned), in call id order.  Unreadable files are logged and skipped here;

@@ -69,11 +69,23 @@ Disk used by QA so far: `qa/resilience/worlds` holds about 516 MB (runs on the p
 
 ## Runs with many agents
 
-The agent limit is 64 (`config.MAX_AGENTS`, raised from 12 on 2026-09-27). Only a short fake-model run has used more than 12 agents: 64 agents for 3 rounds ran in about 10 s per round of engine time and wrote about 200 KB per turn (39 MB for 197 turns). Live runs store far more because knowledge grows over the run: the 12-agent, 98-round live "Blood arena" run takes 1.5 GB (about 2.9 MB per turn), so a 100-round live run with 64 agents (about 6,500 turns) could need tens of GB of disk. Every living agent that is not running a skill makes one model call per round, so a 64-agent round costs about five times a 12-agent round in money and time (about 5-8 s per Haiku call, taken one after another), and storage grows with the number of agents whose knowledge changes each turn. The run page's roster, the map and the default 21 × 21 region were designed around a dozen agents; with 64 the default start positions reach Manhattan radius 6 around the origin.
+The agent limit is 64 (`config.MAX_AGENTS`, raised from 12 on 2026-09-27). Only a short fake-model run has used more than 12 agents: 64 agents for 3 rounds ran in about 10 s per round of engine time and wrote about 200 KB per turn (39 MB for 197 turns). Live runs store far more because knowledge grows over the run: the 12-agent, 98-round live "Blood arena" run takes 1.5 GB (about 2.9 MB per turn), so a 100-round live run with 64 agents (about 6,500 turns) could need tens of GB of disk. Every living agent that is not running a skill makes one model call per round, so a 64-agent round costs about five times a 12-agent round in money. Since the round decisions (A-SCHED-5) the calls of a round run at once, up to `EMPYREAN_MODEL_CONCURRENCY` (16) per backend process, so a round's wall time is about one call per 16 thinking agents plus the turn commits, which stay one after another (a large run's commit writes about 1-3 MB and takes a noticeable share of a CPU core: a backend hosting many large runs is limited by one core). Storage grows with the number of agents whose knowledge changes each turn. The run page's roster, the map and the default 21 × 21 region were designed around a dozen agents; with 64 the default start positions reach Manhattan radius 6 around the origin.
 
 The assistant's create-run brief writes its overlay within the chat output allowance (6000 tokens, `config.ASSISTANT_OUTPUT_TOKENS`), sized for about a dozen cards; a brief that writes a custom persona for each of many more agents can run out and fail.
 
 - *Next step:* a 64-agent fake-model run to measure turn time and storage, then a short live run; consider a larger default region for big casts; let briefs describe card patterns instead of writing every card.
+
+## Simultaneous round decisions (A-SCHED-5)
+
+Every agent's decision for a round is made at round start, so some calls are paid for and never used:
+
+* an agent killed (or removed) by a faster agent before its turn: its call is recorded as an unused, uncharged call (real money spent);
+* an operator edit applied between two turns of a round voids every decision still waiting, and the rest of the round decides again (those calls are paid twice);
+* closing a run mid-round (leaving the run page, or a backend restart) cancels the waiting calls; answers already in are lost and come back as interrupted calls, and the rest of the round decides again when the run is opened. A single Run turn at the start of a round starts every agent's call of that round.
+
+The host budget (`real_budget_usd`) is checked when a round's calls are started, after each call is answered, and before a call made at the turn itself (a skill that ends without an action, the re-run of a failed turn), so a run can overshoot it by up to one round of calls. A running skill that ends at the agent's turn without an action (A-SKILL-11) and the re-run of a failed turn still make their call at that moment, one after another. A claude_cli call is a subprocess of about 250 MB: 16 at once need about 4 GB of memory, so lower `EMPYREAN_MODEL_CONCURRENCY` on a small machine (the pool is shared by every open run in one backend process).
+
+- *Next step:* keep the answered decisions of a closed run (persist their packets with the pending calls) so a reopen can use them.
 
 ## Provider adapters verified only with mocked payloads
 

@@ -434,6 +434,11 @@ def test_crash_recovery_discards_partial_turn_and_carries_interrupted_call(api, 
         ),
     )
 
+    # A-SCHED-5: the close cancelled the round decisions of the agents after ``last``; their
+    # pending files (one of them replaced by the simulated crash file above) are recovered too.
+    pending_before = len(list((rdir / "working" / "pending_model_calls").glob("*.json")))
+    assert pending_before >= 1
+
     with fresh_api(registry, worlds_dir) as restarted:
         status = restarted.open(run_id)
         assert status["state"] == "paused"
@@ -459,8 +464,12 @@ def test_crash_recovery_discards_partial_turn_and_carries_interrupted_call(api, 
         assert failed_events[0]["details"].get("interrupted") is True
         assert failed_events[0]["costs"]["compute"] == 0
         manifest = restarted.read_json(rdir / "manifest.json")
+        # the next turn's interrupted call is committed now; the round's later ones wait for
+        # their own turns (A-SCHED-5) and are already in the status ledger
         assert manifest["real_usage"]["interrupted_calls"] == 1
-        assert list((rdir / "working" / "pending_model_calls").glob("*.json")) == []
+        assert restarted.status(run_id)["real_usage"]["interrupted_calls"] == pending_before
+        # this turn's pending files are gone; the round's later turns still hold theirs
+        assert list((rdir / "working" / "pending_model_calls").glob(f"mc_{next_turn}_*.json")) == []
         assert_chain(entries, restarted, run_id)
         restarted.close(run_id)
 
