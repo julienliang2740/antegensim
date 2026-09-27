@@ -1,7 +1,7 @@
 /**
  * Minimal hash router (no library):
  *   "#/"                              entry
- *   "#/new"                           new session
+ *   "#/new"                           new session; "?clone=<run_id>" prefills its original setup
  *   "#/resume"                        saved sessions
  *   "#/run/<run_id>"                  a run, optionally "?turn=<turn_id>" to open it on a recorded turn
  *   "#/instructions"                  "How the world works", optionally "?section=<id>" to open at a section
@@ -16,7 +16,7 @@ import { useEffect, useState } from "react";
 
 export type Route =
   | { name: "entry" }
-  | { name: "new" }
+  | { name: "new"; cloneRunId?: string }
   | { name: "resume" }
   | { name: "run"; runId: string; turnId: string | null }
   | { name: "instructions"; section: string | null }
@@ -41,7 +41,7 @@ export function parseHash(hash: string): Route {
   const [pathPart, queryPart] = raw.split("?");
   const parts = pathPart.split("/").filter(Boolean);
   const query = new URLSearchParams(queryPart ?? "");
-  if (parts[0] === "new") return { name: "new" };
+  if (parts[0] === "new") return query.get("clone") ? { name: "new", cloneRunId: query.get("clone")! } : { name: "new" };
   if (parts[0] === "resume") return { name: "resume" };
   if (parts[0] === "run" && parts[1]) {
     return { name: "run", runId: decodePart(parts[1]) ?? parts[1], turnId: query.get("turn") };
@@ -59,7 +59,7 @@ export function routeHash(route: Route): string {
     case "entry":
       return "#/";
     case "new":
-      return "#/new";
+      return `#/new${route.cloneRunId ? `?clone=${encodeURIComponent(route.cloneRunId)}` : ""}`;
     case "resume":
       return "#/resume";
     case "run":

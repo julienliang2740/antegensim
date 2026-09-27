@@ -24,7 +24,7 @@ import { StoryPage } from "./pages/StoryPage";
 function renderPage(route: Route) {
   switch (route.name) {
     case "new":
-      return <NewSessionPage />;
+      return <NewSessionPage key={route.cloneRunId ?? "new"} cloneRunId={route.cloneRunId} />;
     case "resume":
       return <ResumePage />;
     case "run":

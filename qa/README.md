@@ -200,3 +200,7 @@ The refined run layout places the map-view switch in the board header and histor
 `node qa/replay_refinement_check.mjs` (from the repository root) uses the recorded SWEEP-B2v2 run by default. Set `QA_RUN_ID` for another existing recording, with at least two rounds. It never sends simulation commands. It checks 2D wheel zoom, visible action cues, delayed checkpoint loading, stop/manual navigation/end-of-record behavior, crossing rounds, replay from the beginning at the latest checkpoint, newly appended checkpoints (mocked browser responses), CPU 3D repeated playback, reduced motion and mobile layout. Screenshots go to `/tmp/empyrean-replay-check/`. `BASE_URL` and `API_URL` use the same defaults as the main suite.
 
 The run-page checks open Session, Inspector and Activity panels through the workspace buttons when needed. The saved replay check also asserts that the board occupies the primary workspace and opening tools does not reduce its dimensions.
+
+### Clone a saved setup
+
+`node qa/clone_setup_check.mjs` tests the Resume page's **Clone setup** action through validation and creation. It creates temporary fake-model sessions without running any turns, checks all original fields and 16 agent cards, distinct world/run ids, an unchanged source, single-selection gating, archived sources, reload, missing-source errors and isolation from pending assistant drafts. It removes only its own test sessions afterward. `BASE_URL` and `API_URL` override the running UI and backend addresses.

@@ -105,6 +105,8 @@ Only one backend process may have a given run open at a time. A second process g
 3. **Validate setup** lists every problem by its path, for example `agents[2].stats.compute: must be a finite number >= 0`. Nothing is created until the problems are fixed.
 4. **Create and open** creates the run. It always opens **Paused** at `r00000_init`.
 
+To reuse a saved setup, open **Resume session**, select one session with its checkbox, and choose **Clone setup**. The New session form opens with its original settings and a copy name. Edit and validate, then **Create and open** to create a fresh world. This also works from the archive. The seed and starting agent cards are preserved; simulation progress is not copied and the source is unchanged.
+
 When a model key with a real provider is chosen, the form warns that every decision is a paid call. Models that are missing credentials are listed as unavailable, with the variables they need.
 
 ### Run controls

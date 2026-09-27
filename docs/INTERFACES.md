@@ -1262,6 +1262,7 @@ compares all four (path parameters are compared by position, query strings are i
 | GET | `/runs?archived=0\|1\|all` | | `RunSummary[]` (default `0`: active runs only; `1` the archive; `all` both) |
 | POST | `/runs` | `RunCreateRequest` | `RunSummary` (201) |
 | POST | `/runs/validate` | `RunCreateRequest` | `RunValidationResponse` |
+| GET | `/runs/{run_id}/setup` | | `RunCreateRequest` (original creation setup, `world_id: null`; read-only, works without opening the run) |
 | POST | `/runs/{run_id}/open` | | `RunStatus` |
 | POST | `/runs/{run_id}/close` | | `RunStatus` |
 | GET | `/runs/{run_id}` | | `RunSummary` |
@@ -1669,3 +1670,15 @@ Applied for 64 agents (2026-09-27): `schemas.MIN_AGENT_CARDS = 6` / `MAX_AGENT_C
 `config._ring_positions` (the first 12 cards unchanged, cards 13-64 on the next Manhattan rings out
 to radius 6, A-WORLD-4); `GET /api/defaults?agent_count` accepts 6-64; the frontend mirror
 `frontend/src/state/setupForm.ts::MAX_AGENTS` and `scripts/run_sim.py` `--agents` follow.
+
+
+Applied for cloning session setup (2026-09-27): `GET /api/runs/{run_id}/setup` returns the saved
+`run_request.json` as the existing `RunCreateRequest` model, with `world_id` cleared to force a
+fresh world on normal creation. No new schema or stored format is introduced. The read does not
+open, pause, restore or mutate the source, works on archived runs, and makes no model calls.
+A continuation uses its inherited original request, not the branch checkpoint or working-file
+edits. Missing or invalid original requests return the existing 404 `not_found` error; current
+model availability is checked by the normal validate/create endpoints. The frontend route
+`#/new?clone=<run_id>` loads this complete request directly, suggests a copy name, and waits for
+the user to edit/validate/create. Seed, cards, rules, context and budgets are preserved; progress,
+memories acquired during simulation, history, assistant settings and stories are not copied.

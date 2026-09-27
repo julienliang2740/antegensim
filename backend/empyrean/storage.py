@@ -569,6 +569,16 @@ def read_manifest(run_id: str) -> Manifest:
     return _read_model(rdir / MANIFEST_FILE, Manifest, f"{run_id}/{MANIFEST_FILE}")
 
 
+def read_run_request(run_id: str) -> RunCreateRequest:
+    """Read the original creation setup, including for archived runs and continuations.
+
+    This is reference data, independent of checkpoints and edited working files.
+    Missing or incompatible reference files raise StorageError; never guess a setup.
+    """
+    rdir = find_run_dir(run_id)
+    return _read_model(rdir / RUN_REQUEST_FILE, RunCreateRequest, f"{run_id}/{RUN_REQUEST_FILE}")
+
+
 def write_manifest(manifest: Manifest) -> None:
     """Atomic (temp + fsync + os.replace).  The run directory must exist."""
     rdir = run_dir(manifest.world_id, manifest.run_id)

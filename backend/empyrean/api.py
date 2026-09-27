@@ -41,6 +41,7 @@ Route table (all JSON; see docs/INTERFACES.md "API" for request/response models)
     GET    /api/runs?archived=0|1|all                    -> list[RunSummary] (default 0: active runs only)
     POST   /api/runs                RunCreateRequest     -> RunSummary          (201)
     POST   /api/runs/validate       RunCreateRequest     -> RunValidationResponse
+    GET    /api/runs/{run_id}/setup                   -> RunCreateRequest (original setup, world_id cleared; read-only)
     POST   /api/runs/{run_id}/open                       -> RunStatus
     POST   /api/runs/{run_id}/close                      -> RunStatus (paused, worker stopped)
     GET    /api/runs/{run_id}                            -> RunSummary
@@ -356,6 +357,11 @@ def create_app(manager: RunManager, assistant: Optional["AssistantService"] = No
     def validate_run(body: RunCreateRequest) -> RunValidationResponse:
         problems = manager.validate_setup(body)
         return RunValidationResponse(ok=not problems, problems=problems)
+
+    @app.get("/api/runs/{run_id}/setup", response_model=RunCreateRequest)
+    def run_setup(run_id: str) -> RunCreateRequest:
+        """Read the original setup for a new world without opening or changing the source."""
+        return manager.clone_setup(run_id)
 
     @app.post("/api/runs/{run_id}/open", response_model=RunStatus)
     def open_run(run_id: str) -> RunStatus:

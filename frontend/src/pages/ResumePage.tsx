@@ -5,6 +5,9 @@
  * "Story" action that opens Story Mode for the run (#/story/<run>) without
  * opening it.
  *
+ * Clone setup opens one selected run’s original creation setup in the New session form.
+ * It works for active and archived runs without opening or changing the source.
+ *
  * Run housekeeping: a checkbox column selects runs (click, Ctrl/Cmd-click, Shift-click
  * ranges and row clicks; the rules are in state/selection.ts).  The selection toolbar
  * archives runs (they move to the archive view, GET /api/runs?archived=1, and can be
@@ -269,6 +272,11 @@ export function ResumePage() {
         <div className="resume-toolbar" role="region" aria-label="Selected runs">
           <strong className="resume-toolbar-count">{selectedRuns.length} selected</strong>
           {hiddenSelected > 0 ? <span className="hint">({hiddenSelected} hidden by the filter)</span> : null}
+          <button type="button" className="btn btn-primary" disabled={busy !== null || selectedRuns.length !== 1}
+            title={selectedRuns.length === 1 ? "Edit this session’s original setup to create a new world" : "Select exactly one session to clone its setup"}
+            onClick={() => navigate({ name: "new", cloneRunId: selectedRuns[0].run_id })}>
+            Clone setup
+          </button>
           {view === "active" ? (
             <button type="button" className="btn" disabled={busy !== null} onClick={() => void moveRuns(selectedRuns, "archive")}>
               Archive selected

@@ -343,3 +343,10 @@ The read-only recorded-run replay check passes with GPU/WebGL disabled: cross-ro
 Responsive browser checks passed at 1366×768, 1600×1000, 1024×768 and 390×844 in both views. The 3D viewport measures 1104×567 at 1366×768 and 1338×799 at 1600×1000 with the left panel open, gaining approximately 94 pixels in height over the previous bottom timeline. Opening Session, Inspector/God mode or Activity leaves the board bounds unchanged. The log is on the right, fills the available height and its width changes correctly using the resize handle's arrow keys and resets on double-click. No page errors or horizontal overflow occurred.
 
 Focused map regression: **3 passed, 0 failed** (`qa/out/2026-09-27_18-15-25/log.json`). Production build, all 96 state tests and documentation checks pass. Lint has zero errors and the same four existing warnings. Backend health is reachable through the running public tunnel.
+
+### Clone saved session setup — 2026-09-27
+
+- Full backend suite: **716 passed, 4 skipped** in 137.14 s, including five new clone cases. These verify exact original settings after simulated progress and settings edits, all 16 agent cards, archived/closed sources, distinct new-world identity, a fresh initial checkpoint, unchanged source bytes, inherited setup for continuations, and missing/corrupt reference errors. Fake models only.
+- `node qa/clone_setup_check.mjs`: passes the full Resume selection → Clone setup → edit → validate → create flow, multiple-selection disabling, all request fields, 16 cards, reload, archive access, missing-source error and assistant-draft isolation. Temporary fake-model sessions were removed; no simulation turns or paid calls were made.
+- Read-only visual review on SWEEP-B2v2 confirms its 30 original cards, seed and limits load into the new form. The public tunnel serves the new setup endpoint. Backend and frontend remain running.
+- Production build, all 96 frontend state tests and docs consistency pass; lint reports zero errors and four existing warnings. No existing simulation calculations or run-command behavior changed.

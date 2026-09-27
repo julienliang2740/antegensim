@@ -7,6 +7,9 @@
  * next to its field and in a summary; "Create and open" saves the initial
  * checkpoint (POST /runs) and opens the run paused.
  *
+ * A clone route loads the saved original request directly (no merge with today’s defaults),
+ * clears world_id and suggests a copy name. Creation still requires the normal form action.
+ *
  * Rev 4: when the assistant hands over a create_run proposal ("Open in setup
  * form instead"), sessionStorage "empyrean.assistant.setupDraft.v1" holds
  * {agent_count, partial, source}; the page fetches the defaults for that
@@ -15,7 +18,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { ApiClientError, createRun, getDefaults, listModels, previewWorld, validateRun } from "../api/client";
+import { ApiClientError, createRun, getDefaults, getRunSetup, listModels, previewWorld, validateRun } from "../api/client";
 import type { AgentCard, ApiProblem, MapState, RunCreateRequest } from "../api/types";
 import { pointKey } from "../api/types";
 import { ContextSettingsEditor, MapView, PlantRulesEditor } from "../components/inspect";
@@ -75,7 +78,7 @@ function takeSetupDraft(): SetupDraft | null {
   }
 }
 
-export function NewSessionPage() {
+export function NewSessionPage({ cloneRunId }: { cloneRunId?: string }) {
   const [request, setRequest] = useState<RunCreateRequest | null>(null);
   const [templates, setTemplates] = useState<AgentCard[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -95,19 +98,20 @@ export function NewSessionPage() {
     document.title = "New session · Empyrean";
     publishContext({ page: "new" });
     let cancelled = false;
-    const draft = takeSetupDraft();
+    const draft = cloneRunId ? null : takeSetupDraft();
     // The MAX_AGENTS request only supplies templates for "Add agent"; if it
     // fails (e.g. an older backend that caps agent_count lower) new rows copy
     // the last card instead (setupForm.newCard).
-    Promise.all([getDefaults(draft?.agent_count ?? 8), getDefaults(MAX_AGENTS).catch(() => null)])
+    Promise.all([cloneRunId ? getRunSetup(cloneRunId) : getDefaults(draft?.agent_count ?? 8), getDefaults(MAX_AGENTS).catch(() => null)])
       .then(([defaults, full]) => {
         if (cancelled) return;
-        const initial = draft ? mergeSetupDraft(defaults, draft.partial) : defaults;
+        const initial = cloneRunId ? { ...defaults, name: `${defaults.name.slice(0, 73)} (copy)`, world_id: null } : draft ? mergeSetupDraft(defaults, draft.partial) : defaults;
         setRequest(initial);
         if (draft) clearSetupDraft();
         setTemplates(full?.agents ?? defaults.agents);
         setRulesText(otherRulesText(initial));
-        if (draft) setDraftBanner(draft.source);
+        if (cloneRunId) setDraftBanner(defaults.name);
+        else if (draft) setDraftBanner(draft.source);
       })
       .catch((e) => {
         if (!cancelled) setLoadError(errorText(e));
@@ -115,13 +119,13 @@ export function NewSessionPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [cloneRunId]);
 
   if (loadError) {
     return (
       <div className="page">
         <PageHeader title="New session" />
-        <ErrorLine text={loadError} prefix="Could not load the defaults from the backend:" />
+        <ErrorLine text={loadError} prefix={cloneRunId ? "Could not load this session’s original setup:" : "Could not load the defaults from the backend:"} />
       </div>
     );
   }
@@ -129,7 +133,7 @@ export function NewSessionPage() {
     return (
       <div className="page">
         <PageHeader title="New session" />
-        <p className="hint">Fetching the defaults…</p>
+        <p className="hint">{cloneRunId ? "Loading the saved setup…" : "Fetching the defaults…"}</p>
       </div>
     );
   }
@@ -218,8 +222,7 @@ export function NewSessionPage() {
       {draftBanner ? (
         <div className="banner setup-draft-banner" role="status">
           <span>
-            <strong>Prefilled by the assistant</strong> from its proposal "{draftBanner}": review the values below, then Validate setup and Create. Nothing was
-            created yet.
+            {cloneRunId ? <><strong>Cloned setup</strong> from "{draftBanner}". These are the original starting settings, not the current simulation state. Review and edit them, then create a new world. The source session stays unchanged.</> : <><strong>Prefilled by the assistant</strong> from its proposal "{draftBanner}": review the values below, then Validate setup and Create. Nothing was created yet.</>}
           </span>
           <button type="button" className="btn btn-small" onClick={() => setDraftBanner(null)}>
             Dismiss
@@ -307,7 +310,7 @@ export function NewSessionPage() {
           Agents ({request.agents.length}; {MIN_AGENTS}–{MAX_AGENTS} allowed)
         </h2>
         <p className="hint">
-          One row per agent, prefilled from the defaults. Click a row or "Edit…" to open its full card: every stat, model, persona, notebook, context settings
+          One row per agent, prefilled from {cloneRunId ? "the saved setup" : "the defaults"}. Click a row or "Edit…" to open its full card: every stat, model, persona, notebook, context settings
           and starting skills.
         </p>
         <FieldProblems problems={at("agents")} />

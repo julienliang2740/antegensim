@@ -426,6 +426,9 @@ test("hash routes round-trip", () => {
   assert.deepEqual(router.parseHash(""), { name: "entry" });
   assert.deepEqual(router.parseHash("#/new"), { name: "new" });
   assert.deepEqual(router.parseHash("#/resume"), { name: "resume" });
+  assert.deepEqual(router.parseHash("#/new?clone="), { name: "new" });
+  const cloneRoute = { name: "new", cloneRunId: "run with & spaces" };
+  assert.deepEqual(router.parseHash(router.routeHash(cloneRoute)), cloneRoute);
   assert.deepEqual(router.parseHash("#/run/run_1?turn=r00001_end"), { name: "run", runId: "run_1", turnId: "r00001_end" });
   assert.equal(router.routeHash({ name: "run", runId: "run_1", turnId: null }), "#/run/run_1");
   assert.deepEqual(router.parseHash(router.routeHash({ name: "run", runId: "run 2", turnId: "r00000_init" })), { name: "run", runId: "run 2", turnId: "r00000_init" });

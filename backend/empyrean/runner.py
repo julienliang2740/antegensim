@@ -3136,6 +3136,15 @@ class RunManager:
                 self._closing.pop(run_id, None)
         return removed
 
+    def clone_setup(self, run_id: str) -> RunCreateRequest:
+        """Return the original setup for editing into a new world, without opening a worker.
+
+        Clear the world identity so the normal create path allocates a fresh world.
+        A continuation uses its inherited original creation request, not its branch state.
+        """
+        request = storage.read_run_request(run_id)
+        return request.model_copy(update={"world_id": None}, deep=True)
+
     def get_summary(self, run_id: str) -> RunSummary:
         worker = self.get(run_id)
         if worker is not None:

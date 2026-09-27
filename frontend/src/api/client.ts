@@ -186,6 +186,11 @@ export function deleteRun(runId: string): Promise<void> {
   return request("DELETE", `/api/runs/${enc(runId)}`);
 }
 
+/** Original saved creation setup for a new world; never opens or modifies the source run. */
+export function getRunSetup(runId: string): Promise<RunCreateRequest> {
+  return request("GET", `/api/runs/${enc(runId)}/setup`);
+}
+
 /** Every setup problem at once, nothing created (inline form feedback). */
 export function validateRun(body: RunCreateRequest): Promise<RunValidationResponse> {
   return request("POST", "/api/runs/validate", body);

@@ -647,3 +647,62 @@ def test_one_active_writer_per_run(api, registry, worlds_dir):
         refused = api.client.post(f"/api/runs/{run_id}/open")
         assert refused.status_code == 409 and refused.json()["error"] == "illegal_command"
         other.close(run_id)
+
+
+def test_clone_setup_preserves_original_request_and_creates_a_fresh_world(api):
+    """Clone the full original setup after progress/edits, without touching the source."""
+    request = base_request(api, "clone source", agent_count=16, seed=391, world_id="world_clone_source", max_rounds=7)
+    request["agents"][0]["persona"] = "Keep the original persona."
+    request["agents"][0]["notebook"] = "Original notebook."
+    request["agents"][0]["model_key"] = "fake-heuristic"
+    source = api.create_run(request)
+    run_id = source["run_id"]
+    api.stage(run_id, {"type": "update_run_settings", "max_rounds": 9})
+    api.run_turn(run_id)
+    assert api.get(f"/runs/{run_id}/settings")["settings"]["max_rounds"] == 9
+    before_status = api.status(run_id)
+    setup = api.get(f"/runs/{run_id}/setup")
+    assert setup == {**request, "world_id": None}
+    assert api.status(run_id) == before_status
+    api.close(run_id)
+    api.post(f"/runs/{run_id}/archive")
+    rdir = api.run_dir(run_id)
+    before_files = {str(p.relative_to(rdir)): p.read_bytes() for p in rdir.rglob("*") if p.is_file()}
+    assert api.get(f"/runs/{run_id}/setup") == setup
+    assert api.get(f"/runs/{run_id}/status", expect=409)["error"] == "run_not_open"
+    setup["name"] = "cloned world"
+    setup["seed"] = 392
+    setup["agents"][0]["name"] = "Edited clone agent"
+    cloned = api.create_run(setup)
+    assert cloned["world_id"] != source["world_id"]
+    assert cloned["run_id"] != run_id
+    assert cloned["parent"] is None
+    assert cloned["current_turn_id"] == "r00000_init"
+    assert len(api.turns(cloned["run_id"])) == 1
+    assert api.get(f"/runs/{cloned['run_id']}/setup") == setup
+    assert {str(p.relative_to(rdir)): p.read_bytes() for p in rdir.rglob("*") if p.is_file()} == before_files
+
+
+def test_clone_setup_of_continuation_uses_inherited_creation_request(api):
+    """Cloning a continuation starts over; continuing remains a separate workflow."""
+    request = base_request(api, "original setup", seed=29)
+    source = api.create_run(request)
+    run_id = source["run_id"]
+    turn = api.run_turn(run_id)["current_turn_id"]
+    child = api.post(f"/runs/{run_id}/continuations", {"from_turn_id": turn, "name": "branch"}, expect=201)
+    assert api.get(f"/runs/{child['run_id']}/setup") == {**request, "world_id": None}
+
+
+@pytest.mark.parametrize("reference", [None, "not JSON", '{"agents": []}'])
+def test_clone_setup_reports_missing_or_invalid_reference(api, reference):
+    """Missing/corrupt setup is reported rather than replaced with unrelated defaults."""
+    assert api.get("/runs/missing/setup", expect=404)["error"] == "not_found"
+    source = api.create_run(base_request(api, "broken setup reference"))
+    path = api.run_dir(source["run_id"]) / "run_request.json"
+    if reference is None:
+        path.unlink()
+    else:
+        path.write_text(reference)
+    response = api.get(f"/runs/{source['run_id']}/setup", expect=404)
+    assert response["error"] == "not_found"
+    assert "run_request.json" in response["detail"]

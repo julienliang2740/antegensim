@@ -78,7 +78,7 @@ Every model call goes `calls.call_profile` -> `model.call_model`; every route is
 | `frontend/src/api/assistantSpeech.ts` | raw-audio transcribe upload and the speech capability store | `frontend/src/api/assistantSpeech.ts::transcribeAudio`, `frontend/src/api/assistantSpeech.ts::fetchSpeechCapability` |
 | `frontend/src/pages/EntryPage.tsx` | entry choices and backend health | `frontend/src/pages/EntryPage.tsx::EntryPage` |
 | `frontend/src/pages/NewSessionPage.tsx` | the setup form | `frontend/src/pages/NewSessionPage.tsx::NewSessionPage` |
-| `frontend/src/pages/ResumePage.tsx` | saved runs: open, Story, multi-select with archive, restore and delete (confirmation dialog), the archive view | `frontend/src/pages/ResumePage.tsx::ResumePage`, `frontend/src/components/common/ConfirmDialog.tsx::ConfirmDialog` |
+| `frontend/src/pages/ResumePage.tsx` | saved runs: open, Story, clone one selected original setup into a new-world form, multi-select with archive, restore and delete (confirmation dialog), the archive view | `frontend/src/pages/ResumePage.tsx::ResumePage`, `frontend/src/components/common/ConfirmDialog.tsx::ConfirmDialog` |
 | `frontend/src/pages/RunPage.tsx` | the run page: layout, feed, selection, the entity profile card, tabs, commands, assistant context and handlers; the **Map view** switch (remembered under `empyrean.map.view`), the viewed turn's effect list for both map views, and the lazy mount of the 3D view (the 2D map stays mounted, hidden, while the 3D view shows) | `frontend/src/pages/RunPage.tsx::RunPage` |
 | `frontend/src/pages/InstructionsPage.tsx` | "How the world works" with numbers from `GET /api/defaults` | `frontend/src/pages/InstructionsPage.tsx::InstructionsPage` |
 | `frontend/src/pages/StoryPage.tsx` | Story Mode | `frontend/src/pages/StoryPage.tsx::StoryPage` |
@@ -137,3 +137,5 @@ Every model call goes `calls.call_profile` -> `model.call_model`; every route is
 | `docs/evidence/browser_qa.md`, `docs/evidence/live_sims.md`, `docs/evidence/resilience.md`, `docs/evidence/final_pass/` | the 2026-09-25 records from before the assistant release |
 
 `qa/replay_refinement_check.mjs` checks recorded-turn playback, 2D wheel zoom and CPU 3D animations without sending simulation commands. `frontend/src/hooks/useSavedReplay.ts::useSavedReplay` owns the local playback timer; it reads existing checkpoints through RunPage's history loader.
+
+Setup cloning reads `backend/empyrean/storage.py::read_run_request` through `backend/empyrean/runner.py::RunManager.clone_setup` and the read-only setup endpoint. `NewSessionPage` loads the full request directly for `#/new?clone=<run_id>`; regular and assistant-prefilled setup remain separate. `qa/clone_setup_check.mjs` checks the complete clone workflow using fake-model setups.
