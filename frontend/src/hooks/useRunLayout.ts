@@ -18,6 +18,7 @@ export interface PanelSizes {
   /** Right column width while it is wide (God mode, Rules, "Wider panel"). */
   sideWideW: number | null;
   logH: number | null;
+  logW: number | null;
 }
 
 export const MIN_RAIL_W = 200;
@@ -25,13 +26,14 @@ export const MAX_RAIL_W = 480;
 export const MIN_SIDE_W = 300;
 export const MIN_MAP_W = 360;
 export const MIN_LOG_H = 120;
+export const MIN_LOG_W = 280;
 /** Room kept for the tabs above the log. */
 const MIN_TABS_H = 200;
 /** Page padding plus the two splitters. */
 const CHROME_W = 20 + 16;
 const THREE_COLUMN_MIN_W = 1200;
 const STORAGE_KEY = "empyrean.runLayout.v1";
-const EMPTY: PanelSizes = { railW: null, sideW: null, sideWideW: null, logH: null };
+const EMPTY: PanelSizes = { railW: null, sideW: null, sideWideW: null, logH: null, logW: null };
 
 function load(): PanelSizes {
   try {
@@ -39,7 +41,7 @@ function load(): PanelSizes {
     if (!raw) return EMPTY;
     const parsed = JSON.parse(raw) as Partial<Record<keyof PanelSizes, unknown>>;
     const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
-    return { railW: num(parsed.railW), sideW: num(parsed.sideW), sideWideW: num(parsed.sideWideW), logH: num(parsed.logH) };
+    return { railW: num(parsed.railW), sideW: num(parsed.sideW), sideWideW: num(parsed.sideWideW), logH: num(parsed.logH), logW: num(parsed.logW) };
   } catch {
     return EMPTY;
   }
@@ -60,6 +62,9 @@ export interface RunLayout {
   railW: number;
   sideW: number;
   logH: number;
+  logW: number;
+  logWMax: number;
+  setLogW(v: number): void;
   railMax: number;
   sideMax: number;
   logMax: number;
@@ -101,16 +106,19 @@ export function useRunLayout(sideWide: boolean, reserveW = 0): RunLayout {
   const railMax = Math.max(MIN_RAIL_W, Math.min(MAX_RAIL_W, spare - sideW));
   const logMax = Math.max(MIN_LOG_H, win.h - MIN_TABS_H - 24);
   const logH = Math.max(MIN_LOG_H, Math.min(logMax, sizes.logH ?? defaultLog));
+  const logWMax = Math.max(MIN_LOG_W, Math.min(640, pageW - 240));
+  const logW = Math.max(MIN_LOG_W, Math.min(logWMax, sizes.logW ?? 380));
 
   const setRailW = useCallback((v: number) => setSizes((s) => ({ ...s, railW: Math.round(v) })), []);
   const setSideW = useCallback((v: number) => setSizes((s) => (sideWide ? { ...s, sideWideW: Math.round(v) } : { ...s, sideW: Math.round(v) })), [sideWide]);
+  const setLogW = useCallback((v: number) => setSizes((s) => ({ ...s, logW: Math.round(v) })), []);
   const setLogH = useCallback((v: number) => setSizes((s) => ({ ...s, logH: Math.round(v) })), []);
   const reset = useCallback(() => setSizes(EMPTY), []);
   const resetPart = useCallback(
     (part: "rail" | "side" | "log") =>
-      setSizes((s) => (part === "rail" ? { ...s, railW: null } : part === "log" ? { ...s, logH: null } : sideWide ? { ...s, sideWideW: null } : { ...s, sideW: null })),
+      setSizes((s) => (part === "rail" ? { ...s, railW: null } : part === "log" ? { ...s, logH: null, logW: null } : sideWide ? { ...s, sideWideW: null } : { ...s, sideW: null })),
     [sideWide],
   );
 
-  return { threeColumn: win.w >= THREE_COLUMN_MIN_W, railW, sideW, logH, railMax, sideMax, logMax, setRailW, setSideW, setLogH, resetPart, reset, reservedW };
+  return { threeColumn: win.w >= THREE_COLUMN_MIN_W, railW, sideW, logH, logW, logWMax, setLogW, railMax, sideMax, logMax, setRailW, setSideW, setLogH, resetPart, reset, reservedW };
 }

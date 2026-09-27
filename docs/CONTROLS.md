@@ -24,7 +24,7 @@ Pages (hash routes): `#/` entry, `#/new` New session, `#/resume` Resume session,
 | **Start simulation** / **Pause simulation** | Run page, top bar | Run continuously / stop before the next turn |
 | **Finish round** | Run page, top bar | Finish the current round, then pause |
 | **Recover (pause)** | Status bar, error state | Discard the failed attempt; the next Advance 1 turn re-runs that turn |
-| **Return to live** | Timeline beneath the board | Leave history and follow the latest saved turn |
+| **Return to live** | Left Replay panel | Leave history and follow the latest saved turn |
 | **2D map** / **3D view** | Run page, top bar (**Map view**) | Show the viewed turn as the SVG map or as a 3D board to fly over; remembered per browser |
 | **Inspector** / **Turn record** / **God mode** / **Rules** / **Storybook** (*new*) | Run page, right tabs | Occupants of a cell and a summary of the selection / the facts of the viewed turn / stage edits / read the rules / read the AI narrative |
 | Click an entity, or **Profile** | Map dot, occupant row, roster row, Inspector | Opens the entity's profile card over the page: Overview, Decisions, Skills, Knowledge, Messages, History (agents); Overview, Growth, Rules, History (plants) |
@@ -104,13 +104,13 @@ Loads `GET /api/defaults?agent_count=8` (and `?agent_count=12` for new-card temp
 ## Run page (`#/run/<run_id>`)
 
 Opening the page opens the run (`POST /api/runs/{run_id}/open`) and polls
-`GET /api/runs/{run_id}/events` every 700 ms while busy and every 2.5 s while idle. The board fills the workspace with simulation controls in the top bar and compact replay controls below. Session, inspector and activity panels open over the board without resizing it. At 1280 px and wider the assistant drawer docks on the right.
+`GET /api/runs/{run_id}/events` every 700 ms while busy and every 2.5 s while idle. The board fills the workspace with simulation controls in the top bar and collapsible replay controls on the left. Session, inspector and activity panels open over the board without resizing it. At 1280 px and wider the assistant drawer docks on the right.
 
 ### Workspace and board timeline
 
-**Session & agents** opens status, model details and the roster. **Inspector & tools** opens the existing Inspector, Turn record, God mode, Rules and Storybook tabs. **Activity log** opens the live feed. Close or Escape returns to the unobstructed board. Panel contents remain mounted, preserving drafts and selections; desktop edge handles still resize them.
+**Session & agents** opens status, model details and the roster. **Inspector & tools** opens the existing Inspector, Turn record, God mode, Rules and Storybook tabs. **Activity log** opens the live feed on the right, with a draggable left edge to resize its width. Close or Escape returns to the unobstructed board. Panel contents remain mounted, preserving drafts and selections; desktop edge handles still resize them.
 
-**Session details** expands run/world ids. **Turn details & model usage** expands secondary status facts, including next step, saved turn and model usage. All history controls sit directly beneath the board.
+**Session details** expands run/world ids. **Turn details & model usage** expands secondary status facts, including next step, saved turn and model usage. **Replay** toggles the left history panel. On smaller screens it opens over the board.
 
 | Area | Label | Effect | API | States |
 | --- | --- | --- | --- | --- |
@@ -123,11 +123,11 @@ Opening the page opens the run (`POST /api/runs/{run_id}/open`) and polls
 | Status bar | **View request in progress** | Open the pending model call in the record viewer | `GET /api/runs/{run_id}/pending_model_call` | waiting_model |
 | Status bar | **Recover (pause)** | Discard the failed attempt and reload the last saved turn | `commands` `pause` | error |
 | Status bar (*new*) | **Ask** ("Why did the run stop?") | Opens the drawer with that question prefilled | | error |
-| Timeline beneath the board | **Return to live** | Follow the latest saved turn | | history |
-| Timeline beneath the board | **◀ Previous round** / **Next round ▶** | View the last turn of the neighbouring round | `GET /api/runs/{run_id}/turns/{turn_id}` | |
-| Timeline beneath the board | **‹ Previous turn** / **Next turn ›** | View the neighbouring turn | same | |
-| Timeline beneath the board | **‹ Parent run** / **Open parent run at that turn** | On a continuation's first turn: open the parent run at the branch turn | | |
-| Timeline beneath the board | Turn select | Pick any turn of the viewed round | `GET /api/runs/{run_id}/turns` | |
+| Left Replay panel | **Return to live** | Follow the latest saved turn | | history |
+| Left Replay panel | **◀ Previous round** / **Next round ▶** | View the last turn of the neighbouring round | `GET /api/runs/{run_id}/turns/{turn_id}` | |
+| Left Replay panel | **‹ Previous turn** / **Next turn ›** | View the neighbouring turn | same | |
+| Left Replay panel | **‹ Parent run** / **Open parent run at that turn** | On a continuation's first turn: open the parent run at the branch turn | | |
+| Left Replay panel | Turn select | Pick any turn of the viewed round | `GET /api/runs/{run_id}/turns` | |
 | Agents roster | Agent row | Select that agent and open its profile card (the Inspector tab shows it behind, unless God mode is open) | | |
 
 Start and pause share one button, so only three simulation command buttons are shown at once. Saved playback is separate:
@@ -135,16 +135,18 @@ Start and pause share one button, so only three simulation command buttons are s
 | Area | Label | Effect | API | States |
 | --- | --- | --- | --- | --- |
 | Timeline | **Jump to round** | Jump to the first recorded turn of a chosen round | Existing saved-turn GET | |
-| Timeline | **Replay from here** / **Stop replay** | Watch the selected turn and subsequent saved turns; stop on the last captured turn in history | Existing saved-turn GET only; no simulation commands | |
-| Timeline | **Replay this turn** | Restart the selected turn's visual cues in either view | | |
-| Timeline | **Replay tempo** | Slow (4 s), Normal (2.2 s) or Fast (1.3 s) per loaded turn | | |
+| Timeline | **Play saved turns** / **Replay from start** / **Stop replay** | Play across rounds through the latest saved turn, including newly indexed checkpoints. At the latest turn, replay begins at the first checkpoint | Existing saved-turn GET only; no simulation commands | |
+| Timeline | **Animate this turn** | Restart the selected turn's visual cues in either view | | |
+| Timeline | **Replay speed** | 0.5× (4.4 s), 1× (2.2 s), 2× (1.1 s) or 4× (0.55 s) per loaded turn | | |
 
 Replay waits for each checkpoint to finish loading and suspends while an entity profile or record is open, or the browser tab is hidden. Manual history navigation and simulation commands stop replay. Reduced-motion settings suppress transient movement and leave the existing static action marks/chips readable.
+
+In 3D, the Replay panel also shows a keyboard guide: click the board, then use W A S D to move, Space to rise and Shift to descend. The unfocused board repeats these keys.
 
 ### Map (centre)
 
 A **Map view** switch in the top bar chooses the view: **2D map** (the SVG map) or
-**3D view** (the board described in "3D view (centre)"). The history strip stays beneath both, and
+**3D view** (the board described in "3D view (centre)"). The Replay panel stays to the left of both, and
 nothing else on the page changes with the switch.
 
 | Area | Label | Effect |
@@ -212,7 +214,7 @@ than 60 units away the figures turn into columns as tall as the count, with badg
 | Toolbar | **Top view** | Look straight down at the region (T) |
 | Toolbar | **Focus selection** | Fly to the selected cell (Home); disabled with no selected cell |
 | Toolbar | **Layer down** / **Layer up** | Activate the layer below / above (PageDown / PageUp). A run has one layer today, so both are disabled; the chip reads "Layer 1 of 1 · World" |
-| Toolbar | **Replay turn** | Play the viewed turn's animations again (R) |
+| Toolbar | **Animate once** | Play the viewed turn's animations again (R) |
 | Toolbar | **Animations** | Animate the viewed turn (on by default; off and disabled when the system asks for reduced motion; the chips stay either way) |
 | Toolbar | **Controls** | Show or hide the help card "3D map controls" (also ? or H). The card opens by itself on the first 3D open; **Close**, Escape or a click on the board hides it |
 | Board | Agent label ("a03 Cyrene") | Select that agent and open its profile card (a focused label also takes Enter); closing the card returns the focus to the board, so the keys work straight away |

@@ -3,7 +3,7 @@
  * right round navigation, turn selection, live/history indicator and an
  * obvious return to live view).  Viewing history never changes the run.
  *
- * Placed beneath the board: round/turn navigation and local saved-turn replay.
+ * Placed to the left of the board: round/turn navigation and local saved-turn replay.
  *
  * On a continuation's first turn the previous arrow leads into the parent
  * run at the copied turn (INTERFACES sections 9 and 11: "previous" resolves
@@ -145,13 +145,13 @@ export function Timeline(props: TimelineProps) {
       <div className="saved-replay" role="group" aria-label="Saved turn playback">
         <span className="rail-label">Saved replay</span>
         <button type="button" className="btn btn-primary" disabled={!props.playing && (props.loading || !shownEntry)} onClick={props.playing ? props.onStopReplay : props.onReplay}>
-          {props.playing ? "Stop replay" : "Replay from here"}
+          {props.playing ? "Stop replay" : shownId === liveTurnId ? "Replay from start" : "Play saved turns"}
         </button>
-        <button type="button" className="btn" disabled={props.loading || !shownEntry} onClick={props.onReplayOne}>Replay this turn</button>
-        <label>Tempo <select aria-label="Replay tempo" value={props.replayIntervalMs} onChange={(event) => props.onReplayInterval(Number(event.target.value))}>
-          <option value={4000}>Slow</option><option value={2200}>Normal</option><option value={1300}>Fast</option>
+        <button type="button" className="btn" disabled={props.loading || !shownEntry} onClick={props.onReplayOne}>Animate this turn</button>
+        <label>Speed <select aria-label="Replay speed" value={props.replayIntervalMs} onChange={(event) => props.onReplayInterval(Number(event.target.value))}>
+          <option value={4400}>0.5×</option><option value={2200}>1×</option><option value={1100}>2×</option><option value={550}>4×</option>
         </select></label>
-        <span className="saved-replay-note" role="status">{props.playing ? props.loadError ? "Replay paused: turn could not load. Stop replay or choose another turn." : props.suspended ? "Waiting for the turn or inspector…" : "Playing saved turns · no simulation changes" : "Choose a round and turn, then replay. No new turns are generated."}</span>
+        <span className="saved-replay-note" role="status">{props.playing ? props.loadError ? "Replay paused: turn could not load. Stop replay or choose another turn." : props.suspended ? "Waiting for the turn or inspector…" : `Playing through the latest saved turn (round ${maxRound}).` : shownId === liveTurnId ? "At the latest turn. Replay starts at the beginning and plays through all saved rounds." : `Plays from here through the latest saved round (${maxRound}).`}</span>
       </div>
       {props.parent ? (
         <div className="timeline-parent">

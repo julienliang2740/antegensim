@@ -257,7 +257,7 @@ async function step(page, id, title, fn, { needs = [] } = {}) {
     try {
       if (["timeline", "map-marks", "map-3d"].includes(id)) {
         await closeProfileCard(page);
-        const openPanel = page.locator('.workspace-tools button[aria-expanded="true"]');
+        const openPanel = page.locator('.workspace-tools button[id^="workspace-toggle-"][aria-expanded="true"]');
         if (await openPanel.count()) await openPanel.click();
       }
       const panels = { "run-turn": "Activity log", "agent-inspector": "Inspector & tools", "plant-rules": "Inspector & tools", "god-mode": "Inspector & tools" };
@@ -1424,6 +1424,8 @@ async function runMapMarksStep(page) {
       if (rec.found.marks_on.groups !== 1 || rec.found.marks_on.checked !== "true") throw new Error(`Action marks on: ${JSON.stringify(rec.found.marks_on)}`);
 
       // 8. Key: collapsed by default; opens the explanations and the terrain entries; remembered per browser.
+      const closeInspector = page.getByRole("button", { name: "Close inspector panel", exact: true });
+      if (await closeInspector.isVisible()) await closeInspector.click();
       const keyButton = map.locator(".insp-legend").getByRole("button", { name: "Key", exact: true });
       const keyStored = () => page.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter((k) => k.startsWith("empyrean.map.key.")).map((k) => [k, localStorage.getItem(k)])));
       rec.found.key_initially_expanded = await keyButton.getAttribute("aria-expanded");
@@ -1727,7 +1729,7 @@ async function runMap3dStep(page) {
         if (rec.found.history.actor_cell !== rec.found.history.api_to) throw new Error(`the actor's label is on ${rec.found.history.actor_cell}, the move went to ${rec.found.history.api_to}`);
         if (!rec.found.history.chip) throw new Error(`no move chip over ${move.acting_agent_id}`);
         if (await animations.isEnabled()) await animations.check();
-        await toolbar.getByRole("button", { name: "Replay turn", exact: true }).click();
+        await toolbar.getByRole("button", { name: "Animate once", exact: true }).click();
         const t0 = Date.now();
         let sawOne = null;
         let backToZero = null;

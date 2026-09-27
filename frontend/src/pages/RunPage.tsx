@@ -3,7 +3,7 @@
  * inspection"; INTERFACES sections 3, 7, 9, 10, 11).  The board is the hero.
  *
  * A compact top bar holds simulation controls and the view switch. The map
- * fills the workspace, with a compact history/replay strip beneath it.
+ * fills the workspace, with history/replay controls in a collapsible left sidebar.
  * Session details/agents, inspection tools and activity each open in a
  * dismissible utility panel over the board; opening one never resizes the map.
  * Panel content stays mounted so selections, edits and scroll state survive.
@@ -77,7 +77,7 @@ import { useFetched } from "../hooks/useFetched";
 import { navigate } from "../hooks/useHashRoute";
 import { useHistoryView, useTurnIndex } from "../hooks/useRunData";
 import { useRunFeed } from "../hooks/useRunFeed";
-import { MIN_LOG_H, MIN_RAIL_W, MIN_SIDE_W, useRunLayout } from "../hooks/useRunLayout";
+import { MIN_LOG_W, MIN_RAIL_W, MIN_SIDE_W, useRunLayout } from "../hooks/useRunLayout";
 import { useSavedReplay } from "../hooks/useSavedReplay";
 import { useThrottledKey } from "../hooks/useThrottledKey";
 import { clearContext, dockReserve, getDrawerState, publishContext, registerHandlers, subscribeDrawer } from "../state/assistantContext";
@@ -163,6 +163,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     trigger?.focus({ preventScroll: true });
   };
   const [logCollapsed, setLogCollapsed] = useState(false);
+  const [replayPanelOpen, setReplayPanelOpen] = useState(() => window.innerWidth >= 900);
   const sideWideNow = wideSide || tab === "god" || tab === "rules";
   // "2D map" or "3D view" in the centre column (remembered per browser; the 3D chunk loads only when chosen).
   const [mapViewMode, setMapViewMode] = useState<MapViewMode>(readMapViewMode);
@@ -175,6 +176,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+  const replayPanelVisible = replayPanelOpen && (winW >= 900 || workspacePanel === null);
   const reserveW = dockReserve(drawer, winW, "run");
   // Utility panel sizes (desktop resize handles), remembered in localStorage.
   const layout = useRunLayout(sideWideNow, reserveW);
@@ -203,6 +205,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   const playback = useSavedReplay({
     turns: index.turns,
     shownId: viewed?.turn.turn_id ?? null,
+    latestSavedId: liveTurnId,
     loaded: viewTurnId !== null && history.dataKey === viewTurnId && !history.loading && !history.error,
     blocked: record !== null || profileId !== null,
     onView: setViewTurnId,
@@ -544,11 +547,11 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     .join(" ");
 
   const layoutStyle = layout.threeColumn
-    ? ({ "--rail-w": `${layout.railW}px`, "--side-w": `${layout.sideW}px`, "--log-h": `${layout.logH}px`, "--assistant-w": `${layout.reservedW}px` } as CSSProperties)
+    ? ({ "--rail-w": `${layout.railW}px`, "--side-w": `${layout.sideW}px`, "--log-h": `${layout.logH}px`, "--log-w": `${layout.logW}px`, "--assistant-w": `${layout.reservedW}px` } as CSSProperties)
     : undefined;
 
   return (
-    <div className={layoutClass} style={layoutStyle} data-panel={workspacePanel ?? "none"} onKeyDown={(event) => {
+    <div className={layoutClass} style={layoutStyle} data-panel={workspacePanel ?? "none"} data-replay={replayPanelVisible ? "open" : "closed"} onKeyDown={(event) => {
       if (event.key === "Escape" && workspacePanel && !profileId && !record && !event.defaultPrevented) closeWorkspacePanel();
     }}>
       <header className="workspace-topbar">
@@ -562,6 +565,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
         <RunControls running={!isIdle(status)} allowed={allowed} inFlight={inFlight} error={commandError} onCommand={(c) => void send(c)} onResetLayout={layout.reset} />
         {viewSwitch}
         <nav className="workspace-tools" aria-label="Workspace panels">
+          <button id="replay-panel-toggle" type="button" className={`btn btn-small${replayPanelVisible ? " btn-primary" : ""}`} aria-expanded={replayPanelVisible} aria-controls="replay-panel" onClick={() => { setReplayPanelOpen(!replayPanelVisible); if (winW < 900) setWorkspacePanel(null); }}>Replay</button>
           {([
             ["session", "Session & agents"], ["inspect", `Inspector & tools${stagedSuffix}`], ["activity", "Activity log"],
           ] as const).map(([id, label]) => <button key={id} id={`workspace-toggle-${id}`} type="button" className={`btn btn-small${workspacePanel === id ? " btn-primary" : ""}`} aria-expanded={workspacePanel === id} aria-controls={`workspace-panel-${id}`} onClick={() => setWorkspacePanel((current) => current === id ? null : id)}>{label}</button>)}
@@ -621,6 +625,37 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
         onReset={() => layout.resetPart("rail")}
       />
 
+      <div className="workspace-stage">
+        <aside id="replay-panel" className="replay-sidebar" aria-label="Replay and history">
+          <div className="workspace-panel-head"><strong>Replay & history</strong><button type="button" className="btn btn-small" aria-label="Hide replay panel" title="Hide replay panel" onClick={() => { setReplayPanelOpen(false); document.getElementById("replay-panel-toggle")?.focus(); }}>‹</button></div>
+        <div className="board-timeline">
+          <Timeline
+            turns={index.turns}
+            liveTurnId={status.current_turn_id}
+            viewTurnId={viewTurnId}
+            loading={viewTurnId !== null && history.loading}
+            loadError={viewTurnId !== null ? history.error : index.error}
+            name={name}
+            parent={viewed.parent}
+            onView={navigateHistory}
+            playing={playback.playing}
+            suspended={playback.suspended}
+            replayIntervalMs={playback.intervalMs}
+            onReplay={playback.start}
+            onStopReplay={playback.stop}
+            onReplayOne={playback.replayOne}
+            onReplayInterval={playback.setIntervalMs}
+            onOpenParent={(parent) => navigate({ name: "run", runId: parent.run_id, turnId: parent.turn_id })}
+          />
+        </div>
+          {mapViewMode === "3d" ? <div className="camera-quick-guide" aria-label="3D navigation guide">
+            <strong>Move around the board</strong>
+            <span>Click the board first, then:</span>
+            <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Move</span></div>
+            <div><kbd>Space</kbd><span>Up</span><kbd>Shift</kbd><span>Down</span></div>
+            <span>Drag to look · right-drag to pan<br />Mouse wheel to zoom</span>
+          </div> : null}
+        </aside>
       <main className="run-center" aria-label="World map">
         {/* The 2D map stays mounted (hidden) while the 3D view is shown, so its zoom and pan survive the switch. */}
         <div className="map-2d-host" hidden={mapViewMode === "3d"}>
@@ -668,26 +703,6 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
             onBackTo2d={() => setMapViewMode("2d")}
           />
         ) : null}
-        <div className="board-timeline">
-          <Timeline
-            turns={index.turns}
-            liveTurnId={status.current_turn_id}
-            viewTurnId={viewTurnId}
-            loading={viewTurnId !== null && history.loading}
-            loadError={viewTurnId !== null ? history.error : index.error}
-            name={name}
-            parent={viewed.parent}
-            onView={navigateHistory}
-            playing={playback.playing}
-            suspended={playback.suspended}
-            replayIntervalMs={playback.intervalMs}
-            onReplay={playback.start}
-            onStopReplay={playback.stop}
-            onReplayOne={playback.replayOne}
-            onReplayInterval={playback.setIntervalMs}
-            onOpenParent={(parent) => navigate({ name: "run", runId: parent.run_id, turnId: parent.turn_id })}
-          />
-        </div>
         {record ? (
           <div className="record-overlay">
             <RecordViewer
@@ -703,6 +718,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
           </div>
         ) : null}
       </main>
+      </div>
 
       <Splitter
         orientation="vertical"
@@ -873,15 +889,15 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
       </section>
 
       <Splitter
-        orientation="horizontal"
+        orientation="vertical"
         label="Resize the live activity log"
         className="splitter-log"
-        value={layout.logH}
-        min={MIN_LOG_H}
-        max={layout.logMax}
+        value={layout.logW}
+        min={MIN_LOG_W}
+        max={layout.logWMax}
         direction={-1}
         disabled={logCollapsed}
-        onChange={layout.setLogH}
+        onChange={layout.setLogW}
         onReset={() => layout.resetPart("log")}
       />
 

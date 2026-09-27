@@ -1,6 +1,6 @@
 /** Simulation commands retain their existing availability and API mapping.
  * Start/Pause share one stable button; single-turn and round controls stay separate.
- * Saved-turn playback lives beneath the board and never sends these commands.
+ * Saved-turn playback lives in the Replay panel and never sends these commands.
  */
 
 import type { RunCommand } from "../../api/types";
@@ -42,7 +42,7 @@ export function RunControls(props: RunControlsProps) {
             <strong>Advance 1 turn</strong> runs one agent action (or the round-end update), then stops.
             <strong> Finish round</strong> runs the remaining agents and the world update, then stops.
             <strong> Start simulation</strong> keeps creating new turns until you press <strong>Pause simulation</strong>.
-            An active turn finishes and is saved before pausing. To watch saved turns, use Replay from here beneath the board.
+            An active turn finishes and is saved before pausing. To watch saved turns, use Play saved turns in the Replay panel.
             {props.onResetLayout ? (
               <div className="controls-help-layout">
                 <strong>Layout:</strong> open a workspace panel, then drag its edge (or focus the resize handle and use the arrow keys) to resize it; double-click a resize handle for its default size.{" "}

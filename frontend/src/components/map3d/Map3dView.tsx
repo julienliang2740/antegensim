@@ -650,7 +650,7 @@ export function Map3dView(props: Map3dProps) {
           {layerText} · {activeLayer.label}
         </span>
         <button type="button" className="insp-btn insp-btn-small" title="Replay the viewed turn's animations (R)" onClick={() => runCommand("replay")}>
-          Replay turn
+          Animate once
         </button>
         <label className="insp-small" title={reducedMotion ? "Off: this system asks for reduced motion" : "Animate the viewed turn's actions (moves, attacks, messages, growth)"}>
           <input type="checkbox" checked={animations && !reducedMotion} disabled={reducedMotion} onChange={(e) => setAnimations(e.target.checked)} /> Animations
@@ -683,7 +683,7 @@ export function Map3dView(props: Map3dProps) {
         }}
       >
         <div ref={labelsRef} className="map3d-labels" />
-        {!focused && !lost ? <div className="map3d-focus-hint">Click the board to control it with the keyboard</div> : null}
+        {!focused && !lost ? <div className="map3d-focus-hint">Click board · W A S D move · Space up · Shift down</div> : null}
         {lost ? (
           <div className="map3d-lost" role="alert">
             <p>The 3D view could not start its canvas renderer.</p>

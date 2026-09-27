@@ -1,6 +1,6 @@
-/** Local playback of a fixed sequence of saved turns. Never sends a simulation command.
- * DOCS: replay waits for each checkpoint to load, pauses behind inspectors/in background,
- * and stops on the last recorded turn without returning to live or advancing the world.
+/** Local playback through the latest saved turn. Never sends a simulation command.
+ * Waits for checkpoint loads and follows additions to the existing turn index.
+ * At the latest checkpoint, starting replay begins at the first recorded turn.
  */
 import { useCallback, useEffect, useState } from "react";
 import type { TurnIndexEntry } from "../api/types";
@@ -8,11 +8,12 @@ import type { TurnIndexEntry } from "../api/types";
 export function useSavedReplay(props: {
   turns: readonly TurnIndexEntry[];
   shownId: string | null;
+  latestSavedId: string | null;
   loaded: boolean;
   blocked: boolean;
   onView(id: string): void;
 }) {
-  const [queue, setQueue] = useState<string[] | null>(null);
+  const [playing, setPlaying] = useState(false);
   const [token, setToken] = useState(0);
   const [intervalMs, setIntervalMs] = useState(2200);
   const [visible, setVisible] = useState(() => document.visibilityState === "visible");
@@ -21,13 +22,13 @@ export function useSavedReplay(props: {
     document.addEventListener("visibilitychange", change);
     return () => document.removeEventListener("visibilitychange", change);
   }, []);
-  const stop = useCallback(() => setQueue(null), []);
+  const stop = useCallback(() => setPlaying(false), []);
   const start = () => {
     const at = props.turns.findIndex((turn) => turn.turn_id === props.shownId);
     if (at < 0) return;
-    const saved = props.turns.slice(at).map((turn) => turn.turn_id);
-    setQueue(saved);
-    props.onView(saved[0]);
+    const first = props.turns[props.shownId === props.latestSavedId ? 0 : at];
+    setPlaying(true);
+    props.onView(first.turn_id);
     setToken((old) => old + 1);
   };
   const replayOne = () => {
@@ -36,15 +37,17 @@ export function useSavedReplay(props: {
     setToken((old) => old + 1);
   };
   const { shownId, loaded, blocked, onView } = props;
+  const at = props.turns.findIndex((turn) => turn.turn_id === shownId);
+  const nextId = at >= 0 ? props.turns[at + 1]?.turn_id ?? null : null;
+  const caughtUp = shownId === props.latestSavedId && nextId === null;
   useEffect(() => {
-    if (!queue || !shownId || !loaded || blocked || !visible) return;
-    const at = queue.indexOf(shownId);
+    if (!playing || !shownId || !loaded || blocked || !visible) return;
     const timer = window.setTimeout(() => {
-      const next = at < 0 ? undefined : queue[at + 1];
-      if (next) onView(next);
-      else setQueue(null);
+      if (nextId) onView(nextId);
+      else if (caughtUp) setPlaying(false);
+      // Otherwise the status is ahead of the index. Its existing refresh supplies the next id.
     }, intervalMs);
     return () => window.clearTimeout(timer);
-  }, [queue, shownId, loaded, blocked, visible, intervalMs, token, onView]);
-  return { playing: queue !== null, suspended: !loaded || blocked || !visible, token, intervalMs, setIntervalMs, start, stop, replayOne };
+  }, [playing, shownId, loaded, blocked, visible, intervalMs, token, onView, nextId, caughtUp]);
+  return { playing, suspended: !loaded || blocked || !visible || (!nextId && !caughtUp), token, intervalMs, setIntervalMs, start, stop, replayOne };
 }
