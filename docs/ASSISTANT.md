@@ -228,9 +228,10 @@ Statuses: `pending`, `executing`, `executed`, `failed`, `rejected`, `superseded`
 * Stored as `<run>/assistant/storybook/entries/<turn_id>.json` (opening: `entries/opening.json`);
   the entry files are the only source of truth. Never inside `turns/`, so checkpoints stay
   immutable and history browsing stays model-free.
-* **Automatic narration** (`storybook_auto`): on for a new run unless the narrator is a paid model
-  and every agent model in the run is fake (a free demo run does not buy narration);
-  `EMPYREAN_STORYBOOK_AUTO` = `on` / `off` / `auto` (the rule). Runs created before the assistant
+* **Automatic narration** (`storybook_auto`): off for new runs by default, so the storybook is
+  written on request ("Write missing"); `EMPYREAN_STORYBOOK_AUTO` = `off` (default) / `on` /
+  `auto` (on unless the narrator is a paid model and every agent model in the run is fake). The
+  tab's auto toggle switches it on for one run. Runs created before the assistant
   existed have no `settings.json` and are off. Auto covers only turns committed after it was
   switched on (`auto_since_turn_id`).
 * While entries are queued or being written the tab's status line shows the working indicator

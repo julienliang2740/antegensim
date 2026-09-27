@@ -244,6 +244,9 @@ CLI_NOT_LOGGED_IN = re.compile(
     r"not logged in|please run /login|invalid api key|oauth token (?:has )?expired|authentication_error",
     re.IGNORECASE,
 )
+# claude_cli: result text of a reply that ran past the CLI's output token limit ("Claude's response
+# exceeded the 250 output token maximum"): classified as a truncated agent reply, not an error.
+CLI_OUTPUT_CAP = re.compile(r"exceeded the \d+ output token maximum", re.IGNORECASE)
 # HTTP statuses reported as error_code "rate_limited" (429 rate limit, 529 overloaded).
 RATE_LIMIT_HTTP_STATUSES: frozenset[int] = frozenset({429, 529})
 
@@ -2700,6 +2703,16 @@ class ClaudeCliAdapter(BaseAdapter):
             )
             notes = [f"model prose before the structured reply: {transcript.prose}"] if transcript.prose else []
             return Attempt(result, notes=notes)
+        if envelope.get("is_error") and CLI_OUTPUT_CAP.search(result_text or ""):
+            # The reply ran past the CLI's output limit (a small generation allowance): an
+            # agent-output failure like any other cut-off reply, not an infrastructure error.
+            return Attempt(
+                _make_result(
+                    request, ref, "truncated", text=None, usage=usage, response_model=response_model,
+                    provider_cost_usd=cost, error=f"claude CLI: {(result_text or '').strip()[:300]}", stop_reason="max_tokens",
+                    error_code=derive_error_code("truncated", None, text_mode=_text_mode(request)),
+                )
+            )
         if envelope.get("is_error") or (subtype is not None and subtype != "success"):
             http_status = envelope.get("api_error_status")
             http_status = http_status if isinstance(http_status, int) and not isinstance(http_status, bool) else None

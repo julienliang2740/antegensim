@@ -87,6 +87,15 @@ The host budget (`real_budget_usd`) is checked when a round's calls are started,
 
 - *Next step:* keep the answered decisions of a closed run (persist their packets with the pending calls) so a reopen can use them.
 
+## Found in the 2026-09-27 live scenario sweep
+
+Fixed after the sweep: the input-cap lockout (the cap now bounds only optional content) and the stalls on the CLI's output-token cap (now a truncated reply). Still open:
+
+* **Backend memory grows on live runs with automatic storybook narration.** Fake-model runs stay flat (68 MB after 40 rounds of 20 agents); with the narrator on, a 20-agent run grows super-linearly (328 MB after 30 rounds with a fake narrator) and live backends reached 7 GB within 15-30 minutes (one was killed by the kernel at 11.8 GB). Automatic narration is now off by default; restarting the backend frees the memory and open runs resume.
+* **Starving agents cannot think.** At (near) zero compute an agent cannot afford the minimum packet and cannot pay for an attack either, so famine ends in a quiet line of starvation deaths rather than conflict.
+
+- *Next step:* find what the storybook path retains.
+
 ## Provider adapters verified only with mocked payloads
 
 Only two adapters have run for real on this machine: `fake` and `claude_cli` (`claude-cli-haiku`). The `anthropic`, `openai`, `fireworks`, `bedrock` and `foundry` adapters are covered only by unit tests against recorded or mocked payloads (request shape, usage normalisation, error classification), because no credentials exist here. Their real request acceptance, schema handling, usage and cost reporting, retries and rate limits are unproven.

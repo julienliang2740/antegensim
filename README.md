@@ -81,7 +81,7 @@ Backend options (environment variables or `.env`):
 | `EMPYREAN_ASSISTANT_STORY_BUDGET_USD` | `5.0` | Spend limit per Story Mode job (the story brief may set its own) |
 | `EMPYREAN_ASSISTANT_MESSAGE_BUDGET_USD` | `0.75` | Spend limit per assistant message (all its steps) |
 | `EMPYREAN_ASSISTANT_GLOBAL_BUDGET_USD` | `20.0` | Assistant spend limit across everything in this backend |
-| `EMPYREAN_STORYBOOK_AUTO` | `auto` | `on` / `off` / `auto`: automatic narration of new runs (`auto`: on unless a paid narrator would narrate an all-fake-agent run) |
+| `EMPYREAN_STORYBOOK_AUTO` | `off` | `on` / `off` / `auto`: automatic narration of new runs while they play (`off`: the storybook is written only on request; `auto`: on unless a paid narrator would narrate an all-fake-agent run) |
 | `EMPYREAN_WHISPER_MODEL` | `large-v3-turbo` | Whisper model for Dictate (`medium` and `small` are faster, less accurate; `off` disables Dictate) |
 | `EMPYREAN_WHISPER_PRELOAD` | `1` | Load the Whisper model when the backend starts (about 16 s, in the background) |
 
@@ -138,7 +138,7 @@ Open it with **Assistant** in the run page's left rail, the button at the bottom
 
 ### Storybook and Story Mode
 
-The **Storybook** tab on the run page is an AI-written narrative with one entry per turn. New runs are narrated automatically (unless a paid narrator would narrate a run of free fake agents); for older runs, **Write missing** narrates the history on request and shows the estimated cost first. The **Turn record** stays the source of truth.
+The **Storybook** tab on the run page is an AI-written narrative with one entry per turn. By default it is written only on request: **Write missing** narrates the turns so far and shows the estimated cost first, and the tab's auto toggle (or `EMPYREAN_STORYBOOK_AUTO=on`/`auto`) narrates new turns while a run plays. The **Turn record** stays the source of truth.
 
 **Story Mode** on the entry page turns any run into a chaptered story: pick a run, choose genre, tone, vividness and point of view, review the story brief with its cost estimate, accept it, and read the chapters as they are written. The story exports to Markdown.
 

@@ -580,6 +580,9 @@ input_cap = min(settings.input_token_cap, capabilities.context_window - gen)    
 budget = min(input_cap, affordable_input(gen))
 mandatory = tokens(stable_rules) + tokens(skills catalogue without source) + tokens(core situation)
             + tokens(decision_request) + overhead_tokens
+if input_cap < mandatory <= context_window - gen: input_cap = mandatory; budget = min(input_cap, affordable_input(gen))
+   # the settings cap bounds the OPTIONAL content only: a mandatory part above it is sent alone
+   # (nothing optional) instead of locking the agent out (2026-09-27 fix)
 if budget < MIN_PACKET_INPUT_TOKENS or mandatory > budget: affordable=False, reason, return
 fill in order while it fits: full unread bodies (urgent first) -> notebook -> recent_history
    -> retrieved_memories -> skill source   (each candidate added only if it fits; else omitted "budget")
@@ -1633,6 +1636,15 @@ Applied for the attack damage cap (A-ACT-19):
   the run-start record, the believed-self line and the query(self) description name `attack_cap`.
 * `types.ts`: `AgentStats.attack_cap`, `BelievedSelf.attack_cap`, `UpgradeSchedule.attack_cap_*`,
   `UpgradeAttribute` / `UPGRADE_ATTRIBUTES` += `attack_cap`.
+
+Applied after the 2026-09-27 scenario sweep: (1) `context.build_packet`: the settings input cap bounds
+only the optional content; a mandatory part above it (and within the context window) is sent alone,
+so an agent is never locked out by the cap (the unaffordable reason now names the context window);
+(2) `model.py` claude_cli: a CLI error whose result says the reply "exceeded the N output token
+maximum" (`model.CLI_OUTPUT_CAP`) is classified `truncated` (an agent-output failure: charged under
+`charge_failed_calls`, the turn is lost, the run keeps playing) instead of `error` (which put the run
+in the error state); (3) `config.STORYBOOK_AUTO` defaults to `off` (A-AST-1): new runs are narrated
+only on request.
 
 Applied for simultaneous round decisions (A-SCHED-5, A-SCHED-6; 2026-09-27): the runner makes every
 agent's model decision of a round at round start from the world as it is then and runs the calls at

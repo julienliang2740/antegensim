@@ -450,11 +450,11 @@ ASSISTANT_REQUEST_SETTINGS: dict[str, tuple[float, int]] = {
     "summarizer": (60.0, 1),
 }
 
-# Storybook (A-AST-1/3).  STORYBOOK_AUTO: "on" | "off" | "auto" (auto = the default rule: on unless a
-# paid narrator would narrate an all-fake-agent run).
-STORYBOOK_AUTO = _env("EMPYREAN_STORYBOOK_AUTO", "auto").strip().lower()
+# Storybook (A-AST-1/3).  STORYBOOK_AUTO: "on" | "off" | "auto" (default "off": narration only on
+# request; auto = on unless a paid narrator would narrate an all-fake-agent run).
+STORYBOOK_AUTO = _env("EMPYREAN_STORYBOOK_AUTO", "off").strip().lower()
 if STORYBOOK_AUTO not in ("on", "off", "auto"):
-    STORYBOOK_AUTO = "auto"
+    STORYBOOK_AUTO = "off"
 STORYBOOK_BATCH_MAX = 12  # turns per narrator call when the backlog is > STORYBOOK_BATCH_THRESHOLD
 STORYBOOK_BATCH_THRESHOLD = 2
 ASSISTANT_BACKGROUND_PAUSE_SECONDS = 60.0  # background profiles pause after a 429/overload
@@ -1085,9 +1085,9 @@ ASSUMPTIONS: dict[str, Assumption] = {
     # -- assistant (rev 4) ----------------------------------------------------------
     "A-AST-1": Assumption(
         key="storybook automatic narration default (STORYBOOK_AUTO, <run>/assistant/settings.json)",
-        default="a new run's storybook_auto is ON unless the narrator model is a paid (non-fake) key AND every agent model in the run is fake; runs without assistant/settings.json (existing runs) are OFF; auto covers only turns committed after auto_since_turn_id (set when the flag is switched on) plus the opening entry written at creation; catch-up of history is never automatic (only the explicit 'Write missing' button / POST storybook/generate); auto pauses with a visible notice at the run's storybook budget",
+        default="off: a new run's storybook_auto is OFF (the storybook is written on request); with STORYBOOK_AUTO 'auto' it is ON unless the narrator model is a paid (non-fake) key AND every agent model in the run is fake, with 'on' always ON; runs without assistant/settings.json (existing runs) are OFF; auto covers only turns committed after auto_since_turn_id (set when the flag is switched on) plus the opening entry written at creation; catch-up of history is never automatic (only the explicit 'Write missing' button / POST storybook/generate); auto pauses with a visible notice at the run's storybook budget",
         citation="User requirement 5 (automatic per-turn storybook); measured Haiku CLI cost $0.0081 and 7.3 s per call, fake runs commit ~5 turns/s, 285-turn runs on disk",
-        rationale="Per-turn narration is what the user asked for, but silently spending on a fake demo run or on an old run that is merely opened is not.",
+        rationale="Operator decision 2026-09-27: story making is an after-the-fact step, so narration spends nothing unless asked (live narration also grew backend memory in long runs). Per-turn live narration stays one switch away.",
     ),
     "A-AST-2": Assumption(
         key="assistant budgets (ASSISTANT_*_BUDGET_USD) and ledger",

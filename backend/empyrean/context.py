@@ -1897,6 +1897,10 @@ def build_packet(
     while affordable_input_tokens(rates, mind_multiplier, compute_available, gen) < target and gen > config.MIN_GENERATION_TOKENS:
         gen = max(config.MIN_GENERATION_TOKENS, gen // 2)
     input_cap = min(settings.input_token_cap, capabilities.context_window - gen)
+    if input_cap < mandatory <= capabilities.context_window - gen:
+        # The cap bounds the optional content only: a mandatory part above it is still sent (with
+        # nothing optional) when it fits the context window, so an agent is never locked out.
+        input_cap = mandatory
     affordable = affordable_input_tokens(rates, mind_multiplier, compute_available, gen)
     budget = int(min(input_cap, affordable))
 
@@ -1919,7 +1923,7 @@ def build_packet(
             f"{config.MIN_PACKET_INPUT_TOKENS} tokens"
         )
     elif mandatory > input_cap:
-        reason = f"the mandatory packet part ({mandatory} tokens) exceeds the input cap of {input_cap} tokens"
+        reason = f"the mandatory packet part ({mandatory} tokens) exceeds the context window left after generation ({input_cap} tokens)"
     elif budget < target:
         needed = cognition_cost(rates, mind_multiplier, target, gen)
         reason = (

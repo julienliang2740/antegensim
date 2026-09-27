@@ -44,6 +44,13 @@ FAKE_KEY = "fake-assistant"
 
 
 @pytest.fixture(autouse=True)
+def storybook_auto_rule(monkeypatch):
+    """These tests exercise automatic narration: use the ``auto`` rule (the shipped default is
+    ``off``, so narration happens only on request); tests of other modes set their own."""
+    monkeypatch.setattr(config, "STORYBOOK_AUTO", "auto")
+
+
+@pytest.fixture(autouse=True)
 def never_live(monkeypatch):
     """Any Claude CLI attempt fails the test (the assistant must never go live in tests)."""
 

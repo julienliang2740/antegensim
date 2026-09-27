@@ -521,8 +521,27 @@ def test_estimate_never_exceeds_cap_or_affordable_input():
             if not packet.affordable:
                 continue
             affordable = context.affordable_input_tokens(rules.cognition, 1.0, compute, packet.generation_allowance)
-            assert packet.input_token_estimate <= min(cap, affordable)
+            assert packet.input_token_estimate <= affordable
+            # the cap bounds the optional content: a mandatory part above it is sent alone
+            optional = [x for x in packet.sections if x.name in ("notebook", "recent_history", "retrieved_memories") and x.token_estimate > 0]
+            assert packet.input_token_estimate <= cap or not optional
             assert packet.reservation_compute <= compute + 1e-9
+
+
+def test_a_mandatory_part_above_the_input_cap_is_sent_alone_instead_of_locking_the_agent_out():
+    """Lockout fix: with an input cap below the mandatory part the agent still gets a packet (the
+    mandatory part only, nothing optional) when it can afford it; it is never skipped for the cap."""
+    agent = make_agent()
+    agent.persona = "A very long persona. " * 400
+    k = fresh_knowledge(agent)
+    for i in range(10):
+        context.record_notice(k, message_notice("a01", "a02", "news " * 60), i + 1, "r00001_t02_a02")
+    packet = make_packet(agent, k, settings=ContextSettings(input_token_cap=2000), compute=200.0, round_no=11)
+    assert packet.affordable, packet.unaffordable_reason
+    assert packet.input_token_estimate > 2000
+    assert not any(x.name in ("notebook", "recent_history", "retrieved_memories") and x.token_estimate > 0 for x in packet.sections)
+    broke = make_packet(agent, k, settings=ContextSettings(input_token_cap=2000), compute=0.05, round_no=11)
+    assert not broke.affordable and "cannot afford" in broke.unaffordable_reason
 
 
 def test_free_input_still_requires_a_fundable_generation_allowance():

@@ -391,9 +391,8 @@ story-so-far; Haiku). Details, budgets and routes: `docs/ASSISTANT.md`.
 * **Storybook** (the fifth run-page tab): an AI-written narrative with one entry per committed
   turn, round-end entries and an opening entry written at run creation. It is stored beside the
   run, never inside `turns/`, and is labelled "AI-written narrative; the Turn record has the
-  facts". Automatic narration is on for new runs unless a paid narrator would narrate an
-  all-fake-agent run; existing runs start off; history is only written on request ("Write
-  missing"). The deterministic **Turn record** tab is unchanged and remains the source of truth.
+  facts". Automatic narration is off by default (`EMPYREAN_STORYBOOK_AUTO`): the storybook is written
+  on request ("Write missing"), or live after the tab's auto toggle is switched on. The deterministic **Turn record** tab is unchanged and remains the source of truth.
 * **Story Mode** (entry page choice, `#/story`): pick a run, answer a short interview (genre,
   tone, vividness, point of view, turn range), review a **story brief** (title, premise, style,
   cast, chapter plan with cost and time estimates) and Accept, Change or Cancel. Chapters (one per

@@ -1228,6 +1228,9 @@ def test_claude_cli_timeout_kills_process_group(fake_cli, monkeypatch, registry)
         # usage.iterations lists only the last request; it must not be used to count requests
         ({"usage": {"input_tokens": 10, "output_tokens": 5, "iterations": [{}, {}]}}, "ok"),
         ({"stop_reason": "max_tokens"}, "truncated"),
+        # the CLI's own output cap (a small generation allowance): a cut-off agent reply, not an error
+        ({"is_error": True, "subtype": "success", "structured_output": None,
+          "result": "API Error: Claude's response exceeded the 250 output token maximum. To configure this behavior, set the CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable."}, "truncated"),
         # the CLI re-prompted once after a text-only first response: accepted (A-COG-9)
         ({"num_turns": 3}, "ok"),
         # beyond CLI_MAX_MODEL_REQUESTS: infrastructure error
