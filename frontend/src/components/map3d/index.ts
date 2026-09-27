@@ -8,6 +8,6 @@
 // DOCS: RunPage imports only Map3dLoader, MapViewSwitch and prefetchMap3d from here; nothing in this file pulls in three.js (Map3dView is loaded lazily by Map3dLoader).
 
 export { Map3dLoader } from "./Map3dLoader";
-export { hasWebgl2, prefetchMap3d } from "./prefetch";
+export { prefetchMap3d } from "./prefetch";
 export { MapViewSwitch } from "./MapViewSwitch";
 export type { LayerInput, Map3dProps } from "./props";

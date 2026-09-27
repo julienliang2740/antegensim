@@ -1,75 +1,30 @@
 /**
- * The 3D board's scene: the WebGL renderer, lights, one group per layer
- * (merged terrain, grid, border, six instanced figure meshes, far-LOD
- * columns), the rings and cell marks, the pooled transient effects, the
- * raycaster, the demand-driven frame loop, the level of detail and the
- * per-frame statistics the QA root reads.  Everything that is not three.js
- * arithmetic comes from the pure modules under src/state/ (map3dLayout,
- * map3dCamera, map3dTimeline, map3dTerrain, map3dPalette, map3dGlyphs):
- * this class only applies their results to GPU objects.
- *
- * Rendering is on demand: invalidate() schedules one frame; a frame reschedules
- * itself only while a key is held, a glide or a timeline runs (the view says so
- * through hooks.beforeFrame).  Paused (the record overlay, a hidden tab): no
- * frames at all.  dispose() frees every geometry, material and the GL context.
+ * CPU canvas renderer for the 3D board. Camera, entity packing, terrain,
+ * playback and overlay placement reuse the existing pure map3d modules.
+ * Frames are drawn only after a change or while controls or a turn run.
  */
+// DOCS: Canvas 2D draws projected terrain and entities without a graphics API; picking and labels use the same camera projection.
 
-// DOCS: draw calls per layer: terrain 1, grid 1, border 1, figures <= 6 (or columns 1 in the far LOD), rings <= 4, cell marks 2, effects <= 5; the outside plane 1.
-
-import {
-  BufferAttribute,
-  BufferGeometry,
-  Color,
-  DirectionalLight,
-  DoubleSide,
-  DynamicDrawUsage,
-  Euler,
-  Group,
-  HemisphereLight,
-  InstancedMesh,
-  LineBasicMaterial,
-  LineSegments,
-  Matrix4,
-  Mesh,
-  MeshBasicMaterial,
-  MeshLambertMaterial,
-  PerspectiveCamera,
-  Plane,
-  PlaneGeometry,
-  Points,
-  PointsMaterial,
-  Quaternion,
-  Raycaster,
-  Scene,
-  Vector2,
-  Vector3,
-  WebGLRenderer,
-} from "three";
-import type { Object3D } from "three";
 import type { Agent, Entity, MapState, Plant, Point } from "../../api/types";
 import { pointKey } from "../../api/types";
 import type { CameraState } from "../../state/map3dCamera";
-import { CAMERA_FAR, CAMERA_NEAR, FOV_DEG, lodDistance } from "../../state/map3dCamera";
+import { CAMERA_NEAR, FOV_DEG, FRAME_SCREEN_Y, lodDistance, lookDirection, rightOf, upVector } from "../../state/map3dCamera";
 import { chipText, glyphFor } from "../../state/map3dGlyphs";
 import type { LodMode, Vec3 } from "../../state/map3dLayout";
-import { COUNT_BADGE_MIN, INACTIVE_LAYER_OPACITY, cellToScene, columnHeight, countBadge, layerY, lodMode, orderForSlots, packCell, slotScenePosition } from "../../state/map3dLayout";
+import { INACTIVE_LAYER_OPACITY, cellToScene, columnHeight, countBadge, figureKind, layerY, lodMode, orderForSlots, packCell, slotScenePosition } from "../../state/map3dLayout";
 import type { Palette, Rgb } from "../../state/map3dPalette";
-import { dominantKind, ghostTint, healthColour, kindColour, plantColour, terrainPalette } from "../../state/map3dPalette";
+import { dominantKind, ghostTint, healthColour, kindColour, mix, plantColour, rgbToCss } from "../../state/map3dPalette";
 import type { ClipColour, FxState, Timeline, TimelineContext } from "../../state/map3dTimeline";
-import { CHIP_HEIGHT, PARTICLE_COUNT, buildTimeline, chipPlacements, sampleTimeline, scaleTimeline } from "../../state/map3dTimeline";
-import type { TerrainArrays } from "../../state/map3dTerrain";
-import { cellOfFace } from "../../state/map3dTerrain";
+import { CHIP_HEIGHT, buildTimeline, chipPlacements, sampleTimeline, scaleTimeline } from "../../state/map3dTimeline";
+import { terrainAt, terrainTop } from "../../state/map3dTerrain";
 import type { TurnEffect } from "../../state/turnEffects";
 import type { MapMarker } from "../inspect/logic";
 import { groupMarkersByPoint } from "../inspect/logic";
 import type { DotKind } from "../inspect/mapDots";
 import { dotKind, dotLabel } from "../inspect/mapDots";
-import type { FigureGeometries, FigureMeshKey } from "./geometry";
-import { DEAD_LIFT, FIGURE_MESH_KEYS, LABEL_HEIGHT, buildBorderGeometry, buildFigureGeometries, buildGridGeometry, buildTerrainGeometry, disposeFigureGeometries, linear, recolourCellFrame } from "./geometry";
 import type { LabelItem } from "./labels";
 import { CHIP_NUDGES, LabelLayer } from "./labels";
 
-/** One board of the stack, as the view hands it over. */
 export interface SceneLayer {
   id: string;
   label: string;
@@ -77,18 +32,12 @@ export interface SceneLayer {
   markers: readonly MapMarker[];
   entities: ReadonlyMap<string, Entity>;
 }
-
 export interface LayerOptions {
-  /** Ids placed first in their cells (the acting and the selected entity). */
   priorityIds: readonly (string | null | undefined)[];
-  /** Legend toggles: kinds not drawn. */
   hiddenKinds: ReadonlySet<DotKind>;
-  /** Agent view: figures are remembered sightings, drawn ghosted and without health discs. */
   ghost: boolean;
-  /** Agent view: the viewing agent (a dashed ring under it). */
   selfId: string | null;
 }
-
 export interface Marks {
   selectedPoint: Point | null;
   selectedEntityId: string | null;
@@ -96,9 +45,7 @@ export interface Marks {
   hoverEntityId: string | null;
   hoverCell: Point | null;
 }
-
 export type Hit = { kind: "entity"; id: string; cell: Point } | { kind: "cell"; cell: Point };
-
 export interface FrameStats {
   drawCalls: number;
   triangles: number;
@@ -108,1017 +55,622 @@ export interface FrameStats {
   labels: number;
   camera: CameraState;
 }
-
 export interface SceneHooks {
-  /** Runs before each frame; returns true when another frame is wanted (a key held, a glide running). */
   beforeFrame(nowMs: number, dtMs: number): boolean;
   onFrame(stats: FrameStats): void;
-  /** A label was clicked. */
   onPick(id: string, cell: Point): void;
-  /** The level of detail changed. */
   onLod(lod: LodMode): void;
 }
 
-/** Longest mean frame time (ms, last 10 frames) before the pixel ratio drops to 1. */
-const SLOW_FRAME_MS = 45;
-/** Beyond this camera distance the grid is hidden on a slow renderer. */
-const GRID_FAR = 40;
-/** Awake frames on a software renderer are spaced at least this far apart (at most every second vsync at 60 Hz). */
-const SOFTWARE_FRAME_MS = 33;
-/** Timing jitter tolerated when a vsync is checked against SOFTWARE_FRAME_MS. */
-const FRAME_JITTER_MS = 1.5;
-/** Labels show the agent's name within this distance and only its id beyond; hidden beyond LABEL_FAR. */
-const LABEL_NAME_DISTANCE = 30;
-const LABEL_FAR = 60;
-/** Speed of the acting ring's rotation, radians per second (only while frames are drawn anyway). */
-const ACTING_RING_SPEED = Math.PI / 6;
-
+type Screen = { x: number; y: number; depth: number; visible: boolean };
+type Draw = { depth: number; paint: () => void };
+type Pick = { x: number; y: number; radius: number; depth: number; id: string; cell: Point };
 interface Figure {
   id: string;
   marker: MapMarker;
   layer: number;
-  mesh: FigureMeshKey;
-  index: number;
-  /** Absolute scene position of the figure's foot (layer height included). */
   base: Vec3;
-  /** base plus the running animation's offset (labels and chips follow it). */
   current: Vec3;
   scale: number;
+  drawScale: number;
   lying: boolean;
-  colour: Color;
-  discIndex: number;
+  colour: Rgb;
+  tint: ClipColour | null;
+  tilt: number;
   cell: Point;
+  health: Rgb | null;
 }
-
 interface LayerRuntime {
   input: SceneLayer;
   index: number;
-  group: Group;
-  terrain: Mesh;
-  arrays: TerrainArrays;
-  grid: LineSegments;
-  border: LineSegments;
-  terrainMat: MeshLambertMaterial;
-  gridMat: LineBasicMaterial;
-  borderMat: LineBasicMaterial;
-  figureMat: MeshLambertMaterial;
-  columnMat: MeshLambertMaterial;
-  meshes: Record<FigureMeshKey, InstancedMesh>;
-  ids: Record<FigureMeshKey, string[]>;
-  columns: InstancedMesh;
-  columnCells: Point[];
-  /** Visible markers per "x,y" in slot order. */
   byCell: Map<string, MapMarker[]>;
+  figures: Figure[];
 }
 
-interface FxPool {
-  rings: Mesh[];
-  ringMats: MeshBasicMaterial[];
-  beams: LineSegments;
-  beamMat: LineBasicMaterial;
-  trails: LineSegments;
-  trailMat: LineBasicMaterial;
-  particles: Points;
-  particleMat: PointsMaterial;
-  quad: Mesh;
-  quadMat: MeshBasicMaterial;
-}
+const FRAME_SPACING_MS = 30;
+const LABEL_HEIGHT: Record<MapMarker["kind"], number> = { agent: 0.62, plant: 0.72, fruit: 0.24, seed: 0.24, residue: 0.14 };
+const LABEL_NAME_DISTANCE = 30;
+const LABEL_FAR = 60;
+const OUTLINE = 0.24;
+const near = (a: number, b: number) => Math.abs(a - b) < 0.001;
+const lerp = (a: Vec3, b: Vec3, t: number): Vec3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const alpha = (colour: Rgb, opacity: number) => `rgba(${Math.round(colour[0] * 255)},${Math.round(colour[1] * 255)},${Math.round(colour[2] * 255)},${Math.max(0, Math.min(1, opacity))})`;
 
-const BEAM_CAPACITY = 32;
-const TRAIL_CAPACITY = 8;
-const PARTICLE_STREAMS = 8;
-const RING_POOL = 4;
-
-const OUTSIDE_Y = -0.2;
-
-function plantScale(entity: Entity | undefined): number {
-  if (!entity || entity.kind !== "plant") return 1;
-  const size = (entity as Plant).size;
-  if (!Number.isFinite(size)) return 1;
-  return Math.min(1.6, Math.max(0.7, 0.4 + 0.3 * size));
-}
-
+/** The board renderer and the view's unchanged scene interface. */
 export class Scene3d {
-  readonly renderer: WebGLRenderer;
-  readonly rendererName: string;
-  readonly software: boolean;
-  readonly camera: PerspectiveCamera;
-  private readonly scene = new Scene();
-  private readonly hooks: SceneHooks;
+  readonly rendererName = "Canvas 2D (CPU)";
+  readonly software = true;
+  private readonly canvas: HTMLCanvasElement;
+  private readonly ctx: CanvasRenderingContext2D;
   private readonly labels: LabelLayer;
-  private readonly geometries: FigureGeometries;
+  private readonly hooks: SceneHooks;
   private palette: Palette;
   private layers: LayerRuntime[] = [];
-  private figures = new Map<string, Figure>();
   private active = 0;
   private options: LayerOptions = { priorityIds: [], hiddenKinds: new Set(), ghost: false, selfId: null };
   private marks: Marks = { selectedPoint: null, selectedEntityId: null, highlightAgentId: null, hoverEntityId: null, hoverCell: null };
   private cameraState: CameraState = { x: 0, y: 10, z: 10, yaw: 0, pitch: -0.8 };
   private lod: LodMode = "figures";
-  private readonly hemi: HemisphereLight;
-  private readonly sun: DirectionalLight;
-  private readonly outside: Mesh;
-  private readonly outsideMat: MeshBasicMaterial;
-  private readonly ringActing: Mesh;
-  private readonly ringSelected: Mesh;
-  private readonly ringHover: Mesh;
-  private readonly ringSelf: Mesh;
-  private readonly hoverQuad: Mesh;
-  private readonly cellFrame: LineSegments;
-  private readonly fx: FxPool;
-  private chips: { effect: TurnEffect; id: string | null; position: Vec3 }[] = [];
-  private ticks: LabelItem[] = [];
+  private width = 1;
+  private height = 1;
+  private pixelRatio = 1;
+  private dirty = false;
+  private paused = false;
+  private disposed = false;
+  private inFrame = false;
+  private rafId = 0;
+  private lastFrameClock = 0;
+  private lastFrameStart = 0;
+  private lastMore = false;
   private timeline: Timeline | null = null;
   private timelineStart = 0;
   private timelineRunning = false;
-  private touched = new Set<string>();
+  private fx: FxState[] = [];
+  private chips: { effect: TurnEffect; id: string | null; position: Vec3 }[] = [];
+  private chipEffects: readonly TurnEffect[] = [];
   private floats: LabelItem[] = [];
-  private width = 1;
-  private height = 1;
-  private dirty = false;
-  private paused = false;
-  private rafId = 0;
-  /** True while frame() runs: schedule() calls from inside it only mark the frame dirty (frame() reschedules once at its end). */
-  private inFrame = false;
-  /** Whether the last frame's hooks asked for another frame (a key held, a glide running). */
-  private lastMore = false;
-  /** rAF timestamp of the last frame (for dt). */
-  private lastFrameStart = 0;
-  /** performance.now() when the last frame began (the software frame spacing; rAF timestamps can lag a vsync). */
-  private lastFrameClock = 0;
-  private frameTimes: number[] = [];
-  private slow = false;
-  private disposed = false;
-  private readonly raycaster = new Raycaster();
-  private readonly tmpM = new Matrix4();
-  private readonly tmpV = new Vector3();
-  private readonly tmpS = new Vector3();
-  private readonly tmpQ = new Quaternion();
-  private readonly tmpE = new Euler();
-  private readonly tmpC = new Color();
+  private ticks: LabelItem[] = [];
+  private picks: Pick[] = [];
   private lastStats: FrameStats;
 
   constructor(canvas: HTMLCanvasElement, labelsRoot: HTMLElement, palette: Palette, hooks: SceneHooks) {
-    this.hooks = hooks;
+    this.canvas = canvas;
+    const context = canvas.getContext("2d", { alpha: false, willReadFrequently: true });
+    if (!context) throw new Error("Canvas 2D is unavailable");
+    this.ctx = context;
     this.palette = palette;
-    const probe = new WebGLRenderer({ canvas, antialias: false, powerPreference: "low-power", alpha: false });
-    const gl = probe.getContext();
-    const debug = gl.getExtension("WEBGL_debug_renderer_info");
-    this.rendererName = debug ? String(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)) : String(gl.getParameter(gl.RENDERER));
-    this.software = /SwiftShader|llvmpipe|Software/i.test(this.rendererName);
-    this.renderer = probe;
-    this.renderer.setPixelRatio(this.software ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
-    this.renderer.info.autoReset = true;
-    this.camera = new PerspectiveCamera(FOV_DEG, 1, CAMERA_NEAR, CAMERA_FAR);
-    this.camera.rotation.order = "YXZ";
-    this.scene.add(this.camera);
-    this.hemi = new HemisphereLight(0xffffff, 0x9a9a9a, 1.1);
-    this.sun = new DirectionalLight(0xffffff, 0.8);
-    this.sun.position.set(1, 2, 1);
-    this.scene.add(this.hemi, this.sun);
-    this.geometries = buildFigureGeometries();
-    this.outsideMat = new MeshBasicMaterial({ color: linear(palette.outside) });
-    this.outside = new Mesh(new PlaneGeometry(600, 600).rotateX(-Math.PI / 2), this.outsideMat);
-    this.outside.position.y = OUTSIDE_Y;
-    this.outside.renderOrder = -1;
-    this.scene.add(this.outside);
-    this.ringActing = new Mesh(this.geometries.dashedRing, new MeshBasicMaterial({ color: linear(palette.highlight), side: DoubleSide }));
-    this.ringSelected = new Mesh(this.geometries.ring, new MeshBasicMaterial({ color: linear(palette.entitySel), side: DoubleSide }));
-    this.ringHover = new Mesh(this.geometries.ring, new MeshBasicMaterial({ color: linear(palette.fg), side: DoubleSide }));
-    this.ringSelf = new Mesh(this.geometries.dashedRing, new MeshBasicMaterial({ color: linear(palette.accent), side: DoubleSide }));
-    this.hoverQuad = new Mesh(this.geometries.hoverQuad, new MeshBasicMaterial({ color: linear(palette.accent), transparent: true, opacity: 0.25, side: DoubleSide, depthWrite: false }));
-    this.cellFrame = new LineSegments(this.geometries.cellFrame, new LineBasicMaterial({ vertexColors: true }));
-    recolourCellFrame(this.geometries.cellFrame, palette.selInner, palette.selOuter);
-    for (const o of [this.ringActing, this.ringSelected, this.ringHover, this.ringSelf, this.hoverQuad, this.cellFrame]) {
-      o.visible = false;
-      o.frustumCulled = false;
-      this.scene.add(o);
-    }
-    this.fx = this.buildFxPool();
-    this.labels = new LabelLayer(labelsRoot, (id, cell) => this.hooks.onPick(id, cell));
-    this.renderer.setClearColor(linear(palette.bg), 1);
-    this.lastStats = { drawCalls: 0, triangles: 0, frameMs: 0, lod: this.lod, animating: false, labels: 0, camera: this.cameraState };
+    this.hooks = hooks;
+    this.labels = new LabelLayer(labelsRoot, hooks.onPick);
+    this.lastStats = { drawCalls: 0, triangles: 0, frameMs: 0, lod: "figures", animating: false, labels: 0, camera: this.cameraState };
   }
 
-  // ------------------------------------------------------------------ pools
-
-  private buildFxPool(): FxPool {
-    const rings: Mesh[] = [];
-    const ringMats: MeshBasicMaterial[] = [];
-    for (let i = 0; i < RING_POOL; i++) {
-      const mat = new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, side: DoubleSide, depthWrite: false });
-      const mesh = new Mesh(this.geometries.fxRing, mat);
-      mesh.visible = false;
-      mesh.frustumCulled = false;
-      this.scene.add(mesh);
-      rings.push(mesh);
-      ringMats.push(mat);
-    }
-    const dyn = (verts: number) => {
-      const g = new BufferGeometry();
-      const attr = new BufferAttribute(new Float32Array(verts * 3), 3);
-      attr.setUsage(DynamicDrawUsage);
-      g.setAttribute("position", attr);
-      g.setDrawRange(0, 0);
-      return g;
-    };
-    const beamMat = new LineBasicMaterial({ color: linear(this.palette.accent), transparent: true, opacity: 1, depthWrite: false });
-    const beams = new LineSegments(dyn(BEAM_CAPACITY * 2), beamMat);
-    const trailMat = new LineBasicMaterial({ color: linear(this.palette.fg), transparent: true, opacity: 1, depthWrite: false });
-    const trails = new LineSegments(dyn(TRAIL_CAPACITY * 2), trailMat);
-    const particleMat = new PointsMaterial({ color: linear(this.palette.warn), size: 0.09, sizeAttenuation: true, transparent: true, opacity: 1, depthWrite: false });
-    const particles = new Points(dyn(PARTICLE_STREAMS * PARTICLE_COUNT), particleMat);
-    const quadMat = new MeshBasicMaterial({ color: linear(this.palette.accent), transparent: true, opacity: 0.5, side: DoubleSide, depthWrite: false });
-    const quad = new Mesh(this.geometries.fxQuad, quadMat);
-    for (const o of [beams, trails, particles, quad]) {
-      o.visible = false;
-      o.frustumCulled = false;
-      this.scene.add(o);
-    }
-    return { rings, ringMats, beams, beamMat, trails, trailMat, particles, particleMat, quad, quadMat };
-  }
-
-  // ------------------------------------------------------------------ size, palette, camera
-
-  /** Resize the drawing buffer to the viewport's CSS size. */
+  /** Resize the CPU backing store to the CSS viewport, capped at native resolution. */
   setSize(width: number, height: number): void {
     this.width = Math.max(1, Math.round(width));
     this.height = Math.max(1, Math.round(height));
-    this.renderer.setSize(this.width, this.height, false);
-    this.camera.aspect = this.width / this.height;
-    this.camera.updateProjectionMatrix();
+    this.pixelRatio = Math.min(1, window.devicePixelRatio || 1);
+    this.canvas.width = Math.max(1, Math.round(this.width * this.pixelRatio));
+    this.canvas.height = Math.max(1, Math.round(this.height * this.pixelRatio));
+    this.ctx.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0);
     this.invalidate();
   }
 
-  /** Re-read colours (a theme change): terrain, lines, figures, rings, lights and the clear colour. */
+  /** Re-read the same CSS palette used by the 2D map. */
   setPalette(palette: Palette): void {
     this.palette = palette;
-    this.renderer.setClearColor(linear(palette.bg), 1);
-    this.outsideMat.color.copy(linear(palette.outside));
-    (this.ringActing.material as MeshBasicMaterial).color.copy(linear(palette.highlight));
-    (this.ringSelected.material as MeshBasicMaterial).color.copy(linear(palette.entitySel));
-    (this.ringHover.material as MeshBasicMaterial).color.copy(linear(palette.fg));
-    (this.ringSelf.material as MeshBasicMaterial).color.copy(linear(palette.accent));
-    (this.hoverQuad.material as MeshBasicMaterial).color.copy(linear(palette.accent));
-    recolourCellFrame(this.geometries.cellFrame, palette.selInner, palette.selOuter);
-    this.fx.beamMat.color.copy(linear(palette.accent));
-    this.fx.trailMat.color.copy(linear(palette.fg));
-    this.fx.particleMat.color.copy(linear(palette.warn));
-    this.fx.quadMat.color.copy(linear(palette.accent));
-    if (this.layers.length > 0) this.setLayers(this.layers.map((l) => l.input), this.active, this.options);
+    this.rebuildFigures();
     this.invalidate();
   }
-
-  getCamera(): CameraState {
-    return this.cameraState;
-  }
-
-  /** Move the camera to `state` (scene units, radians) and mark the frame dirty. */
+  getCamera(): CameraState { return this.cameraState; }
   setCamera(state: CameraState): void {
     this.cameraState = state;
-    this.camera.position.set(state.x, state.y, state.z);
-    this.camera.rotation.set(state.pitch, -state.yaw, 0);
-    this.camera.updateMatrixWorld();
-    const lod = lodMode(lodDistance(state, layerY(this.active)), this.lod);
-    if (lod !== this.lod) {
-      this.lod = lod;
-      this.applyLod();
-      this.hooks.onLod(lod);
-    }
+    const next = lodMode(lodDistance(state, layerY(this.active)), this.lod);
+    if (next !== this.lod) { this.lod = next; this.hooks.onLod(next); }
     this.invalidate();
   }
+  get currentLod(): LodMode { return this.lod; }
+  get stats(): FrameStats { return this.lastStats; }
+  get animating(): boolean { return this.timelineRunning; }
 
-  get currentLod(): LodMode {
-    return this.lod;
-  }
-
-  get stats(): FrameStats {
-    return this.lastStats;
-  }
-
-  get animating(): boolean {
-    return this.timelineRunning;
-  }
-
-  // ------------------------------------------------------------------ layers
-
-  /** Replace the boards: one group per layer, `active` drawn opaque and pickable. */
+  /** Replace every visible board layer and repack its entities. */
   setLayers(layers: readonly SceneLayer[], active: number, options: LayerOptions): void {
     this.snapTimeline();
-    for (const rt of this.layers) this.disposeLayer(rt);
-    this.layers = layers.map((input, index) => this.buildLayer(input, index));
     this.options = options;
     this.active = Math.min(Math.max(0, active), Math.max(0, layers.length - 1));
-    this.figures = new Map();
-    for (const rt of this.layers) this.rebuildFigures(rt);
-    this.applyLayerOpacity();
-    this.applyLod();
+    this.layers = layers.map((input, index) => ({ input, index, byCell: new Map(), figures: [] }));
+    this.rebuildFigures();
     this.buildTicks();
-    this.applyMarks();
     this.refreshChips();
     this.invalidate();
   }
-
-  /** Switch the active layer (opacity, picking, labels) without rebuilding the boards. */
   setActiveLayer(active: number): void {
     const next = Math.min(Math.max(0, active), Math.max(0, this.layers.length - 1));
     if (next === this.active) return;
     this.active = next;
-    this.applyLayerOpacity();
     this.buildTicks();
-    this.applyMarks();
     this.refreshChips();
     const lod = lodMode(lodDistance(this.cameraState, layerY(this.active)), this.lod);
-    if (lod !== this.lod) {
-      this.lod = lod;
-      this.applyLod();
-      this.hooks.onLod(lod);
-    }
+    if (lod !== this.lod) { this.lod = lod; this.hooks.onLod(lod); }
     this.invalidate();
   }
+  get activeLayer(): number { return this.active; }
+  markersAt(cell: Point): MapMarker[] { return this.layers[this.active]?.byCell.get(pointKey(cell)) ?? []; }
 
-  get activeLayer(): number {
-    return this.active;
-  }
-
-  /** The active layer's visible markers at a cell, in slot order (empty when the cell is empty). */
-  markersAt(cell: Point): MapMarker[] {
-    const rt = this.layers[this.active];
-    return rt ? (rt.byCell.get(pointKey(cell)) ?? []) : [];
-  }
-
-  private buildLayer(input: SceneLayer, index: number): LayerRuntime {
-    const group = new Group();
-    group.position.y = layerY(index);
-    const pal = this.palette;
-    const { geometry, arrays } = buildTerrainGeometry(input.map, terrainPalette(pal));
-    const terrainMat = new MeshLambertMaterial({ vertexColors: true });
-    const terrain = new Mesh(geometry, terrainMat);
-    terrain.frustumCulled = false;
-    const gridMat = new LineBasicMaterial({ color: linear(pal.grid), transparent: true, opacity: pal.gridAlpha, depthWrite: false });
-    const grid = new LineSegments(buildGridGeometry(input.map), gridMat);
-    grid.frustumCulled = false;
-    const originColour: Rgb = [pal.fg[0] * 0.18 + pal.bg[0] * 0.82, pal.fg[1] * 0.18 + pal.bg[1] * 0.82, pal.fg[2] * 0.18 + pal.bg[2] * 0.82];
-    const borderMat = new LineBasicMaterial({ vertexColors: true });
-    const border = new LineSegments(buildBorderGeometry(input.map, pal.border, originColour), borderMat);
-    border.frustumCulled = false;
-    const figureMat = new MeshLambertMaterial({ color: 0xffffff });
-    const columnMat = new MeshLambertMaterial({ color: 0xffffff });
-    const meshes = {} as Record<FigureMeshKey, InstancedMesh>;
-    const ids = {} as Record<FigureMeshKey, string[]>;
-    for (const key of FIGURE_MESH_KEYS) {
-      meshes[key] = this.makeInstanced(this.geometries.figures[key], figureMat, 16);
-      ids[key] = [];
-      group.add(meshes[key]);
-    }
-    const columns = this.makeInstanced(this.geometries.column, columnMat, 16);
-    columns.visible = false;
-    group.add(terrain, grid, border, columns);
-    this.scene.add(group);
-    return { input, index, group, terrain, arrays, grid, border, terrainMat, gridMat, borderMat, figureMat, columnMat, meshes, ids, columns, columnCells: [], byCell: new Map() };
-  }
-
-  private makeInstanced(geometry: BufferGeometry, material: MeshLambertMaterial, capacity: number): InstancedMesh {
-    const mesh = new InstancedMesh(geometry, material, capacity);
-    mesh.count = 0;
-    mesh.frustumCulled = false;
-    mesh.instanceMatrix.setUsage(DynamicDrawUsage);
-    return mesh;
-  }
-
-  private ensureCapacity(rt: LayerRuntime, key: FigureMeshKey | "columns", needed: number): InstancedMesh {
-    const current = key === "columns" ? rt.columns : rt.meshes[key];
-    if (current.instanceMatrix.count >= needed) return current;
-    const capacity = Math.max(16, Math.ceil(needed * 1.5));
-    const geometry = key === "columns" ? this.geometries.column : this.geometries.figures[key];
-    const material = key === "columns" ? rt.columnMat : rt.figureMat;
-    const next = this.makeInstanced(geometry, material, capacity);
-    next.visible = current.visible;
-    rt.group.remove(current);
-    current.dispose();
-    rt.group.add(next);
-    if (key === "columns") rt.columns = next;
-    else rt.meshes[key] = next;
-    return next;
-  }
-
-  private disposeLayer(rt: LayerRuntime): void {
-    this.scene.remove(rt.group);
-    rt.terrain.geometry.dispose();
-    rt.grid.geometry.dispose();
-    rt.border.geometry.dispose();
-    rt.terrainMat.dispose();
-    rt.gridMat.dispose();
-    rt.borderMat.dispose();
-    rt.figureMat.dispose();
-    rt.columnMat.dispose();
-    for (const key of FIGURE_MESH_KEYS) rt.meshes[key].dispose();
-    rt.columns.dispose();
-  }
-
-  private applyLayerOpacity(): void {
+  private rebuildFigures(): void {
     for (const rt of this.layers) {
-      const activeLayer = rt.index === this.active;
-      const opacity = activeLayer ? 1 : INACTIVE_LAYER_OPACITY;
-      for (const mat of [rt.terrainMat, rt.figureMat, rt.columnMat]) {
-        mat.transparent = !activeLayer;
-        mat.opacity = opacity;
-        mat.depthWrite = activeLayer;
-        mat.needsUpdate = true;
-      }
-      rt.gridMat.opacity = this.palette.gridAlpha * opacity;
-      rt.borderMat.transparent = !activeLayer;
-      rt.borderMat.opacity = opacity;
-      rt.borderMat.needsUpdate = true;
-    }
-  }
-
-  private applyLod(): void {
-    const columns = this.lod === "columns";
-    for (const rt of this.layers) {
-      for (const key of FIGURE_MESH_KEYS) rt.meshes[key].visible = !columns;
-      rt.columns.visible = columns;
-    }
-    this.invalidate();
-  }
-
-  /** Rebuild one layer's instances from its markers (called on layers, hidden kinds, priority ids and theme changes). */
-  private rebuildFigures(rt: LayerRuntime): void {
-    const { hiddenKinds, priorityIds, ghost } = this.options;
-    const pal = this.palette;
-    const visible = rt.input.markers.filter((m) => !hiddenKinds.has(dotKind(m)));
-    const grouped = groupMarkersByPoint(visible);
-    const counts: Record<FigureMeshKey, number> = { disc: 0, agent: 0, plant: 0, fruit: 0, seed: 0, residue: 0 };
-    const ordered = new Map<string, MapMarker[]>();
-    for (const [key, list] of grouped) {
-      const sorted = orderForSlots(list, priorityIds);
-      ordered.set(key, sorted);
-      for (const m of sorted) {
-        counts[m.kind] += 1;
-        if (m.kind === "agent" && !m.dead && !ghost && rt.input.entities.get(m.id)?.kind === "agent") counts.disc += 1;
-      }
-    }
-    for (const key of FIGURE_MESH_KEYS) {
-      this.ensureCapacity(rt, key, counts[key]);
-      rt.ids[key] = [];
-    }
-    this.ensureCapacity(rt, "columns", ordered.size);
-    const next: Record<FigureMeshKey, number> = { disc: 0, agent: 0, plant: 0, fruit: 0, seed: 0, residue: 0 };
-    const yOffset = layerY(rt.index);
-    for (const [, list] of ordered) {
-      const cell = list[0].position;
-      const slots = packCell(list.length);
-      list.forEach((m, i) => {
-        const slot = slots[i];
-        const local = slotScenePosition(cell, slot, 0);
-        const entity = rt.input.entities.get(m.id);
-        const key = m.kind;
-        const kindScale = key === "plant" ? plantScale(entity) * (m.dead ? 0.6 : 1) : 1;
-        let rgb: Rgb;
-        if (m.dead) rgb = pal.dead;
-        else if (key === "plant") rgb = plantColour(entity && entity.kind === "plant" ? entity.species : "", false, pal);
-        else rgb = kindColour(key, pal);
-        if (ghost) rgb = ghostTint(rgb, pal);
-        const index = next[key]++;
-        rt.ids[key][index] = m.id;
-        const fig: Figure = {
-          id: m.id,
-          marker: m,
-          layer: rt.index,
-          mesh: key,
-          index,
-          base: [local[0], local[1] + yOffset, local[2]],
-          current: [local[0], local[1] + yOffset, local[2]],
-          scale: slot.scale * kindScale,
-          lying: m.dead,
-          colour: linear(rgb),
-          discIndex: -1,
-          cell,
-        };
-        if (m.kind === "agent" && !m.dead && !ghost && entity && entity.kind === "agent") {
-          const stats = (entity as Agent).stats;
-          fig.discIndex = next.disc++;
-          rt.ids.disc[fig.discIndex] = m.id;
-          this.composeDisc(rt, fig, [0, 0, 0], 1);
-          rt.meshes.disc.setColorAt(fig.discIndex, linear(healthColour(stats.max_health > 0 ? stats.health / stats.max_health : 0, pal)));
+      const visible = rt.input.markers.filter((m) => !this.options.hiddenKinds.has(dotKind(m)));
+      const grouped = groupMarkersByPoint(visible);
+      rt.byCell = new Map();
+      rt.figures = [];
+      for (const [key, list] of grouped) {
+        const ordered = orderForSlots(list, this.options.priorityIds);
+        rt.byCell.set(key, ordered);
+        const slots = packCell(ordered.length);
+        for (let i = 0; i < ordered.length; i++) {
+          const marker = ordered[i];
+          const entity = rt.input.entities.get(marker.id);
+          const position = slotScenePosition(marker.position, slots[i], rt.index);
+          const kindScale = marker.kind === "plant" && entity?.kind === "plant" ? Math.min(1.6, Math.max(0.7, 0.4 + 0.3 * ((entity as Plant).size || 1))) * (marker.dead ? 0.6 : 1) : 1;
+          let colour = marker.dead ? this.palette.dead : marker.kind === "plant" ? plantColour(entity?.kind === "plant" ? entity.species : "", false, this.palette) : kindColour(marker.kind, this.palette);
+          if (this.options.ghost) colour = ghostTint(colour, this.palette);
+          const stats = entity?.kind === "agent" ? (entity as Agent).stats : null;
+          rt.figures.push({ id: marker.id, marker, layer: rt.index, base: position, current: position, scale: slots[i].scale * kindScale, drawScale: 1, lying: marker.dead, colour, tint: null, tilt: 0, cell: marker.position, health: stats && !marker.dead && !this.options.ghost ? healthColour(stats.max_health > 0 ? stats.health / stats.max_health : 0, this.palette) : null });
         }
-        this.composeFigure(rt, fig, [0, 0, 0], 1, 0);
-        rt.meshes[key].setColorAt(index, fig.colour);
-        this.figures.set(fig.id, fig);
-      });
+      }
     }
-    for (const key of FIGURE_MESH_KEYS) {
-      const mesh = rt.meshes[key];
-      mesh.count = next[key];
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-      mesh.computeBoundingSphere();
-    }
-    rt.columnCells = [];
-    let c = 0;
-    for (const [, list] of ordered) {
-      const cell = list[0].position;
-      const centre = cellToScene(cell, 0);
-      const kind = dominantKind(list) ?? "residue";
-      let rgb = kindColour(kind, pal);
-      if (ghost) rgb = ghostTint(rgb, pal);
-      this.tmpM.compose(this.tmpV.set(centre[0], centre[1], centre[2]), this.tmpQ.identity(), this.tmpS.set(1, columnHeight(list.length), 1));
-      rt.columns.setMatrixAt(c, this.tmpM);
-      rt.columns.setColorAt(c, linear(rgb));
-      rt.columnCells[c] = cell;
-      c++;
-    }
-    rt.columns.count = c;
-    rt.columns.instanceMatrix.needsUpdate = true;
-    if (rt.columns.instanceColor) rt.columns.instanceColor.needsUpdate = true;
-    rt.columns.computeBoundingSphere();
-    rt.byCell = ordered;
   }
-
-  private composeFigure(rt: LayerRuntime, fig: Figure, offset: Vec3, scaleMul: number, tilt: number): void {
-    const rz = (fig.lying ? Math.PI / 2 : 0) + tilt;
-    const lift = rz !== 0 ? DEAD_LIFT[fig.mesh] * Math.abs(Math.sin(rz)) * fig.scale : 0;
-    const y = fig.base[1] - layerY(rt.index);
-    this.tmpV.set(fig.base[0] + offset[0], y + offset[1] + lift, fig.base[2] + offset[2]);
-    this.tmpQ.setFromEuler(this.tmpE.set(0, 0, rz));
-    const s = Math.max(0.0001, fig.scale * scaleMul);
-    this.tmpS.set(s, s, s);
-    this.tmpM.compose(this.tmpV, this.tmpQ, this.tmpS);
-    rt.meshes[fig.mesh].setMatrixAt(fig.index, this.tmpM);
-    fig.current = [fig.base[0] + offset[0], fig.base[1] + offset[1], fig.base[2] + offset[2]];
-  }
-
-  private composeDisc(rt: LayerRuntime, fig: Figure, offset: Vec3, scaleMul: number): void {
-    if (fig.discIndex < 0) return;
-    const y = fig.base[1] - layerY(rt.index);
-    this.tmpV.set(fig.base[0] + offset[0], y + offset[1], fig.base[2] + offset[2]);
-    const s = Math.max(0.0001, fig.scale * scaleMul);
-    this.tmpS.set(s, 1, s);
-    this.tmpM.compose(this.tmpV, this.tmpQ.identity(), this.tmpS);
-    rt.meshes.disc.setMatrixAt(fig.discIndex, this.tmpM);
-  }
-
+  private findFigure(id: string | null, layer = this.active): Figure | undefined { return id ? this.layers[layer]?.figures.find((f) => f.id === id) : undefined; }
   private buildTicks(): void {
-    const rt = this.layers[this.active];
     this.ticks = [];
+    const rt = this.layers[this.active];
     if (!rt) return;
     const r = rt.input.map.region;
-    const y = layerY(this.active);
     const span = Math.max(r.max_x - r.min_x, r.max_y - r.min_y) + 1;
-    const stepSize = span <= 20 ? 1 : 5;
-    const southZ = 0 - r.min_y + 0.5 + 0.4;
-    const westX = r.min_x - 0.5 - 0.4;
-    for (let x = r.min_x; x <= r.max_x; x++) {
-      if (x % stepSize !== 0 && x !== r.min_x && x !== r.max_x) continue;
-      this.ticks.push({ key: `tick:x:${x}`, kind: "tick", position: [x, y, southZ], text: String(x), anchor: "center", priority: 0, className: x === 0 ? "map3d-tick-zero" : undefined });
-    }
-    for (let yy = r.min_y; yy <= r.max_y; yy++) {
-      if (yy % stepSize !== 0 && yy !== r.min_y && yy !== r.max_y) continue;
-      this.ticks.push({ key: `tick:y:${yy}`, kind: "tick", position: [westX, y, 0 - yy], text: String(yy), anchor: "center", priority: 0, className: yy === 0 ? "map3d-tick-zero" : undefined });
-    }
+    const step = span <= 20 ? 1 : 5;
+    for (let x = r.min_x; x <= r.max_x; x++) if (x % step === 0 || x === r.min_x || x === r.max_x) this.ticks.push({ key: `tick:x:${x}`, kind: "tick", position: [x, layerY(this.active), -r.min_y + 0.9], text: String(x), anchor: "center", priority: 0, className: x === 0 ? "map3d-tick-zero" : undefined });
+    for (let y = r.min_y; y <= r.max_y; y++) if (y % step === 0 || y === r.min_y || y === r.max_y) this.ticks.push({ key: `tick:y:${y}`, kind: "tick", position: [r.min_x - 0.9, layerY(this.active), -y], text: String(y), anchor: "center", priority: 0, className: y === 0 ? "map3d-tick-zero" : undefined });
   }
+  setMarks(marks: Marks): void { this.marks = marks; this.invalidate(); }
 
-  // ------------------------------------------------------------------ marks
-
-  setMarks(marks: Marks): void {
-    this.marks = marks;
-    this.applyMarks();
-    this.invalidate();
-  }
-
-  private placeRing(ring: Mesh, id: string | null): void {
-    const fig = id ? this.figures.get(id) : undefined;
-    if (!fig || fig.layer !== this.active) {
-      ring.visible = false;
-      return;
-    }
-    ring.visible = true;
-    ring.position.set(fig.current[0], fig.current[1], fig.current[2]);
-    const s = Math.max(0.5, fig.scale);
-    ring.scale.set(s, 1, s);
-  }
-
-  private applyMarks(): void {
-    const m = this.marks;
-    this.placeRing(this.ringActing, m.highlightAgentId);
-    this.placeRing(this.ringSelected, m.selectedEntityId);
-    this.placeRing(this.ringHover, m.hoverEntityId && m.hoverEntityId !== m.selectedEntityId ? m.hoverEntityId : null);
-    this.placeRing(this.ringSelf, this.options.selfId);
-    const y = layerY(this.active);
-    if (m.hoverCell) {
-      const c = cellToScene(m.hoverCell, this.active);
-      this.hoverQuad.visible = true;
-      this.hoverQuad.position.set(c[0], y, c[2]);
-    } else this.hoverQuad.visible = false;
-    if (m.selectedPoint) {
-      const c = cellToScene(m.selectedPoint, this.active);
-      this.cellFrame.visible = true;
-      this.cellFrame.position.set(c[0], y, c[2]);
-    } else this.cellFrame.visible = false;
-  }
-
-  // ------------------------------------------------------------------ chips and timeline
-
-  /** The context the timeline and the chips are built with: slots of the active layer, in absolute scene units. */
+  /** Context shared with the unchanged turn timeline builder. */
   timelineContext(reducedMotion: boolean): TimelineContext {
-    const active = this.active;
-    const figures = this.figures;
-    const rt = this.layers[active];
+    const rt = this.layers[this.active];
     return {
-      slotOf: (id) => {
-        const fig = figures.get(id);
-        return fig && fig.layer === active ? [fig.base[0], fig.base[1], fig.base[2]] : null;
-      },
-      cellCentre: (p) => cellToScene(p, active),
-      commRange: (id) => {
-        const e = rt?.input.entities.get(id);
-        return e && e.kind === "agent" ? e.stats.communication_range : null;
-      },
+      slotOf: (id) => this.findFigure(id)?.base ?? null,
+      cellCentre: (p) => cellToScene(p, this.active),
+      commRange: (id) => { const e = rt?.input.entities.get(id); return e?.kind === "agent" ? e.stats.communication_range : null; },
       reducedMotion,
     };
   }
-
-  private chipEffects: readonly TurnEffect[] = [];
-
-  /** The viewed turn's chips (they stay while the turn is viewed). */
-  setChips(effects: readonly TurnEffect[]): void {
-    this.chipEffects = effects;
-    this.refreshChips();
-    this.invalidate();
-  }
-
-  private refreshChips(): void {
-    this.chips = chipPlacements(this.chipEffects, this.timelineContext(true)).map((c) => ({ effect: c.effect, id: c.id, position: c.position }));
-  }
-
-  /**
-   * Restart the viewed turn's animations from `effects`: the timeline is built
-   * against the current slots, squeezed by `factor` (< 1 for fast live play),
-   * and every duration is 0 with `reducedMotion` (the end state at once).
-   */
+  setChips(effects: readonly TurnEffect[]): void { this.chipEffects = effects; this.refreshChips(); this.invalidate(); }
+  private refreshChips(): void { this.chips = chipPlacements(this.chipEffects, this.timelineContext(true)).map((c) => ({ effect: c.effect, id: c.id, position: c.position })); }
   playTimeline(effects: readonly TurnEffect[], reducedMotion: boolean, factor = 1): void {
     this.snapTimeline();
     let tl = buildTimeline(effects, this.timelineContext(reducedMotion));
-    if (factor < 1) tl = scaleTimeline(tl, factor);
+    if (factor !== 1) tl = scaleTimeline(tl, factor);
     this.timeline = tl;
     this.timelineStart = performance.now();
     this.timelineRunning = tl.duration > 0 && tl.clips.length > 0;
-    if (!this.timelineRunning) {
-      this.timeline = null;
-      this.hideFx();
-    }
+    if (!this.timelineRunning) this.timeline = null;
     this.invalidate();
   }
-
-  /** Finish a running timeline at once (every figure back at its saved pose). */
   snapTimeline(): void {
-    if (!this.timelineRunning && this.touched.size === 0) return;
+    if (!this.timelineRunning && this.fx.length === 0) return;
     this.timelineRunning = false;
     this.timeline = null;
-    this.restoreTouched(new Set());
-    this.hideFx();
+    this.fx = [];
     this.floats = [];
+    for (const rt of this.layers) for (const fig of rt.figures) { fig.current = fig.base; fig.drawScale = 1; fig.tint = null; fig.tilt = 0; }
     this.invalidate();
   }
-
-  private restoreTouched(keep: ReadonlySet<string>): void {
-    const meshesToFlag = new Set<InstancedMesh>();
-    for (const id of this.touched) {
-      if (keep.has(id)) continue;
-      const fig = this.figures.get(id);
+  private sample(now: number): void {
+    if (!this.timeline || !this.timelineRunning) return;
+    const sampled = sampleTimeline(this.timeline, now - this.timelineStart);
+    for (const rt of this.layers) for (const fig of rt.figures) { fig.current = fig.base; fig.drawScale = 1; fig.tint = null; fig.tilt = 0; }
+    for (const [id, e] of sampled.entities) {
+      const fig = this.findFigure(id);
       if (!fig) continue;
-      const rt = this.layers[fig.layer];
-      if (!rt) continue;
-      this.composeFigure(rt, fig, [0, 0, 0], 1, 0);
-      this.composeDisc(rt, fig, [0, 0, 0], 1);
-      rt.meshes[fig.mesh].setColorAt(fig.index, fig.colour);
-      meshesToFlag.add(rt.meshes[fig.mesh]);
-      if (fig.discIndex >= 0) meshesToFlag.add(rt.meshes.disc);
+      fig.current = add(fig.base, e.offset);
+      fig.drawScale = e.scale;
+      fig.tint = e.tint;
+      fig.tilt = e.tilt;
     }
-    for (const mesh of meshesToFlag) {
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    }
-    this.touched = new Set(keep);
+    this.fx = sampled.fx.filter((fx) => fx.kind !== "float");
+    this.floats = sampled.fx.filter((fx) => fx.kind === "float").map((fx) => ({ key: `float:${fx.id ?? ""}:${fx.text ?? ""}:${fx.effectKind}`, kind: "float", position: fx.position, text: fx.text ?? "", className: fx.colour ? `map3d-float-${fx.colour}` : undefined, opacity: fx.opacity, anchor: "center", priority: 5 }));
+    if (sampled.done) this.snapTimeline();
   }
 
-  private roleColour(role: ClipColour | null): Color {
-    const pal = this.palette;
-    switch (role) {
-      case "bad":
-        return linear(pal.bad);
-      case "good":
-        return linear(pal.good);
-      case "warn":
-      case "resource":
-        return linear(pal.warn);
-      case "accent":
-      default:
-        return linear(pal.accent);
-    }
+  /** Perspective projection, using the same yaw and pitch as flight controls. */
+  private projectDepth(p: Vec3): Screen {
+    const c = this.cameraState;
+    const rel: Vec3 = [p[0] - c.x, p[1] - c.y, p[2] - c.z];
+    const forward = lookDirection(c);
+    const [rx, rz] = rightOf(c.yaw);
+    const up = upVector(c);
+    const depth = dot(rel, forward);
+    if (depth <= CAMERA_NEAR) return { x: 0, y: 0, depth, visible: false };
+    const focal = (this.height / 2) / Math.tan((FOV_DEG * Math.PI) / 360);
+    const x = this.width / 2 + (rel[0] * rx + rel[2] * rz) * focal / depth;
+    const y = this.height * FRAME_SCREEN_Y - dot(rel, up) * focal / depth;
+    return { x, y, depth, visible: x >= 0 && x <= this.width && y >= 0 && y <= this.height };
   }
+  project(p: Vec3): { x: number; y: number; visible: boolean } { const q = this.projectDepth(p); return { x: q.x, y: q.y, visible: q.visible }; }
+  entityPosition(id: string): Vec3 | null { return this.findFigure(id)?.current ?? null; }
 
-  private applyTimeline(now: number): void {
-    const tl = this.timeline;
-    if (!tl || !this.timelineRunning) return;
-    const sample = sampleTimeline(tl, now - this.timelineStart);
-    const keep = new Set(sample.entities.keys());
-    this.restoreTouched(keep);
-    const flagged = new Set<InstancedMesh>();
-    for (const [id, e] of sample.entities) {
-      const fig = this.figures.get(id);
-      if (!fig) continue;
-      const rt = this.layers[fig.layer];
-      if (!rt) continue;
-      this.composeFigure(rt, fig, e.offset, e.scale, e.tilt);
-      this.composeDisc(rt, fig, e.offset, e.scale);
-      const mesh = rt.meshes[fig.mesh];
-      if (e.tint) mesh.setColorAt(fig.index, this.tmpC.copy(fig.colour).lerp(this.roleColour(e.tint), 0.7));
-      else mesh.setColorAt(fig.index, fig.colour);
-      flagged.add(mesh);
-      if (fig.discIndex >= 0) flagged.add(rt.meshes.disc);
-      this.touched.add(id);
-    }
-    for (const mesh of flagged) {
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    }
-    this.applyFx(sample.fx);
-    if (sample.done) {
-      this.timelineRunning = false;
-      this.timeline = null;
-      this.restoreTouched(new Set());
-      this.hideFx();
-      this.floats = [];
-    }
-    this.applyMarks();
+  /** Intersect the pointer ray with the active board's plane for drag and wheel controls. */
+  boardPoint(px: number, py: number): Vec3 | null {
+    const c = this.cameraState;
+    const forward = lookDirection(c);
+    const up = upVector(c);
+    const [rx, rz] = rightOf(c.yaw);
+    const focal = (this.height / 2) / Math.tan((FOV_DEG * Math.PI) / 360);
+    const dx = (px - this.width / 2) / focal;
+    const dy = (this.height * FRAME_SCREEN_Y - py) / focal;
+    const ray: Vec3 = [forward[0] + rx * dx + up[0] * dy, forward[1] + up[1] * dy, forward[2] + rz * dx + up[2] * dy];
+    if (near(ray[1], 0)) return null;
+    const t = (layerY(this.active) - c.y) / ray[1];
+    return t > 0 ? [c.x + ray[0] * t, layerY(this.active), c.z + ray[2] * t] : null;
   }
-
-  private hideFx(): void {
-    for (const r of this.fx.rings) r.visible = false;
-    this.fx.beams.visible = false;
-    this.fx.trails.visible = false;
-    this.fx.particles.visible = false;
-    this.fx.quad.visible = false;
-  }
-
-  private applyFx(list: readonly FxState[]): void {
-    this.hideFx();
-    this.floats = [];
-    let ringIndex = 0;
-    let beamCount = 0;
-    let trailCount = 0;
-    let particleCount = 0;
-    const beamPos = this.fx.beams.geometry.getAttribute("position") as BufferAttribute;
-    const trailPos = this.fx.trails.geometry.getAttribute("position") as BufferAttribute;
-    const partPos = this.fx.particles.geometry.getAttribute("position") as BufferAttribute;
-    let beamOpacity = 0;
-    let trailOpacity = 0;
-    let particleOpacity = 0;
-    for (const fx of list) {
-      switch (fx.kind) {
-        case "ripple":
-        case "pulse":
-        case "puff": {
-          if (ringIndex >= RING_POOL) break;
-          const ring = this.fx.rings[ringIndex];
-          const mat = this.fx.ringMats[ringIndex];
-          ringIndex++;
-          ring.visible = true;
-          const y = fx.kind === "puff" ? fx.position[1] : fx.position[1] + 0.03;
-          ring.position.set(fx.position[0], y, fx.position[2]);
-          const r = Math.max(0.05, fx.radius);
-          ring.scale.set(r, 1, r);
-          mat.color.copy(this.roleColour(fx.colour));
-          mat.opacity = Math.max(0, Math.min(1, fx.opacity));
-          break;
-        }
-        case "beam": {
-          if (beamCount >= BEAM_CAPACITY) break;
-          const a = fx.from;
-          const b = fx.to;
-          beamPos.setXYZ(beamCount * 2, a[0], a[1] + 0.3, a[2]);
-          beamPos.setXYZ(beamCount * 2 + 1, b[0], b[1] + 0.3, b[2]);
-          beamCount++;
-          beamOpacity = Math.max(beamOpacity, fx.opacity);
-          break;
-        }
-        case "trail": {
-          if (trailCount >= TRAIL_CAPACITY) break;
-          const a = fx.from;
-          const b = fx.to;
-          trailPos.setXYZ(trailCount * 2, a[0], a[1] + 0.05, a[2]);
-          trailPos.setXYZ(trailCount * 2 + 1, b[0], b[1] + 0.05, b[2]);
-          trailCount++;
-          trailOpacity = Math.max(trailOpacity, fx.opacity);
-          break;
-        }
-        case "particles": {
-          if (particleCount + PARTICLE_COUNT > PARTICLE_STREAMS * PARTICLE_COUNT) break;
-          for (let k = 0; k < PARTICLE_COUNT; k++) {
-            const t = Math.min(1, Math.max(0, fx.progress + (k / PARTICLE_COUNT - 0.5) * 0.35));
-            const jitter = ((k * 7919) % 97) / 97 - 0.5;
-            const jitter2 = ((k * 104729) % 89) / 89 - 0.5;
-            partPos.setXYZ(
-              particleCount + k,
-              fx.from[0] + (fx.to[0] - fx.from[0]) * t + jitter * 0.2,
-              fx.from[1] + (fx.to[1] - fx.from[1]) * t + 0.25 + Math.sin(Math.PI * t) * 0.3 + jitter2 * 0.1,
-              fx.from[2] + (fx.to[2] - fx.from[2]) * t + jitter2 * 0.2,
-            );
-          }
-          particleCount += PARTICLE_COUNT;
-          particleOpacity = Math.max(particleOpacity, fx.opacity);
-          this.fx.particleMat.color.copy(this.roleColour(fx.colour));
-          break;
-        }
-        case "quad": {
-          this.fx.quad.visible = true;
-          this.fx.quad.position.set(fx.position[0], fx.position[1], fx.position[2]);
-          this.fx.quadMat.opacity = fx.opacity;
-          this.fx.quadMat.color.copy(this.roleColour(fx.colour));
-          break;
-        }
-        case "float": {
-          this.floats.push({
-            key: `float:${fx.id ?? ""}:${fx.text ?? ""}:${fx.effectKind}`,
-            kind: "float",
-            position: fx.position,
-            text: fx.text ?? "",
-            className: fx.colour ? `map3d-float-${fx.colour}` : undefined,
-            opacity: fx.opacity,
-            anchor: "center",
-            priority: 5,
-          });
-          break;
-        }
-        default:
-          break;
-      }
-    }
-    if (beamCount > 0) {
-      this.fx.beams.visible = true;
-      this.fx.beams.geometry.setDrawRange(0, beamCount * 2);
-      beamPos.needsUpdate = true;
-      this.fx.beamMat.opacity = beamOpacity;
-    }
-    if (trailCount > 0) {
-      this.fx.trails.visible = true;
-      this.fx.trails.geometry.setDrawRange(0, trailCount * 2);
-      trailPos.needsUpdate = true;
-      this.fx.trailMat.opacity = trailOpacity;
-    }
-    if (particleCount > 0) {
-      this.fx.particles.visible = true;
-      this.fx.particles.geometry.setDrawRange(0, particleCount);
-      partPos.needsUpdate = true;
-      this.fx.particleMat.opacity = particleOpacity;
-    }
-  }
-
-  // ------------------------------------------------------------------ picking
-
-  private ndc(px: number, py: number): Vector2 {
-    return new Vector2((px / this.width) * 2 - 1, -(py / this.height) * 2 + 1);
-  }
-
-  /** What is under a viewport pixel on the active layer: a figure (its entity) or a tile (its cell), else null. */
   hitTest(px: number, py: number): Hit | null {
     const rt = this.layers[this.active];
     if (!rt) return null;
-    this.raycaster.setFromCamera(this.ndc(px, py), this.camera);
-    const objects: Object3D[] = [];
-    if (this.lod === "columns") objects.push(rt.columns);
-    else for (const key of FIGURE_MESH_KEYS) if (rt.meshes[key].count > 0) objects.push(rt.meshes[key]);
-    objects.push(rt.terrain);
-    const hits = this.raycaster.intersectObjects(objects, false);
-    for (const hit of hits) {
-      if (hit.object === rt.terrain) {
-        const cell = hit.faceIndex !== undefined && hit.faceIndex !== null ? cellOfFace(rt.input.map, hit.faceIndex, rt.arrays) : null;
-        return cell ? { kind: "cell", cell } : null;
+    let nearest: Pick | null = null;
+    for (const pick of this.picks) {
+      if (Math.hypot(px - pick.x, py - pick.y) <= pick.radius && (!nearest || pick.depth < nearest.depth)) nearest = pick;
+    }
+    if (nearest) return this.lod === "columns" ? { kind: "cell", cell: nearest.cell } : { kind: "entity", id: nearest.id, cell: nearest.cell };
+    const point = this.boardPoint(px, py);
+    if (!point) return null;
+    const cell = { x: Math.round(point[0]), y: Math.round(-point[2]) };
+    const r = rt.input.map.region;
+    return cell.x >= r.min_x && cell.x <= r.max_x && cell.y >= r.min_y && cell.y <= r.max_y ? { kind: "cell", cell } : null;
+  }
+
+  private path(points: readonly Screen[]): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.closePath();
+  }
+  /** Clip terrain polygons against the camera's near plane before projection. */
+  private projectPolygon(points: readonly Vec3[]): Screen[] {
+    const c = this.cameraState;
+    const forward = lookDirection(c);
+    const depth = (p: Vec3) => dot([p[0] - c.x, p[1] - c.y, p[2] - c.z], forward);
+    const threshold = CAMERA_NEAR + 0.02;
+    const clipped: Vec3[] = [];
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % points.length];
+      const da = depth(a), db = depth(b);
+      if (da >= threshold) clipped.push(a);
+      if ((da < threshold && db > threshold) || (da > threshold && db < threshold)) clipped.push(lerp(a, b, (threshold - da) / (db - da)));
+    }
+    return clipped.map((p) => this.projectDepth(p));
+  }
+  private strokePoly(points: readonly Screen[], colour: string, width: number): void { this.path(points); this.ctx.strokeStyle = colour; this.ctx.lineWidth = width; this.ctx.stroke(); }
+  private ellipse(x: number, y: number, rx: number, ry: number, colour: string): void {
+    this.ctx.beginPath(); this.ctx.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), 0, 0, Math.PI * 2); this.ctx.fillStyle = colour; this.ctx.fill();
+  }
+  private line(a: Screen, b: Screen, colour: string, width: number): void {
+    const ctx = this.ctx; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.strokeStyle = colour; ctx.lineWidth = width; ctx.stroke();
+  }
+  private roleColour(role: ClipColour | null): Rgb {
+    switch (role) { case "bad": return this.palette.bad; case "good": return this.palette.good; case "warn": case "resource": return this.palette.warn; default: return this.palette.accent; }
+  }
+  /** Quiet, deterministic surface marks that do not use images or idle animation. */
+  private terrainDetail(terrain: "land" | "mountain" | "water", cell: Point, corners: readonly Vec3[], opacity: number): void {
+    const ctx = this.ctx;
+    const pal = this.palette;
+    const [x, y, z] = [cell.x, corners[0][1], -cell.y];
+    const screenWidth = Math.hypot(this.projectDepth(corners[1]).x - this.projectDepth(corners[0]).x, this.projectDepth(corners[1]).y - this.projectDepth(corners[0]).y);
+    if (terrain === "mountain") {
+      if (screenWidth < 4) return;
+      const off = ((cell.x * 17 + cell.y * 29) % 7) / 35 - 0.08;
+      const peak: Vec3 = [x + off, y + 0.3, z - off * 0.5];
+      const peakScreen = this.projectDepth(peak);
+      if (peakScreen.depth <= CAMERA_NEAR) return;
+      const shades = [mix(pal.mountain, pal.fg, 0.12), mix(pal.mountain, pal.bg, 0.13), mix(pal.mountain, pal.bg, 0.24), mix(pal.mountain, pal.fg, 0.04)];
+      for (let i = 0; i < 4; i++) {
+        const a = this.projectDepth(corners[i]);
+        const b = this.projectDepth(corners[(i + 1) % 4]);
+        if (a.depth <= CAMERA_NEAR || b.depth <= CAMERA_NEAR) continue;
+        this.path([a, b, peakScreen]);
+        ctx.fillStyle = alpha(shades[i], opacity);
+        ctx.fill();
       }
-      if (hit.object === rt.columns) {
-        const cell = hit.instanceId !== undefined ? rt.columnCells[hit.instanceId] : undefined;
-        return cell ? { kind: "cell", cell } : null;
+      return;
+    }
+    if (screenWidth < 12) return;
+    const hash = Math.abs((cell.x * 73856093) ^ (cell.y * 19349663));
+    if (terrain === "land") {
+      if (hash % 5 !== 0) return;
+      const at: Vec3 = [x - 0.15 + (hash % 3) * 0.11, y + 0.009, z + 0.05];
+      const a = this.projectDepth(at);
+      const b = this.projectDepth([at[0] - 0.07, at[1], at[2] - 0.12]);
+      const c = this.projectDepth([at[0] + 0.06, at[1], at[2] - 0.1]);
+      if (a.depth <= CAMERA_NEAR || b.depth <= CAMERA_NEAR || c.depth <= CAMERA_NEAR) return;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y);
+      ctx.strokeStyle = alpha(pal.plant, opacity * 0.22); ctx.lineWidth = 0.85; ctx.stroke();
+      return;
+    }
+    // Two short, still surface strokes make water read as water at close zoom.
+    for (let i = 0; i < 2; i++) {
+      const row = i === 0 ? -0.15 : 0.16;
+      const from = this.projectDepth([x - 0.28 + (hash % 4) * 0.025, y + 0.012, z + row]);
+      const mid = this.projectDepth([x, y + 0.012, z + row - 0.035]);
+      const to = this.projectDepth([x + 0.27, y + 0.012, z + row]);
+      if (from.depth <= CAMERA_NEAR || mid.depth <= CAMERA_NEAR || to.depth <= CAMERA_NEAR) continue;
+      ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.quadraticCurveTo(mid.x, mid.y, to.x, to.y);
+      ctx.strokeStyle = alpha(mix(pal.waterLine, pal.fg, 0.16), opacity * 0.54); ctx.lineWidth = 1.1; ctx.stroke();
+    }
+  }
+  private tile(rt: LayerRuntime, cell: Point, commands: Draw[]): void {
+    const y = layerY(rt.index);
+    const terrain = terrainAt(rt.input.map, cell);
+    const top = y + terrainTop(terrain);
+    const x = cell.x, z = -cell.y;
+    const corners: Vec3[] = [[x - 0.5, top, z - 0.5], [x + 0.5, top, z - 0.5], [x + 0.5, top, z + 0.5], [x - 0.5, top, z + 0.5]];
+    const poly = this.projectPolygon(corners);
+    if (poly.length < 3) return;
+    if (poly.every((p) => p.x < -20) || poly.every((p) => p.x > this.width + 20) || poly.every((p) => p.y < -20) || poly.every((p) => p.y > this.height + 20)) return;
+    const opacity = rt.index === this.active ? 1 : INACTIVE_LAYER_OPACITY;
+    const pal = this.palette;
+    const base = terrain === "mountain" ? pal.mountain : terrain === "water" ? pal.water : pal.land;
+    const centerDepth = this.projectDepth([x, top, z]).depth;
+    commands.push({ depth: centerDepth, paint: () => {
+      const ctx = this.ctx;
+      if (terrain === "mountain" && poly.length === 4 && corners.every((corner) => this.projectDepth(corner).depth > CAMERA_NEAR)) {
+        const bottom = corners.map((p) => this.projectDepth([p[0], y, p[2]]));
+        for (const [a, b] of [[0, 1], [1, 2], [2, 3], [3, 0]]) {
+          const side = [poly[a], poly[b], bottom[b], bottom[a]];
+          this.path(side); ctx.fillStyle = alpha(mix(base, pal.bg, 0.23), opacity); ctx.fill();
+          this.strokePoly(side, alpha(pal.mountainLine, opacity * 0.52), 0.6);
+        }
       }
-      for (const key of FIGURE_MESH_KEYS) {
-        if (hit.object !== rt.meshes[key] || hit.instanceId === undefined) continue;
-        const id = rt.ids[key][hit.instanceId];
-        const fig = id ? this.figures.get(id) : undefined;
-        if (fig) return { kind: "entity", id: fig.id, cell: fig.cell };
+      this.path(poly);
+      ctx.fillStyle = alpha(base, opacity);
+      ctx.fill();
+      // A quiet grid makes exact tile positions legible without a bright mesh.
+      const edge = terrain === "water" ? pal.waterLine : pal.grid;
+      this.strokePoly(poly, alpha(edge, opacity * (terrain === "water" ? 0.5 : Math.max(0.26, pal.gridAlpha))), 0.7);
+      if (poly.length === 4) this.terrainDetail(terrain, cell, corners, opacity);
+      if (rt.index !== this.active) return;
+      if (this.marks.hoverCell && pointKey(this.marks.hoverCell) === pointKey(cell)) { this.path(poly); ctx.fillStyle = alpha(pal.accent, 0.16); ctx.fill(); }
+      if (this.marks.selectedPoint && pointKey(this.marks.selectedPoint) === pointKey(cell)) { this.strokePoly(poly, rgbToCss(pal.selOuter), 3); this.strokePoly(poly, rgbToCss(pal.selInner), 1.3); }
+    } });
+  }
+  private drawFigure(fig: Figure, opacity: number): void {
+    const ctx = this.ctx;
+    const p = this.projectDepth(fig.current);
+    const top = this.projectDepth([fig.current[0], fig.current[1] + 0.55 * fig.scale * fig.drawScale, fig.current[2]]);
+    if (p.depth <= CAMERA_NEAR || top.depth <= CAMERA_NEAR) return;
+    const h = Math.max(3, Math.min(33, Math.abs(top.y - p.y)));
+    const size = Math.max(3, Math.min(26, h * 0.82));
+    const colour = fig.tint ? mix(fig.colour, this.roleColour(fig.tint), 0.7) : fig.colour;
+    const fill = alpha(colour, opacity);
+    const edge = alpha(this.palette.bg, opacity * OUTLINE);
+    const footY = p.y;
+    const x = p.x;
+    ctx.save();
+    ctx.translate(x, footY);
+    ctx.rotate(fig.tilt * 0.32);
+    this.ellipse(0, 1.5, size * 0.8, Math.max(1, size * 0.28), alpha(this.palette.outside, opacity * 0.3));
+    if (fig.health) this.ellipse(0, 0.5, size * 0.82, Math.max(1.3, size * 0.35), alpha(fig.health, opacity * 0.78));
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = Math.max(0.6, size * 0.08);
+    if (fig.lying) {
+      ctx.beginPath(); ctx.roundRect(-size * 0.82, -size * 0.24, size * 1.64, size * 0.4, size * 0.18); ctx.fillStyle = fill; ctx.fill(); ctx.stroke();
+      this.ellipse(size * 0.68, -size * 0.06, size * 0.22, size * 0.19, fill);
+    } else if (fig.marker.kind === "agent") {
+      ctx.beginPath(); ctx.moveTo(-size * 0.64, -size * 0.32); ctx.lineTo(-size * 0.42, -size * 1.34); ctx.quadraticCurveTo(0, -size * 1.72, size * 0.42, -size * 1.34); ctx.lineTo(size * 0.64, -size * 0.32); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.stroke();
+      this.ellipse(0, -size * 1.72, size * 0.42, size * 0.42, fill);
+    } else if (fig.marker.kind === "plant") {
+      ctx.beginPath(); ctx.moveTo(0, -size * 0.16); ctx.lineTo(0, -size * 1.05); ctx.strokeStyle = fill; ctx.lineWidth = Math.max(1.5, size * 0.22); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -size * 2.1); ctx.quadraticCurveTo(size * 1.45, -size * 1.2, 0, -size * 0.85); ctx.quadraticCurveTo(-size * 1.45, -size * 1.2, 0, -size * 2.1); ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = edge; ctx.lineWidth = 0.7; ctx.stroke();
+    } else if (fig.marker.kind === "fruit") {
+      this.ellipse(0, -size * 0.65, size * 0.72, size * 0.7, fill);
+      ctx.beginPath(); ctx.moveTo(0, -size * 1.3); ctx.lineTo(size * 0.35, -size * 1.5); ctx.strokeStyle = alpha(this.palette.plant, opacity); ctx.lineWidth = 1.4; ctx.stroke();
+    } else if (fig.marker.kind === "seed") {
+      ctx.beginPath(); ctx.moveTo(0, -size * 1.1); ctx.lineTo(size * 0.55, -size * 0.24); ctx.lineTo(0, 0); ctx.lineTo(-size * 0.55, -size * 0.24); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.stroke();
+    } else {
+      this.ellipse(0, -size * 0.14, size * 0.8, Math.max(1.5, size * 0.35), fill);
+    }
+    ctx.restore();
+  }
+  private ring(position: Vec3, radius: number, colour: Rgb, opacity: number, width = 1.7, dashed = false): void {
+    const ctx = this.ctx;
+    const count = 40;
+    let drawn = 0;
+    ctx.beginPath();
+    for (let i = 0; i <= count; i++) {
+      const a = i * Math.PI * 2 / count;
+      const p = this.projectDepth([position[0] + Math.cos(a) * radius, position[1] + 0.025, position[2] + Math.sin(a) * radius]);
+      if (p.depth <= CAMERA_NEAR) continue;
+      if (drawn++ === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+    }
+    if (drawn < 3) return;
+    ctx.strokeStyle = alpha(colour, opacity);
+    ctx.lineWidth = width;
+    ctx.setLineDash(dashed ? [4, 3] : []);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  private paintMarks(): void {
+    const m = this.marks;
+    const mark = (id: string | null, colour: Rgb, radius: number, dashed = false) => {
+      const f = this.findFigure(id);
+      if (f) this.ring(f.current, Math.max(0.33, f.scale * radius), colour, 0.94, 1.7, dashed);
+    };
+    mark(m.highlightAgentId, this.palette.highlight, 0.48, true);
+    mark(m.selectedEntityId, this.palette.entitySel, 0.55);
+    if (m.hoverEntityId !== m.selectedEntityId) mark(m.hoverEntityId, this.palette.fg, 0.53);
+    mark(this.options.selfId, this.palette.accent, 0.66, true);
+  }
+  private paintArrow(a: Screen, b: Screen, progress: number, colour: Rgb, opacity: number, width: number): void {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 3) return;
+    const t = Math.max(0, Math.min(1, progress));
+    const u = Math.max(0, t - Math.min(0.24, 17 / length));
+    const head = { x: a.x + dx * t, y: a.y + dy * t };
+    const tail = { x: a.x + dx * u, y: a.y + dy * u };
+    this.line(a, b, alpha(colour, opacity * 0.24), Math.max(1, width * 0.65));
+    this.line({ ...tail, depth: a.depth, visible: true }, { ...head, depth: a.depth, visible: true }, alpha(colour, opacity), width);
+    const ux = dx / length, uy = dy / length;
+    const back = Math.max(5, Math.min(9, width * 2.4));
+    const ctx = this.ctx;
+    ctx.beginPath(); ctx.moveTo(head.x, head.y);
+    ctx.lineTo(head.x - ux * back - uy * back * 0.5, head.y - uy * back + ux * back * 0.5);
+    ctx.lineTo(head.x - ux * back + uy * back * 0.5, head.y - uy * back - ux * back * 0.5);
+    ctx.closePath(); ctx.fillStyle = alpha(colour, opacity); ctx.fill();
+  }
+  /** A short target burst reinforces the actor's lunge during an attack. */
+  private paintImpacts(): void {
+    if (!this.timelineRunning) return;
+    const ctx = this.ctx;
+    for (const fig of this.layers[this.active]?.figures ?? []) {
+      if (fig.tint !== "bad") continue;
+      const target = this.projectDepth([fig.current[0], fig.current[1] + 0.43 * fig.scale, fig.current[2]]);
+      if (!target.visible) continue;
+      const r = Math.max(13, Math.min(24, 0.34 * this.height / target.depth));
+      const colour = alpha(this.palette.bad, 0.8);
+      ctx.save(); ctx.translate(target.x, target.y);
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.72, 0, Math.PI * 2);
+      ctx.strokeStyle = alpha(this.palette.bad, 0.5); ctx.lineWidth = 1.7; ctx.stroke();
+      for (let i = 0; i < 6; i++) {
+        const angle = Math.PI * (i / 3 + 0.125);
+        ctx.beginPath(); ctx.moveTo(Math.cos(angle) * r * 0.83, Math.sin(angle) * r * 0.83);
+        ctx.lineTo(Math.cos(angle) * r * 1.12, Math.sin(angle) * r * 1.12);
+        ctx.strokeStyle = colour; ctx.lineWidth = 1.9; ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+  private paintFx(): void {
+    for (const fx of this.fx) {
+      const colour = this.roleColour(fx.colour);
+      if (fx.kind === "ripple" || fx.kind === "pulse" || fx.kind === "puff") {
+        this.ring(fx.position, Math.max(0.05, fx.radius), colour, fx.opacity, fx.kind === "pulse" ? 2.3 : 1.6);
+      } else if (fx.kind === "beam" || fx.kind === "trail") {
+        const a = this.projectDepth(add(fx.from, [0, fx.kind === "beam" ? 0.3 : 0.05, 0]));
+        const b = this.projectDepth(add(fx.to, [0, fx.kind === "beam" ? 0.3 : 0.05, 0]));
+        if (a.depth > CAMERA_NEAR && b.depth > CAMERA_NEAR) {
+          this.paintArrow(a, b, fx.progress, colour, fx.opacity, fx.kind === "beam" ? 2.6 : 2.2);
+        }
+      } else if (fx.kind === "particles") {
+        const a = this.projectDepth(add(fx.from, [0, 0.24, 0]));
+        const b = this.projectDepth(add(fx.to, [0, 0.24, 0]));
+        if (a.depth > CAMERA_NEAR && b.depth > CAMERA_NEAR) this.paintArrow(a, b, fx.progress, colour, fx.opacity * 0.7, 1.5);
+        for (let k = 0; k < 6; k++) {
+          const t = Math.min(1, Math.max(0, fx.progress - k * 0.055));
+          const p = this.projectDepth([fx.from[0] + (fx.to[0] - fx.from[0]) * t, fx.from[1] + (fx.to[1] - fx.from[1]) * t + 0.22 + Math.sin(Math.PI * t) * 0.18, fx.from[2] + (fx.to[2] - fx.from[2]) * t]);
+          if (p.visible) this.ellipse(p.x, p.y, Math.max(1.4, 3.2 - k * 0.3), Math.max(1.4, 3.2 - k * 0.3), alpha(colour, fx.opacity * (1 - k * 0.1)));
+        }
+      } else if (fx.kind === "quad") {
+        const p = this.projectDepth(fx.position);
+        if (p.visible) this.ellipse(p.x, p.y, 11, 5, alpha(colour, fx.opacity * 0.42));
       }
     }
-    return null;
   }
-
-  /** The point of the active board under a viewport pixel (terrain hit, else the layer plane), or null. */
-  boardPoint(px: number, py: number): Vec3 | null {
-    const rt = this.layers[this.active];
-    this.raycaster.setFromCamera(this.ndc(px, py), this.camera);
-    if (rt) {
-      const hits = this.raycaster.intersectObject(rt.terrain, false);
-      if (hits.length > 0) return [hits[0].point.x, hits[0].point.y, hits[0].point.z];
+  private paintColumn(rt: LayerRuntime, list: MapMarker[], opacity: number): void {
+    const cell = list[0].position;
+    const base = cellToScene(cell, rt.index);
+    const bottom = this.projectDepth(base);
+    const top = this.projectDepth([base[0], base[1] + columnHeight(list.length), base[2]]);
+    if (bottom.depth <= CAMERA_NEAR || top.depth <= CAMERA_NEAR) return;
+    const radius = Math.max(2.5, Math.min(12, 0.23 * (this.height / 2) / Math.tan((FOV_DEG * Math.PI) / 360) / bottom.depth));
+    let rgb = kindColour(dominantKind(list) ?? "residue", this.palette);
+    if (this.options.ghost) rgb = ghostTint(rgb, this.palette);
+    const ctx = this.ctx;
+    const height = Math.max(radius, bottom.y - top.y);
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(bottom.x - radius, top.y, radius * 2, height, radius * 0.5); ctx.clip();
+    const counts = new Map<ReturnType<typeof figureKind>, number>();
+    for (const marker of list) { const kind = figureKind(marker); counts.set(kind, (counts.get(kind) ?? 0) + 1); }
+    let used = 0;
+    for (const [kind, count] of counts) {
+      const segment = height * count / list.length;
+      ctx.fillStyle = alpha(this.options.ghost ? ghostTint(kindColour(kind, this.palette), this.palette) : kindColour(kind, this.palette), opacity);
+      ctx.fillRect(bottom.x - radius, bottom.y - used - segment, radius * 2, segment + 0.5);
+      used += segment;
     }
-    const plane = new Plane(new Vector3(0, 1, 0), -layerY(this.active));
-    const target = new Vector3();
-    const point = this.raycaster.ray.intersectPlane(plane, target);
-    return point ? [point.x, point.y, point.z] : null;
+    ctx.restore();
+    this.ellipse(bottom.x, top.y, radius, radius * 0.45, alpha(mix(rgb, this.palette.fg, 0.16), opacity));
+    if (rt.index === this.active) this.picks.push({ x: bottom.x, y: (bottom.y + top.y) / 2, radius: Math.max(radius + 4, Math.abs(bottom.y - top.y) / 2), depth: bottom.depth, id: list[0].id, cell });
   }
-
-  /** Viewport pixel of a scene point and whether it is in front of the camera and inside the viewport. */
-  project(p: Vec3): { x: number; y: number; visible: boolean } {
-    const v = this.tmpV.set(p[0], p[1], p[2]).applyMatrix4(this.camera.matrixWorldInverse);
-    if (v.z >= -0.05) return { x: 0, y: 0, visible: false };
-    v.applyMatrix4(this.camera.projectionMatrix);
-    const x = ((v.x + 1) / 2) * this.width;
-    const y = ((1 - v.y) / 2) * this.height;
-    return { x, y, visible: v.x >= -1 && v.x <= 1 && v.y >= -1 && v.y <= 1 };
+  private paintBoard(): number {
+    const ctx = this.ctx;
+    ctx.fillStyle = rgbToCss(this.palette.outside);
+    ctx.fillRect(0, 0, this.width, this.height);
+    this.picks = [];
+    const commands: Draw[] = [];
+    for (const rt of this.layers) {
+      const r = rt.input.map.region;
+      for (let y = r.min_y; y <= r.max_y; y++) for (let x = r.min_x; x <= r.max_x; x++) this.tile(rt, { x, y }, commands);
+      const opacity = rt.index === this.active ? 1 : INACTIVE_LAYER_OPACITY;
+      if (this.lod === "columns") {
+        for (const list of rt.byCell.values()) {
+          const depth = this.projectDepth(cellToScene(list[0].position, rt.index)).depth;
+          if (depth > CAMERA_NEAR) commands.push({ depth: depth - 0.015, paint: () => this.paintColumn(rt, list, opacity) });
+        }
+      } else {
+        for (const fig of rt.figures) {
+          const projected = this.projectDepth(fig.current);
+          if (projected.depth <= CAMERA_NEAR || projected.x < -40 || projected.x > this.width + 40 || projected.y < -50 || projected.y > this.height + 40) continue;
+          commands.push({ depth: projected.depth - 0.015, paint: () => {
+            this.drawFigure(fig, opacity);
+            if (rt.index === this.active) {
+              const size = Math.max(5, Math.min(25, 0.32 * (this.height / 2) / Math.tan((FOV_DEG * Math.PI) / 360) * fig.scale / projected.depth));
+              this.picks.push({ x: projected.x, y: projected.y - size * 0.7, radius: Math.max(5, size * 1.4), depth: projected.depth, id: fig.id, cell: fig.cell });
+            }
+          } });
+        }
+      }
+    }
+    commands.sort((a, b) => b.depth - a.depth);
+    for (const command of commands) command.paint();
+    this.paintMarks();
+    this.paintFx();
+    this.paintImpacts();
+    return commands.length;
   }
-
-  /** The figure's current (animated) scene position, or null. */
-  entityPosition(id: string): Vec3 | null {
-    const fig = this.figures.get(id);
-    return fig && fig.layer === this.active ? fig.current : null;
-  }
-
-  // ------------------------------------------------------------------ frame loop
 
   setPaused(paused: boolean): void {
     if (this.paused === paused) return;
     this.paused = paused;
-    if (paused) this.cancelScheduled();
-    else this.invalidate();
+    if (paused && this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = 0; }
+    else if (!paused) this.invalidate();
   }
-
-  /** Ask for one frame (coalesced; no-op while paused or disposed). */
-  invalidate(): void {
-    this.dirty = true;
-    this.schedule();
-  }
-
-  private cancelScheduled(): void {
-    if (this.rafId) cancelAnimationFrame(this.rafId);
-    this.rafId = 0;
-  }
-
+  invalidate(): void { this.dirty = true; this.schedule(); }
   private schedule(): void {
     if (this.inFrame || this.paused || this.disposed || this.rafId) return;
     this.rafId = requestAnimationFrame(this.frame);
   }
-
   private readonly frame = (now: number): void => {
     this.rafId = 0;
     if (this.paused || this.disposed) return;
-    // Software renderer: a vsync that comes before SOFTWARE_FRAME_MS since the last frame began is skipped.  The
-    // clock is performance.now(), not the rAF timestamp, which can lag the callback by a whole vsync.
-    if (this.software && this.lastFrameClock > 0 && performance.now() - this.lastFrameClock < SOFTWARE_FRAME_MS - FRAME_JITTER_MS) {
-      this.rafId = requestAnimationFrame(this.frame);
-      return;
-    }
+    if (this.lastFrameClock > 0 && performance.now() - this.lastFrameClock < FRAME_SPACING_MS) { this.schedule(); return; }
     this.inFrame = true;
     try {
-      this.drawFrame(now);
-    } finally {
-      this.inFrame = false;
-    }
+      const start = performance.now();
+      const dt = this.lastFrameStart ? now - this.lastFrameStart : 16;
+      this.lastFrameStart = now;
+      this.lastFrameClock = start;
+      this.lastMore = this.hooks.beforeFrame(now, dt);
+      this.sample(start);
+      this.dirty = false;
+      const calls = this.paintBoard();
+      const shown = this.labels.sync(this.labelItems(), (p) => this.projectDepth(p), this.width, this.height);
+      this.labels.setCompass(this.cameraState.yaw);
+      this.lastStats = { drawCalls: calls, triangles: 0, frameMs: performance.now() - start, lod: this.lod, animating: this.timelineRunning, labels: shown, camera: this.cameraState };
+      this.hooks.onFrame(this.lastStats);
+    } finally { this.inFrame = false; }
     if (this.lastMore || this.timelineRunning || this.dirty) this.schedule();
   };
-
-  private drawFrame(now: number): void {
-    const start = performance.now();
-    const dt = this.lastFrameStart ? now - this.lastFrameStart : 16;
-    this.lastFrameStart = now;
-    this.lastFrameClock = start;
-    const more = this.hooks.beforeFrame(now, dt);
-    this.lastMore = more;
-    this.applyTimeline(start);
-    // Everything the hooks and the timeline changed is drawn by this frame.
-    this.dirty = false;
-    if (this.ringActing.visible) this.ringActing.rotation.y += ACTING_RING_SPEED * (Math.min(dt, 100) / 1000);
-    if (this.ringSelf.visible) this.ringSelf.rotation.y -= ACTING_RING_SPEED * (Math.min(dt, 100) / 1000);
-    const rt = this.layers[this.active];
-    if (rt) rt.grid.visible = !(this.slow && lodDistance(this.cameraState, layerY(this.active)) > GRID_FAR);
-    this.renderer.render(this.scene, this.camera);
-    const shown = this.labels.sync(this.labelItems(), this.camera, this.width, this.height);
-    this.labels.setCompass(this.cameraState.yaw);
-    const end = performance.now();
-    const frameMs = end - start;
-    this.frameTimes.push(frameMs);
-    if (this.frameTimes.length > 10) this.frameTimes.shift();
-    if (!this.slow && this.frameTimes.length === 10 && this.frameTimes.reduce((a, b) => a + b, 0) / 10 > SLOW_FRAME_MS) {
-      this.slow = true;
-      this.renderer.setPixelRatio(1);
-    }
-    this.lastStats = {
-      drawCalls: this.renderer.info.render.calls,
-      triangles: this.renderer.info.render.triangles,
-      frameMs,
-      lod: this.lod,
-      animating: this.timelineRunning,
-      labels: shown,
-      camera: this.cameraState,
-    };
-    this.hooks.onFrame(this.lastStats);
-  }
 
   private labelItems(): LabelItem[] {
     const items: LabelItem[] = [];
@@ -1127,110 +679,54 @@ export class Scene3d {
     const cam = this.cameraState;
     const m = this.marks;
     const columns = this.lod === "columns";
-    // A figure that carries a chip keeps its label below the chip: its label places before the chips and its chip may stack above it.
     const chipFigures = new Set<string>();
     for (const chip of this.chips) if (chip.id) chipFigures.add(chip.id);
     const labelled = new Set<string>();
-    if (!columns) {
-      for (const fig of this.figures.values()) {
-        if (fig.layer !== this.active) continue;
-        const marker = fig.marker;
-        const focus = fig.id === m.hoverEntityId || fig.id === m.selectedEntityId;
-        const living = marker.kind === "agent" && !marker.dead;
-        if (!living && !focus) continue;
-        const d = Math.hypot(fig.current[0] - cam.x, fig.current[1] - cam.y, fig.current[2] - cam.z);
-        if (!focus && d > LABEL_FAR) continue;
-        labelled.add(fig.id);
-        let text: string;
-        let shortText: string | undefined;
-        if (marker.kind === "agent") {
-          const e = rt.input.entities.get(fig.id);
-          const name = e && e.kind === "agent" ? e.name : marker.title.replace(/\s*\(.*\)$/, "");
-          text = d > LABEL_NAME_DISTANCE && !focus ? fig.id : `${fig.id} ${name}`;
-          if (text !== fig.id) shortText = fig.id;
-        } else text = dotLabel(marker);
-        items.push({
-          key: `label:${fig.id}`,
-          kind: "label",
-          position: [fig.current[0], fig.current[1] + LABEL_HEIGHT[fig.mesh] * fig.scale, fig.current[2]],
-          text,
-          shortText,
-          pinned: focus,
-          title: `${marker.title} · ${marker.line}`,
-          attrs: { entityId: fig.id, cell: pointKey(fig.cell) },
-          className: focus ? "map3d-label-focus" : undefined,
-          anchor: "bottom",
-          priority: focus ? 3 : chipFigures.has(fig.id) ? 4.5 : 2,
-          entityId: fig.id,
-          cell: fig.cell,
-        });
-      }
+    if (!columns) for (const fig of rt.figures) {
+      const marker = fig.marker;
+      const focus = fig.id === m.hoverEntityId || fig.id === m.selectedEntityId;
+      const living = marker.kind === "agent" && !marker.dead;
+      if (!living && !focus) continue;
+      const d = Math.hypot(fig.current[0] - cam.x, fig.current[1] - cam.y, fig.current[2] - cam.z);
+      if (!focus && d > LABEL_FAR) continue;
+      labelled.add(fig.id);
+      let content: string;
+      let shortText: string | undefined;
+      if (marker.kind === "agent") {
+        const e = rt.input.entities.get(fig.id);
+        const name = e?.kind === "agent" ? e.name : marker.title.replace(/\s*\(.*\)$/, "");
+        content = d > LABEL_NAME_DISTANCE && !focus ? fig.id : `${fig.id} ${name}`;
+        if (content !== fig.id) shortText = fig.id;
+      } else content = dotLabel(marker);
+      items.push({ key: `label:${fig.id}`, kind: "label", position: [fig.current[0], fig.current[1] + LABEL_HEIGHT[fig.marker.kind] * fig.scale, fig.current[2]], text: content, shortText, pinned: focus, title: `${marker.title} · ${marker.line}`, attrs: { entityId: fig.id, cell: pointKey(fig.cell) }, className: focus ? "map3d-label-focus" : undefined, anchor: "bottom", priority: focus ? 3 : chipFigures.has(fig.id) ? 4.5 : 2, entityId: fig.id, cell: fig.cell });
     }
     const y = layerY(this.active);
     for (const [key, list] of rt.byCell) {
       const n = list.length;
-      const badge = columns ? (n >= 2 ? String(n) : null) : countBadge(n);
+      const badge = columns ? n >= 2 ? String(n) : null : countBadge(n);
       if (!badge) continue;
       const c = cellToScene(list[0].position, 0);
-      items.push({
-        key: `badge:${key}`,
-        kind: "badge",
-        position: [c[0], y + (columns ? columnHeight(n) + 0.15 : 0.8), c[2]],
-        text: badge,
-        title: `${n} occupants at (${list[0].position.x}, ${list[0].position.y})`,
-        attrs: { cell: key },
-        anchor: "center",
-        priority: n >= COUNT_BADGE_MIN ? 1 : 0.5,
-      });
+      items.push({ key: `badge:${key}`, kind: "badge", position: [c[0], y + (columns ? columnHeight(n) + 0.15 : 0.8), c[2]], text: badge, title: `${n} occupants at (${list[0].position.x}, ${list[0].position.y})`, attrs: { cell: key }, anchor: "center", priority: 5.5 });
     }
     this.chips.forEach((chip, i) => {
       const e = chip.effect;
-      const fig = chip.id ? this.figures.get(chip.id) : undefined;
-      const anchor = fig && fig.layer === this.active ? [fig.current[0], fig.current[1] + CHIP_HEIGHT, fig.current[2]] : chip.position;
+      const fig = this.findFigure(chip.id);
+      const anchor = fig ? [fig.current[0], fig.current[1] + CHIP_HEIGHT, fig.current[2]] : chip.position;
       const glyph = glyphFor(e.kind, e.ok);
-      items.push({
-        key: `chip:${i}:${e.kind}:${e.actor}`,
-        kind: "chip",
-        position: [anchor[0], anchor[1], anchor[2]],
-        text: chipText(e),
-        title: `${e.actor} ${e.label}`,
-        className: `map3d-chip-${e.kind}${e.ok ? "" : " map3d-chip-failed"}`,
-        attrs: { effectKind: e.kind, actor: e.actor, glyph: glyph.label },
-        glyph: glyph.path,
-        anchor: "bottom",
-        priority: 4,
-        nudges: chip.id && labelled.has(chip.id) ? CHIP_NUDGES : 0,
-      });
+      items.push({ key: `chip:${i}:${e.kind}:${e.actor}`, kind: "chip", position: [anchor[0], anchor[1], anchor[2]], text: chipText(e), title: `${e.actor} ${e.label}`, className: `map3d-chip-${e.kind}${e.ok ? "" : " map3d-chip-failed"}`, attrs: { effectKind: e.kind, actor: e.actor, glyph: glyph.label }, glyph: glyph.path, anchor: "bottom", priority: 4, nudges: chip.id && labelled.has(chip.id) ? CHIP_NUDGES : 0 });
     });
     for (const f of this.floats) items.push(f);
     for (const t of this.ticks) items.push(t);
     return items;
   }
-
-  // ------------------------------------------------------------------ dispose
-
-  /** Free every GPU object and the context; the instance is unusable afterwards. */
+  /** Release the canvas and label pool. */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.cancelScheduled();
-    for (const rt of this.layers) this.disposeLayer(rt);
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.rafId = 0;
     this.layers = [];
-    this.figures.clear();
+    this.picks = [];
     this.labels.clear();
-    for (const o of [this.ringActing, this.ringSelected, this.ringHover, this.ringSelf, this.hoverQuad, this.cellFrame, this.fx.quad]) (o.material as MeshBasicMaterial).dispose();
-    for (const mat of this.fx.ringMats) mat.dispose();
-    this.fx.beamMat.dispose();
-    this.fx.trailMat.dispose();
-    this.fx.particleMat.dispose();
-    this.fx.beams.geometry.dispose();
-    this.fx.trails.geometry.dispose();
-    this.fx.particles.geometry.dispose();
-    this.outside.geometry.dispose();
-    this.outsideMat.dispose();
-    disposeFigureGeometries(this.geometries);
-    this.scene.clear();
-    this.renderer.dispose();
-    this.renderer.forceContextLoss();
   }
 }

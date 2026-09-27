@@ -40,6 +40,7 @@ cd qa && node browser_check.mjs                                 # or: npm run ch
 | `STEP_TIMEOUT_MS` | `8000` | How long to look for each control |
 | `QA_RUN_NAME` | `qa browser <timestamp>` | Name typed into the run name field, if the form has one |
 | `QA_SKIP_ERROR_STEP` | unset | `1` skips the error-state step (it creates an extra run) |
+| `QA_ONLY_PROFILE` | unset | `1` with `QA_RUN_ID=<existing run>` checks only the profile-card workflow on recorded turns, without generating turns |
 | `QA_ONLY_MAP` | unset | `1` runs only the map steps: preflight, `entry`, `new-session-cards`, `create-run`, `run-turn` and `step-round` (a new fake-model run with round 1 committed), then 36 `map-marks` and 37 `map-3d`. With `QA_RUN_ID=<run>` it runs only preflight and the two map steps on that existing run: nothing is created and no turn runs (viewing a run never calls a model), so it is safe against a backend with live models |
 
 The assistant steps have their own variables (`QA_ASSISTANT`, `QA_ONLY_ASSISTANT`, `QA_RUN_ID`,
@@ -76,17 +77,17 @@ model, and every direct `POST /api/runs` sets `default_model_key` to `fake-heuri
 | 4 | `edit-card` | Renames the first card and sets its starting x to 3 | U11 |
 | 5 | `invalid-value` | Sets health to 999 (or x to 999). Expects a problem shown by its path (`agents[0]...`), then fixes the value | Spec "New session" |
 | 6 | `create-run` | Checks that `fake-heuristic` is the default model, creates the run and checks that it opens **Paused** with a round/turn status line. The backend confirms the edited name and x | U12, U14 |
-| 7 | `run-turn` | **Run turn** commits exactly one turn, and a `[r1 t1] ...` feed line appears | U12, U13 |
-| 8 | `play-pause` | **Play**, then **Pause**. Records whether "Pause requested" was seen before "Paused" | U12 |
-| 9 | `step-round` | **Step round** stops at `r{n}_end` | U12 |
+| 7 | `run-turn` | **Advance 1 turn** commits exactly one turn, and a `[r1 t1] ...` feed line appears | U12, U13 |
+| 8 | `play-pause` | **Start simulation**, then **Pause simulation**. Records whether "Pause requested" was seen before "Paused" | U12 |
+| 9 | `step-round` | **Finish round** stops at `r{n}_end` | U12 |
 | 10 | `timeline` | Previous/next arrows, a history indicator, turn selection, then **return to live** | U6 |
 | 11 | `crowded-coordinate` | Hovers and clicks the coordinate with the most occupants (taken from the API). Every occupant id must be listed (a profile card opened by the click is closed first) | U1 |
 | 12 | `select-occupants` | Selects each occupant and expects its profile card with details, closing it between clicks | U1, U2 |
 | 13 | `agent-inspector` | The agent's profile card: stats, model, Skills and Knowledge sections; the Decisions row's **Packet** opens the decision packet (the card hides behind the record viewer and comes back after Escape), then its **Model call** | U2 |
 | 14 | `plant-rules` | The plant's profile card shows the species and stage; in its Rules section, editing "fruit energy" stages `update_plant_rules` | U3 |
-| 15 | `god-mode` | Changes "recent history length" and sends a broadcast voice. Both appear in the staged list, and after **Run turn** they are recorded in that turn | U7, U8, U16 |
+| 15 | `god-mode` | Changes "recent history length" and sends a broadcast voice. Both appear in the staged list, and after **Advance 1 turn** they are recorded in that turn | U7, U8, U16 |
 | 16 | `resume` | Goes back to the entry page, uses **Resume session**, and checks the run opens paused | U10 |
-| 17 | `error-recovery` | A run whose fake model times out in round 1 is opened in the UI. **Run turn** leads to the error state, and **Recover (pause)** leads back to paused | A-COG-5 |
+| 17 | `error-recovery` | A run whose fake model times out in round 1 is opened in the UI. **Advance 1 turn** leads to the error state, and **Recover (pause)** leads back to paused | A-COG-5 |
 
 ## Reading the results
 
@@ -145,7 +146,7 @@ step that would call a model skips itself, so the script never spends against a 
 | 27 | `assistant-interventions-brief` | A `stage_interventions` brief with an unknown entity cannot be approved; **Ask for changes**; the corrected brief supersedes it and stages the edit with origin `assistant` (scripted) |
 | 28 | `assistant-godmode-badge` | "Open God mode (1 staged)" opens the God mode tab with the assistant's staged edit (scripted) |
 | 29 | `assistant-storybook-readonly` | The **Storybook** tab of the old-check run, read only (never presses Write missing); Auto per the default rule |
-| 30 | `assistant-storybook` | Two **Run turn** clicks on the brief-created run write two entries in the Storybook tab (model calls: the fake narrator) |
+| 30 | `assistant-storybook` | Two **Advance 1 turn** clicks on the brief-created run write two entries in the Storybook tab (model calls: the fake narrator) |
 | 31 | `assistant-escape-record-viewer` | With the record viewer open, Escape closes the drawer first and the viewer stays open |
 | 32 | `story-mode` | **Story Mode** from the entry page: run picker, step-0 card, story brief with both estimates, Accept, chapter 1 in the reader, Export Markdown (model calls) |
 | 33 | `assistant-dictate` | The **Dictate** button: enabled on secure origins when speech is ready; on a non-secure origin disabled with its reason |
@@ -191,3 +192,11 @@ voice, working-files, storage and reload-order scenarios (`a_crash_resume.py` ..
 per scenario to `qa/resilience/out/`. The scripts assume the checkout is at
 `/home/ubuntu/antegensim` (see `docs/LIMITATIONS.md`). Results are recorded in
 `docs/evidence/resilience.md`.
+
+The refined run layout places the map-view switch in the board header and history controls below the board. The 3D check blocks WebGL requests and verifies the CPU Canvas 2D renderer, zero triangles, finite frame timing, and no Three.js runtime download.
+
+## Saved replay refinements
+
+`node qa/replay_refinement_check.mjs` (from the repository root) uses the recorded SWEEP-B2v2 run by default. Set `QA_RUN_ID` for another existing recording, with at least two rounds. It never sends simulation commands. It checks 2D wheel zoom, visible action cues, delayed checkpoint loading, stop/manual navigation/end-of-record behavior, CPU 3D repeated playback, reduced motion and mobile layout. Screenshots go to `/tmp/empyrean-replay-check/`. `BASE_URL` and `API_URL` use the same defaults as the main suite.
+
+The run-page checks open Session, Inspector and Activity panels through the workspace buttons when needed. The saved replay check also asserts that the board occupies the primary workspace and opening tools does not reduce its dimensions.

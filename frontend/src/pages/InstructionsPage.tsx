@@ -927,9 +927,9 @@ RETURN "completed"`}
       <Section id="operator">
         <h3>Run controls</h3>
         <p>
-          A run always opens paused. <strong>Run turn</strong> plays one agent's turn, <strong>Step round</strong> plays to the end of the round, and{" "}
-          <strong>Play</strong> / <strong>Pause</strong> run continuously with the play delay between turns. The timeline goes back to any saved turn so you can
-          inspect it; history is read-only.
+          A run always opens paused. <strong>Advance 1 turn</strong> plays one agent's turn, <strong>Finish round</strong> plays to the end of the round, and{" "}
+          <strong>Start simulation</strong> / <strong>Pause simulation</strong> run continuously with the play delay between turns. The timeline goes back to any saved turn so you can
+          inspect it. Choose a round and turn, then use Replay from here to watch saved actions in sequence; replay never generates new turns.
         </p>
         <h3>God mode</h3>
         <p>

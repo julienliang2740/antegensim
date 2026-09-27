@@ -24,8 +24,9 @@ export function EntryPage() {
   return (
     <div className="page entry-page">
       <header className="entry-header">
-        <h1>Empyrean</h1>
-        <p>LLM artificial-life world — operator console (prototype)</p>
+        <span className="entry-eyebrow">ARTIFICIAL LIFE · SIMULATION STUDIO</span>
+        <h1>Empyrean<span className="entry-dot">.</span></h1>
+        <p>Create a world. Observe its agents. Follow every decision.</p>
       </header>
       <div className="entry-choices entry-choices-four">
         <button type="button" className="choice" onClick={() => navigate({ name: "new" })}>

@@ -255,6 +255,13 @@ async function step(page, id, title, fn, { needs = [] } = {}) {
     rec.skipped = `needs ${missing.join(", ")} from an earlier step`;
   } else {
     try {
+      if (["timeline", "map-marks", "map-3d"].includes(id)) {
+        await closeProfileCard(page);
+        const openPanel = page.locator('.workspace-tools button[aria-expanded="true"]');
+        if (await openPanel.count()) await openPanel.click();
+      }
+      const panels = { "run-turn": "Activity log", "agent-inspector": "Inspector & tools", "plant-rules": "Inspector & tools", "god-mode": "Inspector & tools" };
+      if (panels[id]) await openWorkspacePanel(page, panels[id]);
       await fn(rec);
       rec.ok = true;
     } catch (error) {
@@ -284,10 +291,10 @@ async function step(page, id, title, fn, { needs = [] } = {}) {
 const RE = {
   newSession: /new session/i,
   resumeSession: /resume session/i,
-  runTurn: /run turn/i,
-  play: /^\s*(▶\s*)?play\b/i,
-  pause: /^\s*(⏸\s*)?pause\b/i,
-  stepRound: /step round/i,
+  runTurn: /^advance 1 turn$/i,
+  play: /^start simulation$/i,
+  pause: /^pause simulation$/i,
+  stepRound: /^finish round$/i,
   create: /create( run| session)?|start( run| session| simulation)?|launch|begin/i,
   validate: /validate|check setup/i,
   previous: /^(?!.*\bpan\b).*(previous|prev\b|earlier|◀|←|‹)/i,
@@ -297,6 +304,12 @@ const RE = {
   back: /back to (sessions|start|entry)|sessions|leave|exit|close run|home|entry/i,
   recover: /recover|pause/i,
 };
+
+async function openWorkspacePanel(page, name) {
+  const ids = { "Session & agents": "session", "Inspector & tools": "inspect", "Activity log": "activity" };
+  const button = ids[name] ? page.locator(`#workspace-toggle-${ids[name]}`) : page.getByRole("button", { name, exact: true });
+  if (await button.isVisible().catch(() => false) && await button.getAttribute("aria-expanded") !== "true") await button.click();
+}
 
 async function clickRunControl(page, rec, what, re) {
   const control = await mustFind(rec, what, [[`button ${re}`, page.getByRole("button", { name: re })]]);
@@ -319,7 +332,7 @@ async function selectAgentOrEntity(page, rec, entityId) {
     rec.notes.push(`selected ${entityId} via ${direct.how}`);
     return true;
   }
-  const box = await findOne([...fields(page, /go to|search|find|lookup|entity id|e\.g\. a05/i)], 1500);
+  const box = await findOne([["Find entity by id", page.getByLabel("Find entity by id", { exact: true })], ...fields(page, /search|find|lookup|entity id|e\.g\. a05/i)], 1500);
   if (box) {
     await box.locator.fill(entityId);
     await box.locator.press("Enter");
@@ -378,6 +391,12 @@ async function main() {
 }
 
 async function runSteps(page) {
+  if (process.env.QA_ONLY_PROFILE === "1" && process.env.QA_RUN_ID) {
+    state.runId = process.env.QA_RUN_ID;
+    log.run_id = state.runId;
+    await runProfileCardStep(page);
+    return;
+  }
   if (process.env.QA_ONLY_RESUME_ARCHIVE === "1") {
     await step(page, "preflight", "Backend health and defaults reachable", async () => {
       await api("GET", "/health");
@@ -653,17 +672,17 @@ async function runSteps(page) {
     "timeline",
     "History: left/right arrows, turn selection, return to live (U6)",
     async (rec) => {
-      const previous = await mustFind(rec, "previous arrow", clickables(page, RE.previous));
+      const previous = await mustFind(rec, "previous arrow", [["Previous turn", page.getByRole("button", { name: "‹ Previous turn", exact: true })]]);
       await previous.click();
       await sleep(600);
       rec.found.history_indicator = await textVisible(page, /history|historical|viewing/i, 3000);
       await previous.click().catch(() => {});
       await sleep(400);
-      const next = await tryFind(rec, "next arrow", clickables(page, RE.next));
+      const next = await tryFind(rec, "next arrow", [["Next turn", page.getByRole("button", { name: "Next turn ›", exact: true })]]);
       if (next) await next.click();
       const turns = await api("GET", `/runs/${state.runId}/turns`);
       const target = turns[Math.min(2, turns.length - 1)].turn_id;
-      const selector = await findOne([...fields(page, /turn/i), ["combobox", page.getByRole("combobox")]], 2000);
+      const selector = await findOne([["Turn in round", page.locator(".turn-select select")]], 2000);
       if (selector) {
         const options = await selector.locator.locator("option").allTextContents().catch(() => []);
         const option = options.find((o) => o.includes(target));
@@ -821,7 +840,7 @@ async function runSteps(page) {
         await call.locator.click();
         await sleep(600);
         rec.found.model_call_content = await textVisible(page, /tokens|usage|latency|mc_r\d+/i, 2000);
-        await page.keyboard.press("Escape");
+        await page.getByRole("button", { name: "Close record view", exact: true }).click();
         await sleep(400);
       } else {
         rec.notes.push("no model call control found");
@@ -877,6 +896,7 @@ async function runSteps(page) {
     "God mode: change a context setting and send a voice; staged, then applied after a turn (U7, U8, U16)",
     async (rec) => {
       await page.keyboard.press("Escape").catch(() => {});
+      await openWorkspacePanel(page, "Inspector & tools");
       const god = await mustFind(rec, "God mode", clickables(page, RE.godMode));
       await god.click();
       await sleep(500);
@@ -992,6 +1012,7 @@ async function runSteps(page) {
         if (s.state !== "error") throw new Error(`expected the error state, got ${s.state}`);
         if (!(await textVisible(page, /error/i))) throw new Error("the UI does not show the error state");
         await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-error-state.png`) }).catch(() => {});
+        await openWorkspacePanel(page, "Session & agents");
         const recover = await mustFind(rec, "Recover (pause)", [
           [`button recover`, page.getByRole("button", { name: /recover/i })],
           [`button pause`, page.getByRole("button", { name: RE.pause })],
@@ -1087,8 +1108,9 @@ async function runProfileCardStep(page) {
       const olderTurn = await older.getAttribute("data-turn-id");
       await waitVisible(older.getByText(/^action |^result |no action|thinking/), "the older row's loaded events", 6000).catch(() => null);
       await older.getByRole("button", { name: "View turn" }).click();
-      await waitVisible(page.locator(".map-history-strip"), "the history strip after View turn");
+      await waitVisible(page.locator(".timeline-history"), "the history strip after View turn");
       rec.found.view_turn = olderTurn;
+      await page.waitForFunction((turn) => document.querySelector(".profile-card .profile-sub code")?.textContent === turn, olderTurn, { timeout: STEP_TIMEOUT_MS });
       rec.found.card_header_turn = await card.locator(".profile-sub code").innerText();
       if (rec.found.card_header_turn !== olderTurn) throw new Error(`the card shows turn ${rec.found.card_header_turn}, expected ${olderTurn}`);
       if (!(await card.isVisible())) throw new Error("View turn closed the card");
@@ -1107,8 +1129,8 @@ async function runProfileCardStep(page) {
       await page.keyboard.press("Escape");
       await card.waitFor({ state: "detached", timeout: 3000 });
       rec.found.escape_closes = true;
-      rec.found.history_kept = await page.locator(".map-history-strip").isVisible();
-      await page.locator(".map-history-strip").getByRole("button", { name: /back to live/i }).click();
+      rec.found.history_kept = await page.locator(".timeline-history").isVisible();
+      await page.locator(".timeline-history").getByRole("button", { name: /return to live/i }).click();
     },
     { needs: ["runId"] },
   );
@@ -1146,7 +1168,7 @@ const ACTION_GLYPH = {
 const glyphOf = (name) => (name ? (ACTION_GLYPH[name] ?? "skill") : "none");
 
 const centreMap = (page) => page.locator("main.run-center");
-const viewRadio = (page, name) => page.locator('main.run-center [role="radiogroup"][aria-label="Map view"]').getByRole("radio", { name, exact: true });
+const viewRadio = (page, name) => page.getByRole("radiogroup", { name: "Map view", exact: true }).getByRole("radio", { name, exact: true });
 
 /** Console and page errors so far (a map step fails when it adds any). */
 const errorCount = () => log.console_errors.length + log.page_errors.length;
@@ -1192,11 +1214,13 @@ async function goToPoint(page, p) {
 
 /** Select an entity through the Inspector tab's "Find entity by id" (works in both map views), then close its card. */
 async function selectById(page, id) {
+  await openWorkspacePanel(page, "Inspector & tools");
   await page.locator("#tab-inspect").click();
   await page.locator("#find-entity").fill(id);
   await page.getByRole("button", { name: "Select entity", exact: true }).click();
   await waitVisible(profileCard(page), `the profile card of ${id}`);
   await closeProfileCard(page);
+  await page.getByRole("button", { name: "Close inspector panel", exact: true }).click();
   await sleep(300);
 }
 
@@ -1210,7 +1234,7 @@ async function cellContents(page, key) {
       const y = b.top + b.height / 2;
       return x >= box.left - 0.5 && x <= box.right + 0.5 && y >= box.top - 0.5 && y <= box.bottom + 0.5;
     };
-    const dots = [...svg.querySelectorAll("circle.insp-dot")].filter((c) => inside(c.getBoundingClientRect())).length;
+    const dots = [...svg.querySelectorAll("[data-dot-radius].insp-dot")].filter((c) => inside(c.getBoundingClientRect())).length;
     const badges = [...svg.querySelectorAll("g.insp-dot-badge")]
       .filter((g) => inside(g.getBoundingClientRect()))
       .map((g) => {
@@ -1223,7 +1247,7 @@ async function cellContents(page, key) {
 }
 
 async function dotRadii(page) {
-  return page.evaluate(() => [...new Set([...document.querySelectorAll("main.run-center .insp-map-svg circle.insp-dot")].map((c) => c.getAttribute("r")))]);
+  return page.evaluate(() => [...new Set([...document.querySelectorAll("main.run-center .insp-map-svg [data-dot-radius].insp-dot")].map((c) => c.getAttribute("data-dot-radius")))]);
 }
 
 async function runMapMarksStep(page) {
@@ -1314,8 +1338,8 @@ async function runMapMarksStep(page) {
       await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-map-marks-turn.png`) }).catch(() => {});
       await gotoRun(page, state.runId);
       await closeProfileCard(page);
-      if (await page.locator(".map-history-strip").isVisible().catch(() => false)) {
-        await page.locator(".map-history-strip").getByRole("button", { name: /back to live/i }).click();
+      if (await page.locator(".timeline-history").isVisible().catch(() => false)) {
+        await page.locator(".timeline-history").getByRole("button", { name: /return to live/i }).click();
         await sleep(500);
       }
 
@@ -1336,7 +1360,7 @@ async function runMapMarksStep(page) {
       const occupied = Object.values(live.map.occupants).filter((ids) => ids.length > 0).length;
       const far = await page.evaluate(() => ({
         tiles: document.querySelectorAll("main.run-center .insp-map-svg rect.insp-tile").length,
-        dots: document.querySelectorAll("main.run-center .insp-map-svg circle.insp-dot").length,
+        dots: document.querySelectorAll("main.run-center .insp-map-svg [data-dot-radius].insp-dot").length,
       }));
       rec.found.far_10px = { ...far, occupied_cells: occupied, zoom_out_disabled: await map.getByRole("button", { name: "Zoom out", exact: true }).isDisabled() };
       if (far.tiles !== occupied) throw new Error(`${far.tiles} group tiles at 10 px for ${occupied} occupied cells`);
@@ -1443,12 +1467,19 @@ async function map3dAttrs(page) {
   return attrs;
 }
 
-/** The pose of map3dCamera.frameRegion(region, 0, aspect) (vertical FOV 50 deg, pitch -50 deg, margin 1.15). */
+/** The pose of map3dCamera.frameRegion(region, 0, aspect), including perspective fit for the nearer south corners. */
 function expectedFrame(region, aspect) {
   const cols = region.max_x - region.min_x + 1;
   const rows = region.max_y - region.min_y + 1;
-  const d = (1.15 * 0.5 * Math.max(cols / aspect, rows)) / Math.tan((25 * Math.PI) / 180);
   const tilt = (50 * Math.PI) / 180;
+  const halfW = cols / 2;
+  const halfD = rows / 2;
+  const tan = Math.tan((25 * Math.PI) / 180);
+  const d = 1.15 * Math.max(
+    halfD * Math.cos(tilt) + halfW / (aspect * tan),
+    halfD * Math.cos(tilt) + halfD * Math.sin(tilt) / (2 * (1 - 0.42) * tan),
+    -halfD * Math.cos(tilt) + halfD * Math.sin(tilt) / (2 * 0.42 * tan),
+  );
   const cx = (region.min_x + region.max_x) / 2;
   const cy = (region.min_y + region.max_y) / 2;
   return { x: cx, y: d * Math.sin(tilt), z: -cy + d * Math.cos(tilt), yaw: 0, pitch: -tilt };
@@ -1497,7 +1528,19 @@ async function runMap3dStep(page) {
         rec.notes.push("no living agent in this run: the label checks expect no label and the label click is not checked");
       }
 
-      // 1. No three.js before the click; the chunk arrives with it.
+      // The projected board must work without any WebGL context.
+      await page.evaluate(() => {
+        window.__qaWebglRequests = [];
+        const original = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function (kind, ...args) {
+          if (/webgl|experimental-webgl/i.test(kind)) {
+            window.__qaWebglRequests.push(kind);
+            return null;
+          }
+          return original.call(this, kind, ...args);
+        };
+      });
+      // 1. The CPU board chunk arrives only with the view switch.
       const resources = () => page.evaluate(() => performance.getEntriesByType("resource").map((r) => r.name));
       const chunkRe = /(Map3dView|three)[.-]/;
       const before = (await resources()).filter((n) => chunkRe.test(n));
@@ -1548,8 +1591,10 @@ async function runMap3dStep(page) {
       };
       if (rec.found.board.entities !== counts.entities) throw new Error(`data-entities ${a.entities}, the API has ${counts.entities}`);
       if (rec.found.board.agents !== counts.agents) throw new Error(`data-agents ${a.agents}, the API has ${counts.agents}`);
-      if (!(rec.found.board.draw_calls <= 24)) throw new Error(`data-draw-calls ${a.drawCalls} > 24`);
-      if (!(rec.found.board.triangles <= 120_000)) throw new Error(`data-triangles ${a.triangles} > 120000`);
+      if (a.renderer !== "Canvas 2D (CPU)" || a.software !== "1" || Number(a.triangles) !== 0) throw new Error("the board must use CPU Canvas 2D");
+      if (!Number.isFinite(Number(a.frameMs))) throw new Error("invalid frame timing");
+      if ((await page.evaluate(() => window.__qaWebglRequests)).length) throw new Error("the board requested WebGL");
+      if ((await resources()).some((n) => /\/three[._/]/.test(n))) throw new Error("the board loaded Three.js");
       await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-map-3d-board.png`) }).catch(() => {});
 
       // 4. Labels: only agents (plus the selection), the selected agent's on its cell; a click opens its card and
@@ -1712,8 +1757,8 @@ async function runMap3dStep(page) {
       await waitVisible(page.locator("main.run-center .insp-map-svg"), "the 2D map after choosing 2D map");
       rec.found.back_to_2d = { map3d_left: await page.locator(".map3d").count(), stored: await page.evaluate(() => localStorage.getItem("empyrean.map.view")) };
       if (rec.found.back_to_2d.map3d_left !== 0 || rec.found.back_to_2d.stored !== "2d") throw new Error(`back to 2D: ${JSON.stringify(rec.found.back_to_2d)}`);
-      if (await page.locator(".map-history-strip").isVisible().catch(() => false)) {
-        await page.locator(".map-history-strip").getByRole("button", { name: /back to live/i }).click();
+      if (await page.locator(".timeline-history").isVisible().catch(() => false)) {
+        await page.locator(".timeline-history").getByRole("button", { name: /return to live/i }).click();
       }
       assertNoNewErrors(rec, errorsBefore);
     },
@@ -2238,10 +2283,10 @@ async function runAssistantSteps(page) {
       await reply.article.locator(`.assistant-ref-turn[title="turn ${someTurn}"]`).click();
       await sleep(900);
       rec.found.turn_ref_history = await textVisible(page, new RegExp(escapeRe(someTurn)), 2000);
-      rec.found.history_strip = await page.locator(".map-history-strip").isVisible().catch(() => false);
+      rec.found.history_strip = await page.locator(".timeline-history").isVisible().catch(() => false);
       if (!rec.found.entity_ref_selects) throw new Error("clicking the entity ref did not show a01 in the side column");
       if (!rec.found.history_strip) rec.notes.push("the turn ref did not show the history strip");
-      const back = page.locator(".map-history-strip").getByRole("button", { name: /back to live/i });
+      const back = page.locator(".timeline-history").getByRole("button", { name: /return to live/i });
       if (await back.count()) await back.click();
       await setFake({});
     },

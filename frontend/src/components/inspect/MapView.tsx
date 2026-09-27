@@ -43,7 +43,7 @@
  */
 
 import "../../inspect.css";
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, KeyboardEvent, PointerEvent as ReactPointerEvent, Ref, ReactNode } from "react";
 import type { Point, RemovedEntity, Terrain } from "../../api/types";
@@ -211,17 +211,14 @@ export function MapView(props: MapViewProps) {
     return best;
   };
 
-  // First real measurement: a region that fits at the default zoom or larger opens fitted
-  // (a small arena fills the map); a large region stays at the default zoom around the origin.
+  // Start with the whole region visible. Explicit zoom/pan then keeps the user's framing.
   const [autoFitted, setAutoFitted] = useState(false);
   if (size.measured && !autoFitted) {
     setAutoFitted(true);
     const best = fitIndex(Math.max(40, size.width - AXIS_LEFT), Math.max(40, (fill ? size.height : height) - AXIS_TOP));
-    if (best > DEFAULT_ZOOM_INDEX) {
-      setZoomIndex(best);
-      setCenter({ x: (region.min_x + region.max_x) / 2, y: (region.min_y + region.max_y) / 2 });
-      setFitted(true);
-    }
+    setZoomIndex(best);
+    setCenter({ x: (region.min_x + region.max_x) / 2, y: (region.min_y + region.max_y) / 2 });
+    setFitted(true);
   }
   // The map column was resized (window, splitters): a fitted view fits again; any other view keeps its zoom and centre.
   const dims = `${width}x${height}`;
@@ -234,10 +231,10 @@ export function MapView(props: MapViewProps) {
     }
   }
 
-  const clampCenter = (p: Point): Point => ({
+  const clampCenter = useCallback((p: Point): Point => ({
     x: Math.min(region.max_x, Math.max(region.min_x, p.x)),
     y: Math.min(region.max_y, Math.max(region.min_y, p.y)),
-  });
+  }), [region]);
 
   // World <-> screen.  Cell (x, y) spans [cellLeft(x), cellLeft(x) + cellPx].
   const cellLeft = (x: number) => AXIS_LEFT + plotW / 2 + (x - center.x) * cellPx - cellPx / 2;
@@ -359,6 +356,34 @@ export function MapView(props: MapViewProps) {
     if (dotId) onSelectEntity(dotId);
     else if (occupants.length === 1) onSelectEntity(occupants[0].id);
   };
+
+  // Non-passive listener keeps wheel zoom inside the board, anchored under the cursor.
+  useEffect(() => {
+    const viewport = containerRef.current;
+    if (!viewport) return;
+    let accumulated = 0;
+    let lastZoom = 0;
+    const wheel = (event: WheelEvent) => {
+      event.preventDefault();
+      accumulated += event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? plotH : 1);
+      const now = performance.now();
+      if (Math.abs(accumulated) < 35 || now - lastZoom < 80) return;
+      const next = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, zoomIndex + (accumulated < 0 ? 1 : -1)));
+      accumulated = 0;
+      lastZoom = now;
+      if (next === zoomIndex) return;
+      const box = viewport.getBoundingClientRect();
+      const dx = event.clientX - box.left - AXIS_LEFT - plotW / 2;
+      const dy = event.clientY - box.top - AXIS_TOP - plotH / 2;
+      const scaleDelta = 1 / cellPx - 1 / ZOOM_LEVELS[next];
+      setCenter(clampCenter({ x: center.x + dx * scaleDelta, y: center.y - dy * scaleDelta }));
+      setZoomIndex(next);
+      setFitted(false);
+      closeTip();
+    };
+    viewport.addEventListener("wheel", wheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", wheel);
+  }, [zoomIndex, center.x, center.y, plotW, plotH, cellPx, clampCenter]);
 
   // ---------------------------------------------------------------- pointer handling
   const localXY = (e: ReactPointerEvent<SVGSVGElement>) => {
@@ -657,7 +682,7 @@ export function MapView(props: MapViewProps) {
         style={fill ? undefined : { height }}
         tabIndex={0}
         onKeyDown={onKeyDown}
-        aria-label="World map. Drag or use arrow keys to pan, + and - to zoom, click a cell or a dot to select it."
+        aria-label="World map. Drag or use arrow keys to pan, scroll or use + and - to zoom, click a cell or a dot to select it."
       >
         <svg
           ref={svgRef}
@@ -709,7 +734,11 @@ export function MapView(props: MapViewProps) {
             {outline(selectedPoint, "insp-map-sel-inner", 3.5, "si")}
             {occupantCells}
             {showMarks && turnId ? (
-              <g key={turnId} className="insp-marks" data-turn-id={turnId} data-kind={marks.kind} data-action={badgeMark?.glyph ?? ""} pointerEvents="none">
+              <g key={`${turnId}:${props.replayToken ?? 0}`} style={{ "--turn-motion-ms": `${props.replayDurationMs ?? 900}ms` } as CSSProperties} className="insp-marks" data-turn-id={turnId} data-kind={marks.kind} data-action={badgeMark?.glyph ?? ""} pointerEvents="none">
+                <TurnMotion
+                  effects={overlay ? effects.filter((effect) => effect.actor === overlay.agentId && effect.kind === "move") : effects}
+                  cellPx={cellPx} cellLeft={cellLeft} cellTop={cellTop} layouts={layouts}
+                />
                 <MarksLayer
                   marks={marks}
                   cellPx={cellPx}
@@ -837,6 +866,55 @@ export function MapView(props: MapViewProps) {
   );
 }
 
+/** Short visual cues anchored to recorded actors/targets; never predicts simulation outcomes. */
+function TurnMotion(props: {
+  effects: readonly TurnEffect[];
+  cellPx: number;
+  cellLeft(x: number): number;
+  cellTop(y: number): number;
+  layouts: ReadonlyMap<string, CellDots | null>;
+}) {
+  const anchor = (point: Point, id?: string) => {
+    const dot = props.layouts.get(pointKey(point))?.dots.find((entry) => entry.marker.id === id);
+    return { x: props.cellLeft(point.x) + (dot?.cx ?? props.cellPx / 2), y: props.cellTop(point.y) + (dot?.cy ?? props.cellPx / 2) };
+  };
+  const radius = Math.max(5, Math.min(13, props.cellPx * 0.2));
+  return <g className="turn-motion" aria-hidden="true">{props.effects.slice(0, 24).map((effect, index) => {
+    if (!effect.at) return null;
+    const sourcePoint = effect.kind === "move" && effect.ok ? effect.from ?? effect.at : effect.at;
+    let source = anchor(sourcePoint, effect.kind === "move" ? undefined : effect.actor);
+    let target = anchor(effect.kind === "move" ? effect.to ?? effect.at : effect.targetPoints[0] ?? effect.to ?? effect.at, effect.targets[0]);
+    if (effect.kind === "absorb") [source, target] = [target, source];
+    const colour = !effect.ok || effect.kind === "attack" || effect.kind === "starvation" ? "bad"
+      : ["recover", "growth", "fruit", "seed", "germination"].includes(effect.kind) ? "good"
+      : ["absorb", "transfer", "upgrade"].includes(effect.kind) ? "resource" : "accent";
+    const travelling = effect.ok && ["move", "attack", "message", "transfer", "absorb", "query"].includes(effect.kind);
+    const end = effect.kind === "attack" || effect.kind === "starvation" ? target : source;
+    const style = { "--cue-x": `${target.x - source.x}px`, "--cue-y": `${target.y - source.y}px` } as CSSProperties;
+    return <g key={index} className={`turn-cue turn-cue-${colour}`} data-effect-kind={effect.kind} data-ok={effect.ok}>
+      {travelling ? <>
+        <line className="turn-cue-trail" x1={source.x} y1={source.y} x2={target.x} y2={target.y} pathLength={1} />
+        <g transform={`translate(${source.x} ${source.y})`}><g className="turn-cue-travel" style={style}>
+          {effect.kind === "message" ? <path d="M-6,-4 H6 V4 H-6 Z M-6,-4 L0,1 L6,-4" />
+            : <circle r={effect.kind === "attack" ? 4 : 3} className="turn-cue-particle" />}
+        </g></g>
+      </> : null}
+      <g transform={`translate(${end.x} ${end.y})`}><g className="turn-cue-impact">
+        <circle r={radius} className="turn-cue-halo" />
+        {!effect.ok ? <path d="M-5,-5 L5,5 M5,-5 L-5,5" />
+          : effect.kind === "attack" ? <path d="M-8,0 L-4,-2 L-6,-7 L0,-4 L5,-8 L4,-2 L9,1 L4,3 L6,8 L0,5 L-5,8 L-4,3 Z" />
+          : effect.kind === "wait" ? <path d="M-5,-6 H5 M-5,6 H5 M-4,-6 L4,6 M4,-6 L-4,6" />
+          : effect.kind === "recover" ? <path d="M0,-6 V6 M-6,0 H6" />
+          : effect.kind === "upgrade" ? <path d="M-5,1 L0,-5 L5,1 M0,-5 V7" />
+          : effect.kind === "observe" || effect.kind === "query" ? <><ellipse rx={7} ry={4} /><circle r={2} /></>
+          : effect.kind === "death" ? <path d="M-5,-5 L5,5 M5,-5 L-5,5" />
+          : effect.kind === "skill" ? <path d="M-5,-5 L0,0 L-5,5 M1,5 H6" />
+          : null}
+      </g></g>
+    </g>;
+  })}</g>;
+}
+
 // ---------------------------------------------------------------------------
 // Dots
 // ---------------------------------------------------------------------------
@@ -871,7 +949,7 @@ function EntityDot(props: { dot: Dot; acting: boolean; pending: boolean; selecte
     <g>
       {selected ? <circle cx={cx} cy={cy} r={r + Math.max(3, r * 0.28)} className="insp-dot-ring-selected" /> : null}
       {acting || pending ? <circle cx={cx} cy={cy} r={r + Math.max(2, r * 0.16)} className={`insp-dot-ring-acting${pending ? " insp-ring-pending" : ""}`} /> : null}
-      <circle cx={cx} cy={cy} r={r} className={`insp-dot insp-dot-${dot.kind}${hovered ? " insp-dot-hover" : ""}`} />
+      <DotGlyph kind={dot.kind} cx={cx} cy={cy} r={r} className={`insp-dot${hovered ? " insp-dot-hover" : ""}`} />
       {dot.kind === "dead" ? (
         <path d={`M${cx - cross},${cy - cross} L${cx + cross},${cy + cross} M${cx + cross},${cy - cross} L${cx - cross},${cy + cross}`} className="insp-dot-cross" />
       ) : null}
@@ -882,6 +960,18 @@ function EntityDot(props: { dot: Dot; acting: boolean; pending: boolean; selecte
       ) : null}
     </g>
   );
+}
+
+/** Entity silhouettes share the dot's existing radius so layout and hit testing stay unchanged. */
+function DotGlyph(props: { kind: string; cx: number; cy: number; r: number; className?: string }) {
+  const { kind, cx, cy, r, className = "" } = props;
+  const transform = `translate(${cx} ${cy}) scale(${r / 4})`;
+  const cls = `insp-dot-shape insp-dot-${kind}${className ? ` ${className}` : ""}`;
+  if (kind === "plant") return <g transform={transform} className={cls} data-dot-radius={r}><path d="M0,-4 C-1.1,-2.8 -3.6,-2.4 -3.5,-0.7 C-3.4,0.7 -1.8,1.5 -0.4,0.7 C-1.2,2.5 -2.3,3.2 -2.3,3.2 L2.3,3.2 C2.3,3.2 1.2,2.5 0.4,0.7 C1.8,1.5 3.4,0.7 3.5,-0.7 C3.6,-2.4 1.1,-2.8 0,-4 Z" /><path d="M0,0.2 V3.3" className="insp-dot-stem" /></g>;
+  if (kind === "fruit") return <path transform={transform} d="M0,-4 C0.5,-3.1 1.3,-3 2,-2.2 L4,0 L0,4 L-4,0 L-2,-2.2 C-1.3,-3 -0.5,-3.1 0,-4 Z" className={cls} data-dot-radius={r} />;
+  if (kind === "seed") return <ellipse transform={transform} cx={0} cy={0} rx={2.6} ry={4} className={cls} data-dot-radius={r} />;
+  if (kind === "residue") return <path transform={transform} d="M0,-4 L3.3,-1.4 L2.5,2.6 L0,4 L-2.5,2.6 L-3.3,-1.4 Z" className={cls} data-dot-radius={r} />;
+  return <circle cx={cx} cy={cy} r={r} className={`${cls} insp-dot-round`} data-dot-radius={r} />;
 }
 
 /** The total-occupant count of a packed cell: a pill in the top-right corner, or bare digits in that corner in small cells (no dot sits under either). */
@@ -1282,7 +1372,7 @@ function LegendDot(props: { kind: string; dead?: boolean; ring?: "acting" | "sel
     <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" className="insp-legend-dot">
       {props.ring === "selected" ? <circle cx={9} cy={9} r={7.5} className="insp-dot-ring-selected" /> : null}
       {props.ring === "acting" ? <circle cx={9} cy={9} r={7.5} className="insp-dot-ring-acting" /> : null}
-      <circle cx={9} cy={9} r={props.ring ? 4.5 : 6} className={`insp-dot-sample insp-dot-${props.kind}`} />
+      <DotGlyph kind={props.kind} cx={9} cy={9} r={props.ring ? 4.5 : 6} className="insp-dot-sample" />
       {props.dead ? <path d="M6,6 L12,12 M12,6 L6,12" className="insp-dot-cross" /> : null}
     </svg>
   );

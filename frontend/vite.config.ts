@@ -8,7 +8,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   build: {
-    // The 3D view's chunk (three.js, loaded only when "3D view" is chosen) is about 600 kB; the main bundle stays below.
+    // Keep the existing bundle warning budget; the CPU board is a small lazy chunk.
     chunkSizeWarningLimit: 900,
   },
   server: {

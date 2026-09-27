@@ -2,19 +2,11 @@
  * The run page (spec "Sessions and run controls" and "Display and historical
  * inspection"; INTERFACES sections 3, 7, 9, 10, 11).  The board is the hero.
  *
- * Three columns from 1200 px wide, filling the window (each column scrolls on
- * its own):
- * - LEFT rail: run name, the run controls (first, so status changes never
- *   move them), the status facts with the model-call slot and Recover, the
- *   history timeline (round/turn arrows, turn selector, LIVE/HISTORY, Return
- *   to live) and a compact agent roster.
- * - CENTRE: the map at the full height of the window, its toolbar above and
- *   the legend always visible below it.  Decision packets and model calls
- *   open over the map (Close / Escape returns to it).
- * - RIGHT: tabs (Inspector, Turn record, God mode, Rules & settings,
- *   Storybook) and the live activity log docked at the bottom (collapsible).
- *   God mode and the rules widen this column; "Wider panel" does it for any
- *   tab (the toggle sits in the panel header under the one-line tabs row).
+ * A compact top bar holds simulation controls and the view switch. The map
+ * fills the workspace, with a compact history/replay strip beneath it.
+ * Session details/agents, inspection tools and activity each open in a
+ * dismissible utility panel over the board; opening one never resizes the map.
+ * Panel content stays mounted so selections, edits and scroll state survive.
  *
  * Entity profile card: clicking an entity (map dot, map tooltip row,
  * occupant row, roster row, "Other entities" chip, an assistant entity link,
@@ -29,9 +21,7 @@
  * in-flight guard, apply status, show error) so the drawer's links and
  * approved run commands act through the page's own logic.  When the drawer
  * is docked (>= 1280 px) the layout reserves its width on the right.
- * Below 1200 px the rail and the map share the top row and the tabs follow
- * below; below 900 px everything stacks with the map first.  On narrow
- * screens the log is a drawer at the bottom of the window.
+ * Narrow screens wrap the top bar and keep utility panels inside the viewport.
  *
  * Data flow: useRunFeed holds the run open and polls status + events;
  * everything that only changes at a commit (live checkpoint, settings, rules,
@@ -88,13 +78,14 @@ import { navigate } from "../hooks/useHashRoute";
 import { useHistoryView, useTurnIndex } from "../hooks/useRunData";
 import { useRunFeed } from "../hooks/useRunFeed";
 import { MIN_LOG_H, MIN_RAIL_W, MIN_SIDE_W, useRunLayout } from "../hooks/useRunLayout";
+import { useSavedReplay } from "../hooks/useSavedReplay";
 import { useThrottledKey } from "../hooks/useThrottledKey";
 import { clearContext, dockReserve, getDrawerState, publishContext, registerHandlers, subscribeDrawer } from "../state/assistantContext";
 import type { RunHandlers, RunTabId } from "../state/assistantContext";
 import { MAP_VIEW_STORAGE_KEY, parseMapViewMode } from "../state/map3dView";
 import type { MapViewMode } from "../state/map3dView";
 import { errorText, withReopen } from "../state/runSessions";
-import { allModelsFake, controlAvailability, isIdle } from "../state/statusText";
+import { allModelsFake, controlAvailability, isIdle, stateWord } from "../state/statusText";
 import { turnEffects } from "../state/turnEffects";
 
 type Tab = RunTabId;
@@ -164,6 +155,13 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   const [profileId, setProfileId] = useState<string | null>(null);
   // "Wider panel": the right column takes more room from the map (God mode and the rules always do).
   const [wideSide, setWideSide] = useState(false);
+  // Presentation only: one utility panel at a time, leaving the board at its full size.
+  const [workspacePanel, setWorkspacePanel] = useState<"session" | "inspect" | "activity" | null>(null);
+  const closeWorkspacePanel = () => {
+    const trigger = document.getElementById(`workspace-toggle-${workspacePanel}`);
+    setWorkspacePanel(null);
+    trigger?.focus({ preventScroll: true });
+  };
   const [logCollapsed, setLogCollapsed] = useState(false);
   const sideWideNow = wideSide || tab === "god" || tab === "rules";
   // "2D map" or "3D view" in the centre column (remembered per browser; the 3D chunk loads only when chosen).
@@ -178,7 +176,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     return () => window.removeEventListener("resize", onResize);
   }, []);
   const reserveW = dockReserve(drawer, winW, "run");
-  // Splitter sizes (three-column layout only), remembered in localStorage.
+  // Utility panel sizes (desktop resize handles), remembered in localStorage.
   const layout = useRunLayout(sideWideNow, reserveW);
   // Lines of a discarded attempt of a saved turn (INTERFACES section 8): known once the saved turn's event range arrives.
   const [discardedSeqs, setDiscardedSeqs] = useState<ReadonlySet<number>>(() => new Set());
@@ -190,10 +188,6 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   const [now, setNow] = useState(() => Date.now());
 
   const [prevInitial, setPrevInitial] = useState(props.initialTurnId);
-  if (props.initialTurnId !== prevInitial) {
-    setPrevInitial(props.initialTurnId);
-    setViewTurnId(props.initialTurnId);
-  }
 
   const history = useHistoryView(runId, viewTurnId);
   const liveTurnRecord = live.data?.turn ?? null;
@@ -206,6 +200,22 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     });
   }, [liveTurnRecord, feed.events]);
   const viewed: TurnView | null = viewTurnId === null ? live.data : ((history.dataKey === viewTurnId ? history.data : null) ?? history.data ?? live.data);
+  const playback = useSavedReplay({
+    turns: index.turns,
+    shownId: viewed?.turn.turn_id ?? null,
+    loaded: viewTurnId !== null && history.dataKey === viewTurnId && !history.loading && !history.error,
+    blocked: record !== null || profileId !== null,
+    onView: setViewTurnId,
+  });
+  if (props.initialTurnId !== prevInitial) {
+    setPrevInitial(props.initialTurnId);
+    setViewTurnId(props.initialTurnId);
+    playback.stop();
+  }
+  const navigateHistory = (id: string | null) => {
+    playback.stop();
+    setViewTurnId(id);
+  };
   // "Before" values for the turn record: the previous saved turn, loaded only while that tab is shown
   // (a continuation's first turn has its previous turn in the parent run: not loaded).
   const previousTurnId = tab === "turn" && viewed && !viewed.parent ? viewed.turn.previous_turn_id : null;
@@ -293,6 +303,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   const [revealTick, setRevealTick] = useState(0);
   // An operator selection shows the inspector (God mode keeps its tab: its forms use the selection; the Storybook follows the selection instead).
   const reveal = () => {
+    setWorkspacePanel("inspect");
     setTab((current) => (current === "god" || current === "storybook" ? current : "inspect"));
     setRevealTick((n) => n + 1);
   };
@@ -335,6 +346,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
 
   /** A map click or "Select point": a selection that is not at the new point is cleared, so the column shows that point. */
   const selectPoint = (p: Point) => {
+    setWorkspacePanel("inspect");
     setSelectedPoint(p);
     setTab((current) => (current === "god" || current === "storybook" ? current : "inspect"));
     if (selectedEntity && (selectedEntity.position.x !== p.x || selectedEntity.position.y !== p.y)) setSelectedId(null);
@@ -368,6 +380,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   // ------------------------------------------------------------------ commands and edits
   const send = async (command: RunCommand) => {
     if (inFlight) return;
+    playback.stop();
     setInFlight(command);
     setCommandError(null);
     try {
@@ -441,18 +454,22 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   // ------------------------------------------------------------------ assistant: context and handlers
   // Handlers are registered once per run id and always call the latest closures.
   // (State setters are stable and used directly; only the closures that change per render go through the ref.)
-  const latest = useRef({ findEntityById, findPoint, openRecord, applyStatus, liveTurnId });
+  const stopReplay = playback.stop;
+  const latest = useRef({ findEntityById, findPoint, navigateHistory, stopReplay, openRecord, applyStatus, liveTurnId });
   useEffect(() => {
-    latest.current = { findEntityById, findPoint, openRecord, applyStatus, liveTurnId };
+    latest.current = { findEntityById, findPoint, navigateHistory, stopReplay, openRecord, applyStatus, liveTurnId };
   });
   useEffect(() => {
     const bundle: RunHandlers = {
       selectEntity: (id) => latest.current.findEntityById(id),
       findPoint: (p) => latest.current.findPoint(p),
-      viewTurn: (turnId) => setViewTurnId(turnId !== null && turnId === latest.current.liveTurnId ? null : turnId),
-      setTab: (next) => setTab(next),
+      viewTurn: (turnId) => latest.current.navigateHistory(turnId !== null && turnId === latest.current.liveTurnId ? null : turnId),
+      setTab: (next) => { setWorkspacePanel("inspect"); setTab(next); },
       openRecord: (target) => latest.current.openRecord(target),
-      setInFlight: (busy) => setAssistantBusy(busy),
+      setInFlight: (busy) => {
+        if (busy) latest.current.stopReplay();
+        setAssistantBusy(busy);
+      },
       applyStatus: (next) => latest.current.applyStatus(next),
       showError: (message) => setCommandError(message),
     };
@@ -495,7 +512,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     );
   }
 
-  // The "Map view" switch sits at the end of the shown view's legend controls row (both views take it as legendExtra), so it adds no row to the board.
+  // The stable top-bar switch stays visible while either map view is loading.
   const viewSwitch = <MapViewSwitch value={mapViewMode} onChange={setMapViewMode} onPrefetch3d={prefetchMap3d} />;
   const allowed = controlAvailability(status, inFlight !== null || assistantBusy);
   const highlightAgentId = viewTurnId === null && status.active_turn_id ? status.acting_agent_id : viewed.turn.acting_agent_id;
@@ -522,7 +539,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   ];
   const activeTab = tabs.find((t) => t.id === tab) ?? tabs[0];
   const docked = layout.threeColumn && layout.reservedW > 0;
-  const layoutClass = ["run-layout", sideWideNow ? "run-side-wide" : "", logCollapsed ? "run-log-collapsed" : "", viewTurnId !== null ? "run-history" : "", docked ? "run-assistant-docked" : ""]
+  const layoutClass = ["run-layout", "board-workspace", sideWideNow ? "run-side-wide" : "", logCollapsed ? "run-log-collapsed" : "", viewTurnId !== null ? "run-history" : "", docked ? "run-assistant-docked" : ""]
     .filter(Boolean)
     .join(" ");
 
@@ -531,34 +548,52 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     : undefined;
 
   return (
-    <div className={layoutClass} style={layoutStyle}>
-      <aside className="run-rail" aria-label="Run">
+    <div className={layoutClass} style={layoutStyle} data-panel={workspacePanel ?? "none"} onKeyDown={(event) => {
+      if (event.key === "Escape" && workspacePanel && !profileId && !record && !event.defaultPrevented) closeWorkspacePanel();
+    }}>
+      <header className="workspace-topbar">
+        <button type="button" className="btn workspace-back" aria-label="Back to sessions" title="Back to sessions" onClick={() => navigate({ name: "entry" })}>‹</button>
+        <div className="workspace-identity">
+          <h1 title={runName}>{runName}</h1>
+          <button className="workspace-status btn-link" onClick={() => setWorkspacePanel("session")} title="Open session status and model details">
+            <span className={`state-badge state-${status.state}`}>{stateWord(status.state)}</span> Live round {status.round}
+          </button>
+        </div>
+        <RunControls running={!isIdle(status)} allowed={allowed} inFlight={inFlight} error={commandError} onCommand={(c) => void send(c)} onResetLayout={layout.reset} />
+        {viewSwitch}
+        <nav className="workspace-tools" aria-label="Workspace panels">
+          {([
+            ["session", "Session & agents"], ["inspect", `Inspector & tools${stagedSuffix}`], ["activity", "Activity log"],
+          ] as const).map(([id, label]) => <button key={id} id={`workspace-toggle-${id}`} type="button" className={`btn btn-small${workspacePanel === id ? " btn-primary" : ""}`} aria-expanded={workspacePanel === id} aria-controls={`workspace-panel-${id}`} onClick={() => setWorkspacePanel((current) => current === id ? null : id)}>{label}</button>)}
+        </nav>
+      </header>
+      <aside id="workspace-panel-session" className="run-rail" aria-label="Run">
+        <div className="workspace-panel-head"><strong>Session & agents</strong><button type="button" className="btn btn-small" onClick={closeWorkspacePanel} aria-label="Close session panel">Close ×</button></div>
         <header className="rail-header">
           <h1 className="rail-title" title={runName}>
             {runName}
           </h1>
-          <div className="rail-ids">
-            run <code>{runId}</code>
-            <br />
-            world <code>{status.world_id}</code>
-            {parentRun ? (
-              <>
-                <br />
-                continuation of <code>{parentRun.run_id}</code> from turn <code>{parentRun.turn_id}</code>
-              </>
-            ) : null}
-          </div>
+          <details className="rail-identifiers">
+            <summary>Session details</summary>
+            <div className="rail-ids">
+              run <code>{runId}</code>
+              <br />
+              world <code>{status.world_id}</code>
+              {parentRun ? (
+                <>
+                  <br />
+                  continuation of <code>{parentRun.run_id}</code> from turn <code>{parentRun.turn_id}</code>
+                </>
+              ) : null}
+            </div>
+          </details>
           <div className="rail-actions">
-            <button type="button" className="btn btn-small rail-back" onClick={() => navigate({ name: "entry" })}>
-              Back to sessions
-            </button>
             <LauncherButton />
           </div>
           <button type="button" className="btn-link rail-story-link" title="Story Mode: turn this run into a story" onClick={() => navigate({ name: "story", runId, storyId: null })}>
             Make a story of this run
           </button>
         </header>
-        <RunControls allowed={allowed} inFlight={inFlight} error={commandError} onCommand={(c) => void send(c)} onResetLayout={layout.reset} />
         <StatusBar
           status={status}
           name={name}
@@ -570,45 +605,23 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
           onRecover={() => void send("pause")}
           onViewPending={() => openRecord({ kind: "pending" })}
         />
-        <Timeline
-          turns={index.turns}
-          liveTurnId={status.current_turn_id}
-          viewTurnId={viewTurnId}
-          loading={viewTurnId !== null && history.loading}
-          loadError={viewTurnId !== null ? history.error : index.error}
-          name={name}
-          parent={viewed.parent}
-          onView={setViewTurnId}
-          onOpenParent={(parent) => navigate({ name: "run", runId: parent.run_id, turnId: parent.turn_id })}
-        />
         <ErrorLine text={live.error} prefix="Live state:" />
         <AgentRoster agents={agents} selectedId={selectedId} actingId={highlightAgentId} onSelect={selectEntity} compact />
       </aside>
 
       <Splitter
         orientation="vertical"
-        label="Resize the left panel"
+        label="Resize session panel"
         className="splitter-rail"
         value={layout.railW}
         min={MIN_RAIL_W}
         max={layout.railMax}
-        direction={1}
+        direction={-1}
         onChange={layout.setRailW}
         onReset={() => layout.resetPart("rail")}
       />
 
       <main className="run-center" aria-label="World map">
-        {viewTurnId !== null ? (
-          <div className="map-history-strip" role="status">
-            <span className="mode-badge mode-history">HISTORY</span>
-            <span>
-              The map shows turn <code>{viewTurnId}</code> (round {viewed.turn.round}), not the live state.
-            </span>
-            <button type="button" className="btn btn-small" onClick={() => setViewTurnId(null)}>
-              Back to live
-            </button>
-          </div>
-        ) : null}
         {/* The 2D map stays mounted (hidden) while the 3D view is shown, so its zoom and pan survive the switch. */}
         <div className="map-2d-host" hidden={mapViewMode === "3d"}>
           <MapView
@@ -627,8 +640,9 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
             agentViewOverlay={agentViewOverlay}
             effects={effects}
             turnId={viewed.turn.turn_id}
+            replayToken={playback.token}
+            replayDurationMs={viewTurnId !== null ? Math.min(1400, playback.intervalMs * 0.7) : undefined}
             pendingAgentId={pendingAgentId}
-            legendExtra={viewSwitch}
           />
         </div>
         {mapViewMode === "3d" ? (
@@ -647,12 +661,33 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
             agentViewOverlay={agentViewOverlay}
             effects={effects}
             turnId={viewed.turn.turn_id}
+            replayToken={playback.token}
+            replayDurationMs={viewTurnId !== null ? Math.min(1400, playback.intervalMs * 0.7) : undefined}
             live={viewTurnId === null}
             paused={record !== null}
             onBackTo2d={() => setMapViewMode("2d")}
-            legendExtra={viewSwitch}
           />
         ) : null}
+        <div className="board-timeline">
+          <Timeline
+            turns={index.turns}
+            liveTurnId={status.current_turn_id}
+            viewTurnId={viewTurnId}
+            loading={viewTurnId !== null && history.loading}
+            loadError={viewTurnId !== null ? history.error : index.error}
+            name={name}
+            parent={viewed.parent}
+            onView={navigateHistory}
+            playing={playback.playing}
+            suspended={playback.suspended}
+            replayIntervalMs={playback.intervalMs}
+            onReplay={playback.start}
+            onStopReplay={playback.stop}
+            onReplayOne={playback.replayOne}
+            onReplayInterval={playback.setIntervalMs}
+            onOpenParent={(parent) => navigate({ name: "run", runId: parent.run_id, turnId: parent.turn_id })}
+          />
+        </div>
         {record ? (
           <div className="record-overlay">
             <RecordViewer
@@ -671,7 +706,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
 
       <Splitter
         orientation="vertical"
-        label="Resize the right panel"
+        label="Resize inspector panel"
         className="splitter-side"
         value={layout.sideW}
         min={MIN_SIDE_W}
@@ -681,7 +716,8 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
         onReset={() => layout.resetPart("side")}
       />
 
-      <section className="run-side" aria-label="Inspector and records">
+      <section id="workspace-panel-inspect" className="run-side" aria-label="Inspector and records">
+        <div className="workspace-panel-head"><strong>Inspector & tools</strong><button type="button" className="btn btn-small" onClick={closeWorkspacePanel} aria-label="Close inspector panel">Close ×</button></div>
         <div className="tabs-row">
           <div className="tabs" role="tablist" aria-label="Run views">
             {tabs.map((t) => (
@@ -720,7 +756,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
             aria-pressed={sideWideNow}
             aria-label="Wider panel"
             disabled={tab === "god" || tab === "rules"}
-            title={tab === "god" || tab === "rules" ? "This tab always uses the wide panel" : "Give this panel more room (the map gets narrower)"}
+            title={tab === "god" || tab === "rules" ? "This tab always uses the wide panel" : "Widen this panel over the board"}
             onClick={() => setWideSide((w) => !w)}
           >
             {sideWideNow ? "⇥" : "⇤"}
@@ -757,7 +793,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
                 turns={index.turns}
                 shownTurnId={viewed.turn.turn_id}
                 onOpen={openRecord}
-                onViewTurn={(turnId) => setViewTurnId(turnId === status.current_turn_id ? null : turnId)}
+                onViewTurn={(turnId) => navigateHistory(turnId === status.current_turn_id ? null : turnId)}
               />
             ) : null}
             <InspectorPanel
@@ -825,7 +861,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
               liveTurnId={status.current_turn_id}
               selectedEntityId={selectedId}
               name={name}
-              onViewTurn={(turnId) => setViewTurnId(turnId === status.current_turn_id ? null : turnId)}
+              onViewTurn={(turnId) => navigateHistory(turnId === status.current_turn_id ? null : turnId)}
               onInspect={(entityId) => {
                 selectEntity(entityId);
                 setTab("inspect");
@@ -872,13 +908,14 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
             requestAnimationFrame(() => inspectorRef.current?.querySelector<HTMLElement>(".insp-inspector button")?.focus({ preventScroll: true }));
           }}
           onSelectEntity={selectEntity}
-          onViewTurn={(turnId) => setViewTurnId(turnId === status.current_turn_id ? null : turnId)}
+          onViewTurn={(turnId) => navigateHistory(turnId === status.current_turn_id ? null : turnId)}
           onOpen={openRecord}
           onStage={onStage}
         />
       ) : null}
 
-      <div className="run-log">
+      <div id="workspace-panel-activity" className="run-log">
+        <div className="workspace-panel-head"><strong>Activity log</strong><button type="button" className="btn btn-small" onClick={closeWorkspacePanel} aria-label="Close activity panel">Close ×</button></div>
         <ActivityLog
           events={feed.events}
           status={status}
@@ -897,8 +934,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
 
 /**
  * Scroll the inspector into view if its top is not comfortably visible.  In
- * the three-column layout the right column's tab panel scrolls on its own;
- * in the stacked layout the page does.
+ * the utility panel its tab content scrolls independently of the board.
  */
 function revealInspector(block: HTMLElement | null): void {
   if (!block) return;

@@ -73,6 +73,10 @@ export interface MapViewProps {
   effects?: readonly TurnEffect[];
   /** The viewed turn's id: keys the marks layer so its entrance animation plays once per turn change, and names the turn in the status line. */
   turnId?: string | null;
+  /** Replay the same saved turn without changing its data. */
+  replayToken?: number;
+  /** Visual duration only; no relation to simulation timing. */
+  replayDurationMs?: number;
   /** Live only: the agent whose turn is in progress (its dashed ring pulses); null when nothing is pending. */
   pendingAgentId?: string | null;
   /**

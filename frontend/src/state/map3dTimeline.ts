@@ -248,14 +248,14 @@ function tiltClip(b: Builder, e: TurnEffect, id: string, t0: number, t1: number)
 function buildAction(b: Builder, e: TurnEffect): void {
   const { ctx } = b;
   const target = e.targets[0] ?? null;
+  if (!e.ok) {
+    const anchor = anchorOf(ctx, e.actor, e.at);
+    if (anchor) push(b, "puff", e.kind, 0, 400, { id: e.actor, from: anchor, colour: "bad" });
+    return;
+  }
   switch (e.kind) {
     case "move": {
       const slot = ctx.slotOf(e.actor);
-      if (!e.ok) {
-        const anchor = anchorOf(ctx, e.actor, e.at);
-        if (anchor) push(b, "puff", e.kind, 0, 400, { id: e.actor, from: anchor, colour: "bad" });
-        return;
-      }
       if (!e.from || !e.to) return;
       if (slot) push(b, "slide", e.kind, 0, 450, { id: e.actor, from: ctx.cellCentre(e.from), to: slot });
       push(b, "trail", e.kind, 0, 600, { id: e.actor, from: ctx.cellCentre(e.from), to: ctx.cellCentre(e.to) });
@@ -267,6 +267,8 @@ function buildAction(b: Builder, e: TurnEffect): void {
       const targetSlot = ctx.slotOf(target);
       if (!targetSlot) return;
       if (actorSlot) push(b, "lunge", e.kind, 0, 240, { id: e.actor, from: actorSlot, to: targetSlot });
+      if (actorSlot) push(b, "beam", e.kind, 30, 260, { id: e.actor, from: actorSlot, to: targetSlot, colour: "bad" });
+      push(b, "puff", e.kind, 120, 430, { id: target, from: targetSlot, colour: "bad" });
       push(b, "flash", e.kind, 120, 600, { id: target, colour: "bad" });
       if (e.amount !== null) floatClip(b, e, targetSlot, formatAmount(e.amount, "-"), "bad", 120, 700);
       return;
@@ -289,11 +291,11 @@ function buildAction(b: Builder, e: TurnEffect): void {
       return;
     }
     case "absorb": {
-      if (!e.ok) return;
       const actorSlot = ctx.slotOf(e.actor);
       if (!actorSlot) return;
       const source = target ? ctx.slotOf(target) : null;
       if (source) push(b, "particles", e.kind, 0, 450, { id: e.actor, from: source, to: actorSlot, colour: "resource" });
+      else push(b, "pulse", e.kind, 0, 450, { id: e.actor, from: actorSlot, colour: "resource" });
       if (e.amount !== null) floatClip(b, e, actorSlot, formatAmount(e.amount, "+"), "good", 300, 700);
       return;
     }
@@ -350,8 +352,23 @@ function buildAction(b: Builder, e: TurnEffect): void {
       return;
     }
     case "wait":
+      {
+        const anchor = anchorOf(ctx, e.actor, e.at);
+        if (anchor) push(b, "pulse", e.kind, 0, 360, { id: e.actor, from: anchor, colour: "accent" });
+      }
+      return;
     case "skill":
+      {
+        const anchor = anchorOf(ctx, e.actor, e.at);
+        if (anchor) push(b, "pulse", e.kind, 0, 420, { id: e.actor, from: anchor, colour: "warn" });
+      }
+      return;
     case "voice":
+      e.targets.forEach((id, i) => {
+        const anchor = ctx.slotOf(id) ?? (e.targetPoints[i] ? ctx.cellCentre(e.targetPoints[i]) : null);
+        if (anchor) push(b, "pulse", e.kind, 0, 500, { id, from: anchor, colour: "accent" });
+      });
+      return;
     case "fruit":
     case "seed":
     case "germination":
@@ -376,8 +393,9 @@ function buildSpawns(b: Builder, spawns: readonly TurnEffect[]): void {
  * data degrades to no clip, never an error):
  * move ok: slide (actor, from the origin cell to its slot, 0-450, with a hop)
  * and a trail line (0-600); move failed: a red puff over the actor (0-400).
- * attack ok with a target that has a slot: lunge (0-240), red flash of the
- * target (120-600, 3 pulses), floating "-amount" (120-700); a kill is animated
+ * attack ok with a target that has a slot: lunge (0-240), directed red strike
+ * (30-260), target burst (120-430), red flash (120-600, 3 pulses), floating
+ * "-amount" (120-700); a kill is animated
  * by the same turn's death effect (one tilt per id).  message: broadcast ->
  * ripple from the actor to commRange (0-600) and a bounce of each recipient
  * (350-600); send -> a beam to each recipient (0-400).  absorb / transfer:
@@ -388,8 +406,9 @@ function buildSpawns(b: Builder, spawns: readonly TurnEffect[]): void {
  * sink (0-500).  growth: pop 0.8 -> 1 (0-450).  fruit / seed / germination:
  * pop 0 -> 1 (300 ms each), staggered by up to 30 ms, at most 40 animated (the
  * stagger shrinks so the last pop still ends by 700 ms).  starvation: red
- * flash (0-400) and "-amount".  wait, skill, voice and failed actions: no
- * clips (the chip alone).  `reducedMotion` zeroes every t0 and t1.
+ * flash (0-400) and "-amount".  Wait and skill add quiet pulses at the actor;
+ * operator voice pulses each known recipient, and failed actions puff red at
+ * the actor's known position.  `reducedMotion` zeroes every t0 and t1.
  */
 export function buildTimeline(effects: readonly TurnEffect[], ctx: TimelineContext): Timeline {
   const b: Builder = { ctx, clips: [], tilted: new Set() };

@@ -16,7 +16,6 @@
 
 // DOCS: button.map3d-label[data-entity-id][data-cell] per living agent with room on screen (a crowded label shows its id only, then drops out; the hovered/selected one always shows), span.map3d-badge (count >= 5), div.map3d-chip.map3d-chip-<kind>, span.map3d-float, span.map3d-tick, div.map3d-compass; a label click picks via onPick, pointer presses on labels also reach the viewport's controls.
 
-import { Camera, Vector3 } from "three";
 import type { Point } from "../../api/types";
 import type { OverlayEntry, ScreenBox, Vec3 } from "../../state/map3dLayout";
 import { OVERLAY_GAP, placeOverlay } from "../../state/map3dLayout";
@@ -202,7 +201,6 @@ export class LabelLayer {
   private readonly onPick: (id: string, cell: Point) => void;
   private readonly slots = new Map<string, Slot>();
   private readonly compass: HTMLElement;
-  private readonly v = new Vector3();
   /** Measured element sizes by class and text. */
   private readonly sizes = new Map<string, Size>();
   private compassYaw = Number.NaN;
@@ -232,18 +230,12 @@ export class LabelLayer {
    * LABEL_CAP), reuse elements by key and remove the rest.  Returns the number
    * of elements shown.
    */
-  sync(items: readonly LabelItem[], camera: Camera, width: number, height: number): number {
+  sync(items: readonly LabelItem[], project: (point: Vec3) => { x: number; y: number; depth: number; visible: boolean }, width: number, height: number): number {
     const projected: Projected[] = [];
-    const inv = camera.matrixWorldInverse;
-    const proj = camera.projectionMatrix;
-    const v = this.v;
     for (const item of items) {
-      v.set(item.position[0], item.position[1], item.position[2]).applyMatrix4(inv);
-      const depth = -v.z;
-      if (depth <= 0.05) continue;
-      v.applyMatrix4(proj);
-      if (v.x < -1.2 || v.x > 1.2 || v.y < -1.2 || v.y > 1.2) continue;
-      projected.push({ item, x: ((v.x + 1) / 2) * width, y: ((1 - v.y) / 2) * height, depth });
+      const p = project(item.position);
+      if (!p.visible || p.x < -width * 0.1 || p.x > width * 1.1 || p.y < -height * 0.1 || p.y > height * 1.1) continue;
+      projected.push({ item, x: p.x, y: p.y, depth: p.depth });
     }
     const capped = projected.filter((p) => CAPPED.has(p.item.kind));
     this.measure(capped);

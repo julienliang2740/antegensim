@@ -3,8 +3,7 @@
  * right round navigation, turn selection, live/history indicator and an
  * obvious return to live view).  Viewing history never changes the run.
  *
- * Laid out for the run page's left rail: mode badge and sentence, Return to
- * live, round arrows, turn arrows and the turn selector, stacked.
+ * Placed beneath the board: round/turn navigation and local saved-turn replay.
  *
  * On a continuation's first turn the previous arrow leads into the parent
  * run at the copied turn (INTERFACES sections 9 and 11: "previous" resolves
@@ -26,6 +25,13 @@ export interface TimelineProps {
   name: AgentNamer;
   /** Parent run of the viewed turn (first turn of a continuation). */
   parent: ParentRef | null;
+  playing: boolean;
+  suspended: boolean;
+  replayIntervalMs: number;
+  onReplay(): void;
+  onStopReplay(): void;
+  onReplayOne(): void;
+  onReplayInterval(ms: number): void;
   onView(turnId: string | null): void;
   onOpenParent(parent: ParentRef): void;
 }
@@ -36,6 +42,7 @@ export function Timeline(props: TimelineProps) {
   const shownId = viewTurnId ?? liveTurnId;
   const shownEntry = turns.find((t) => t.turn_id === shownId) ?? null;
   const round = shownEntry ? shownEntry.round : turns.length > 0 ? lastRound(turns) : 0;
+  const rounds = [...new Set(turns.map((turn) => turn.round))];
   const inRound = turnsOfRound(turns, round);
   const agentTurns = inRound.filter((t) => t.kind === "agent_turn");
   const otherTurns = inRound.filter((t) => t.kind !== "agent_turn");
@@ -55,15 +62,7 @@ export function Timeline(props: TimelineProps) {
       <div className="timeline-mode">
         <span className={`mode-badge ${live ? "mode-live" : "mode-history"}`}>{live ? "LIVE" : "HISTORY"}</span>
         <span className="timeline-mode-text">
-          {live ? (
-            <>
-              Following the latest saved turn <code>{liveTurnId}</code>.
-            </>
-          ) : (
-            <>
-              Viewing history: turn <code>{viewTurnId}</code> (round {round}). The run itself is unchanged and the live log keeps running.
-            </>
-          )}
+          <span title={shownId}>Round {round} · {shownEntry?.kind === "round_end" ? "round end" : shownEntry?.turn_index ? `turn ${shownEntry.turn_index}` : "initial state"}</span>
           {props.loading ? <span className="hint"> Fetching the turn…</span> : null}
         </span>
       </div>
@@ -72,14 +71,17 @@ export function Timeline(props: TimelineProps) {
       </button>
       <div className="timeline-nav">
         <span className="timeline-group" title={`Recorded rounds ${minRound}–${maxRound}`}>
-          Round <span className="timeline-round">{round}</span>
+          <label>Round <select aria-label="Jump to round" value={round} onChange={(event) => {
+            const first = turns.find((turn) => turn.round === Number(event.target.value));
+            if (first) go(first.turn_id);
+          }}>{rounds.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
         </span>
         <div className="timeline-pair">
-          <button type="button" className="btn btn-small" disabled={previousRound === null} onClick={() => previousRound && go(previousRound)}>
-            ◀ Previous round
+          <button type="button" className="btn btn-small" disabled={previousRound === null} onClick={() => previousRound && go(previousRound)} aria-label="◀ Previous round" title="◀ Previous round">
+            ◀
           </button>
-          <button type="button" className="btn btn-small" disabled={nextRound === null} onClick={() => nextRound && go(nextRound)}>
-            Next round ▶
+          <button type="button" className="btn btn-small" disabled={nextRound === null} onClick={() => nextRound && go(nextRound)} aria-label="Next round ▶" title="Next round ▶">
+            ▶
           </button>
         </div>
       </div>
@@ -96,17 +98,17 @@ export function Timeline(props: TimelineProps) {
               ‹ Parent run
             </button>
           ) : (
-            <button type="button" className="btn btn-small" disabled={previousTurn === null} onClick={() => previousTurn && go(previousTurn)}>
-              ‹ Previous turn
+            <button type="button" className="btn btn-small" disabled={previousTurn === null} onClick={() => previousTurn && go(previousTurn)} aria-label="‹ Previous turn" title="‹ Previous turn">
+              ‹
             </button>
           )}
-          <button type="button" className="btn btn-small" disabled={nextTurn === null} onClick={() => nextTurn && go(nextTurn)}>
-            Next turn ›
+          <button type="button" className="btn btn-small" disabled={nextTurn === null} onClick={() => nextTurn && go(nextTurn)} aria-label="Next turn ›" title="Next turn ›">
+            ›
           </button>
         </div>
       </div>
       <label className="turn-select">
-        <span>Turn in round {round}</span>
+        <span className="turn-select-label">Turn in round {round}</span>
         <select value={shownId} onChange={(e) => go(e.target.value)} title={shownId}>
           {!knownShown ? <option value={shownId}>{shownId}</option> : null}
           {otherTurns
@@ -140,6 +142,17 @@ export function Timeline(props: TimelineProps) {
           ) : null}
         </select>
       </label>
+      <div className="saved-replay" role="group" aria-label="Saved turn playback">
+        <span className="rail-label">Saved replay</span>
+        <button type="button" className="btn btn-primary" disabled={!props.playing && (props.loading || !shownEntry)} onClick={props.playing ? props.onStopReplay : props.onReplay}>
+          {props.playing ? "Stop replay" : "Replay from here"}
+        </button>
+        <button type="button" className="btn" disabled={props.loading || !shownEntry} onClick={props.onReplayOne}>Replay this turn</button>
+        <label>Tempo <select aria-label="Replay tempo" value={props.replayIntervalMs} onChange={(event) => props.onReplayInterval(Number(event.target.value))}>
+          <option value={4000}>Slow</option><option value={2200}>Normal</option><option value={1300}>Fast</option>
+        </select></label>
+        <span className="saved-replay-note" role="status">{props.playing ? props.loadError ? "Replay paused: turn could not load. Stop replay or choose another turn." : props.suspended ? "Waiting for the turn or inspector…" : "Playing saved turns · no simulation changes" : "Choose a round and turn, then replay. No new turns are generated."}</span>
+      </div>
       {props.parent ? (
         <div className="timeline-parent">
           ← Earlier history is in the parent run <code>{props.parent.run_id}</code> at turn <code>{props.parent.turn_id}</code>.{" "}

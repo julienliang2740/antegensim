@@ -1,6 +1,6 @@
 /**
  * The 3D view of the world: toolbar (frame, top view, focus, layers, replay,
- * animations, controls), the WebGL viewport with its HTML label layer, two
+ * animations, controls), the CPU canvas viewport with its HTML label layer, two
  * fixed-height status lines, the legend and the cell tooltip and help card.
  * It owns a Scene3d (components/map3d/scene.ts) created in an effect and
  * disposed in its cleanup, pushes its props into the scene (layers, marks,
@@ -12,7 +12,7 @@
  * entities, effects and selection, exactly as it does for the 2D map.
  */
 
-// DOCS: div.map3d.insp with data-ready, data-webgl, data-renderer, data-draw-calls, data-triangles, data-frame-ms, data-camera, data-turn, data-entities, data-agents, data-layer, data-lod, data-animating.
+// DOCS: div.map3d.insp with data-ready, data-renderer, data-draw-calls, data-triangles, data-frame-ms, data-camera, data-turn, data-entities, data-agents, data-layer, data-lod, data-animating.
 
 import "../../map3d.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -474,11 +474,6 @@ export function Map3dView(props: Map3dProps) {
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const onMotion = () => setReducedMotion(motion.matches);
     motion.addEventListener("change", onMotion);
-    const onLost = (event: Event) => {
-      event.preventDefault();
-      setLost(true);
-    };
-    canvas.addEventListener("webglcontextlost", onLost);
     const onVisibility = () => scene.setPaused(latest.current.paused || document.visibilityState !== "visible");
     document.addEventListener("visibilitychange", onVisibility);
     setSceneReady((n) => n + 1);
@@ -489,7 +484,6 @@ export function Map3dView(props: Map3dProps) {
       dark.removeEventListener("change", onTheme);
       motion.removeEventListener("change", onMotion);
       document.removeEventListener("visibilitychange", onVisibility);
-      canvas.removeEventListener("webglcontextlost", onLost);
       if (hoverRaf.current) cancelAnimationFrame(hoverRaf.current);
       hoverRaf.current = 0;
       controls.dispose();
@@ -537,7 +531,7 @@ export function Map3dView(props: Map3dProps) {
     const scene = sceneRef.current;
     if (!scene) return;
     const now = performance.now();
-    let factor = 1;
+    let factor = (props.replayDurationMs ?? TIMELINE_MAX_MS) / TIMELINE_MAX_MS;
     let skip = false;
     if (lastTurnId.current !== turnId) {
       const previous = lastTurnChange.current;
@@ -551,7 +545,7 @@ export function Map3dView(props: Map3dProps) {
     }
     if (skip) scene.snapTimeline();
     else scene.playTimeline(latest.current.visibleEffects, latest.current.reducedMotion || !latest.current.animations, factor);
-  }, [turnId, replayTick, sceneReady]);
+  }, [turnId, replayTick, sceneReady, props.replayToken, props.replayDurationMs]);
 
   // A selection made elsewhere (Find, Go to, roster, assistant) that is off screen glides the camera to it.
   useEffect(() => {
@@ -627,7 +621,7 @@ export function Map3dView(props: Map3dProps) {
     <div
       ref={rootRef}
       className="map3d insp"
-      data-webgl="2"
+      data-rendering="cpu-canvas"
       data-turn={turnId}
       data-entities={activeLayer.markers.length}
       data-agents={agentCount}
@@ -692,7 +686,7 @@ export function Map3dView(props: Map3dProps) {
         {!focused && !lost ? <div className="map3d-focus-hint">Click the board to control it with the keyboard</div> : null}
         {lost ? (
           <div className="map3d-lost" role="alert">
-            <p>The 3D view lost its graphics context.</p>
+            <p>The 3D view could not start its canvas renderer.</p>
             <button
               type="button"
               className="insp-btn"
@@ -759,42 +753,47 @@ export function Map3dView(props: Map3dProps) {
           Unselect all
         </button>
         {props.legendExtra}
-        <span className="insp-legend-sep" />
-        <span className="insp-legend-item">
-          <svg className="map3d-legend-icon" viewBox="0 0 16 16" aria-hidden="true">
-            <circle className="ring-acting" cx="8" cy="8" r="6" />
-          </svg>
-          acting agent (dashed ring: the agent whose turn is running)
-        </span>
-        <span className="insp-legend-item">
-          <svg className="map3d-legend-icon" viewBox="0 0 16 16" aria-hidden="true">
-            <circle className="ring-selected" cx="8" cy="8" r="6" />
-          </svg>
-          selected entity (ring)
-        </span>
-        <span className="insp-legend-item">
-          <svg className="map3d-legend-icon" viewBox="0 0 16 16" aria-hidden="true">
-            <rect className="cell-frame-outer" x="3" y="3" width="10" height="10" />
-            <rect className="cell-frame" x="3" y="3" width="10" height="10" />
-          </svg>
-          selected cell
-        </span>
-        <span className="insp-legend-item">
-          <span className="map3d-badge">7</span> occupants in the cell (from 5)
-        </span>
-        <span className="insp-legend-sep" />
-        <span className="insp-legend-item">
-          <span className="insp-swatch insp-swatch-land" /> land
-        </span>
-        <span className="insp-legend-item">
-          <span className="insp-swatch insp-swatch-mountain" /> mountain (raised, impassable)
-        </span>
-        <span className="insp-legend-item">
-          <span className="insp-swatch insp-swatch-water" /> water (sunk, no plants)
-        </span>
-        <span className="insp-legend-item">
-          <span className="insp-swatch insp-swatch-outside" /> outside region
-        </span>
+        <details className="map3d-key">
+          <summary>Key</summary>
+          <div className="map3d-key-items">
+            <span className="insp-legend-sep" />
+            <span className="insp-legend-item">
+              <svg className="map3d-legend-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <circle className="ring-acting" cx="8" cy="8" r="6" />
+              </svg>
+              acting agent (dashed ring: the agent whose turn is running)
+            </span>
+            <span className="insp-legend-item">
+              <svg className="map3d-legend-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <circle className="ring-selected" cx="8" cy="8" r="6" />
+              </svg>
+              selected entity (ring)
+            </span>
+            <span className="insp-legend-item">
+              <svg className="map3d-legend-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <rect className="cell-frame-outer" x="3" y="3" width="10" height="10" />
+                <rect className="cell-frame" x="3" y="3" width="10" height="10" />
+              </svg>
+              selected cell
+            </span>
+            <span className="insp-legend-item">
+              <span className="map3d-badge">7</span> occupants in the cell (from 5)
+            </span>
+            <span className="insp-legend-sep" />
+            <span className="insp-legend-item">
+              <span className="insp-swatch insp-swatch-land" /> land
+            </span>
+            <span className="insp-legend-item">
+              <span className="insp-swatch insp-swatch-mountain" /> mountain (raised, impassable)
+            </span>
+            <span className="insp-legend-item">
+              <span className="insp-swatch insp-swatch-water" /> water (sunk, no plants)
+            </span>
+            <span className="insp-legend-item">
+              <span className="insp-swatch insp-swatch-outside" /> outside region
+            </span>
+          </div>
+        </details>
       </div>
       {tip ? (
         <Tooltip3d

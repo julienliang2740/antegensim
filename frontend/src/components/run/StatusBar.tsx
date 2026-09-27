@@ -77,14 +77,19 @@ export function StatusBar(props: StatusBarProps) {
         <Fact label="Round" value={String(status.round)} />
         <Fact label="Turn" value={turnText(status)} />
         <Fact label={actingAgentLabel(status)} value={status.acting_agent_id ? name(status.acting_agent_id) : "none"} />
-        {/* Its own row, wrapping: at a round boundary it lists every agent of the predicted order. */}
-        <Fact label="Next step" value={nextStepText(status, name)} wide row wrap />
-        <Fact label="Last saved turn" value={status.current_turn_id} code />
         <Fact label="Living agents" value={String(status.living_agent_count)} />
         <Fact label="Staged edits" value={String(status.staged_intervention_count)} />
-        {/* Always its own full-width row, so the bar never grows by a line when the usage text lengthens during Play. */}
-        <Fact label={usageLabel} value={usageText} wide row wrap />
       </dl>
+      <details className="status-details">
+        <summary>Turn details &amp; model usage</summary>
+        <dl className="status-facts">
+          {/* Its own row, wrapping: at a round boundary it lists every agent of the predicted order. */}
+          <Fact label="Next step" value={nextStepText(status, name)} wide row wrap />
+          <Fact label="Last saved turn" value={status.current_turn_id} code />
+          {/* Always its own full-width row, so the bar never grows by a line when the usage text lengthens during Play. */}
+          <Fact label={usageLabel} value={usageText} wide row wrap />
+        </dl>
+      </details>
       <div className={`status-slot${call ? " status-waiting" : ""}`}>
         {call ? (
           <>
@@ -109,7 +114,7 @@ export function StatusBar(props: StatusBarProps) {
             </button>
             <AskButton question="Why did the run stop?" />
             <span className="hint">
-              Discards the failed attempt and reloads the last saved turn <code>{status.current_turn_id}</code>; the next Run turn or Play re-runs{" "}
+              Discards the failed attempt and reloads the last saved turn <code>{status.current_turn_id}</code>; the next Advance 1 turn or Start simulation re-runs{" "}
               {failedTurn ? <code>{failedTurn.turnId}</code> : "the same turn"}.
             </span>
           </div>

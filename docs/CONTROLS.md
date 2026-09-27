@@ -20,23 +20,23 @@ Pages (hash routes): `#/` entry, `#/new` New session, `#/resume` Resume session,
 | **How the world works** | Entry page | The rules explained, with numbers read from the backend defaults |
 | **Story Mode** (*new*) | Entry page | Turn a run into a chaptered story |
 | **Validate setup** / **Create and open** | New session | Check every problem by path / create the run (opens paused) |
-| **Run turn** | Run page, left rail | One agent turn (or the round-end step), then pause |
-| **Play** / **Pause** | Run page, left rail | Run continuously / stop before the next turn |
-| **Step round** | Run page, left rail | Finish the current round, then pause |
-| **Recover (pause)** | Status bar, error state | Discard the failed attempt; the next Run turn re-runs that turn |
-| **Return to live** | Timeline | Leave history and follow the latest saved turn |
-| **2D map** / **3D view** | Run page, end of the map legend's controls row (**Map view**) | Show the viewed turn as the SVG map or as a 3D board to fly over; remembered per browser |
+| **Advance 1 turn** | Run page, top bar | One agent turn (or the round-end step), then pause |
+| **Start simulation** / **Pause simulation** | Run page, top bar | Run continuously / stop before the next turn |
+| **Finish round** | Run page, top bar | Finish the current round, then pause |
+| **Recover (pause)** | Status bar, error state | Discard the failed attempt; the next Advance 1 turn re-runs that turn |
+| **Return to live** | Timeline beneath the board | Leave history and follow the latest saved turn |
+| **2D map** / **3D view** | Run page, top bar (**Map view**) | Show the viewed turn as the SVG map or as a 3D board to fly over; remembered per browser |
 | **Inspector** / **Turn record** / **God mode** / **Rules** / **Storybook** (*new*) | Run page, right tabs | Occupants of a cell and a summary of the selection / the facts of the viewed turn / stage edits / read the rules / read the AI narrative |
 | Click an entity, or **Profile** | Map dot, occupant row, roster row, Inspector | Opens the entity's profile card over the page: Overview, Decisions, Skills, Knowledge, Messages, History (agents); Overview, Growth, Rules, History (plants) |
 | **Create continuation from turn <id>** | God mode tab | New run from the viewed checkpoint; the original is untouched |
 | **Reload working/ files** | God mode tab | Stage the edits made to the run's `working/` JSON files |
-| **Assistant** (*new*) | Bottom-right pill on every page (hidden while the drawer is open) plus a rail-header button on the run page, Alt+A | Open the assistant drawer |
+| **Assistant** (*new*) | Bottom-right pill on every page (hidden while the drawer is open) plus a session-panel button on the run page, Alt+A | Open the assistant drawer |
 | **Approve** / **Ask for changes** / **Cancel** (*new*) | Brief card in the drawer | Execute the proposed action once / reply with changes / reject it |
 | **Dictate** (*new*) | Assistant and Story Mode composers | Record speech and insert the transcript (never sends) |
 | **Write missing** (*new*) | Storybook tab | Narrate the turns that have no storybook entry yet (costs money with a paid narrator) |
 
-Commands and their states: **Run turn**, **Play** and **Step round** work only in `paused` or
-`finished` and when no command is in flight; **Pause** works in `running`, `turn_active` and
+Commands and their states: **Advance 1 turn**, **Start simulation** and **Finish round** work only in `paused` or
+`finished` and when no command is in flight; **Pause simulation** works in `running`, `turn_active` and
 `waiting_model` (and recovers from `error`). Anything else answers 409 `illegal_command`. God-mode
 edits can be staged in any state and apply at the next turn boundary of the live run.
 
@@ -104,42 +104,54 @@ Loads `GET /api/defaults?agent_count=8` (and `?agent_count=12` for new-card temp
 ## Run page (`#/run/<run_id>`)
 
 Opening the page opens the run (`POST /api/runs/{run_id}/open`) and polls
-`GET /api/runs/{run_id}/events` every 700 ms while busy and every 2.5 s while idle. From 1200 px
-wide the page has three columns (left rail, map, right tabs) with the live activity log below;
-at 1280 px and wider the assistant drawer docks on the right (*new*).
+`GET /api/runs/{run_id}/events` every 700 ms while busy and every 2.5 s while idle. The board fills the workspace with simulation controls in the top bar and compact replay controls below. Session, inspector and activity panels open over the board without resizing it. At 1280 px and wider the assistant drawer docks on the right.
 
-### Left rail
+### Workspace and board timeline
+
+**Session & agents** opens status, model details and the roster. **Inspector & tools** opens the existing Inspector, Turn record, God mode, Rules and Storybook tabs. **Activity log** opens the live feed. Close or Escape returns to the unobstructed board. Panel contents remain mounted, preserving drafts and selections; desktop edge handles still resize them.
+
+**Session details** expands run/world ids. **Turn details & model usage** expands secondary status facts, including next step, saved turn and model usage. All history controls sit directly beneath the board.
 
 | Area | Label | Effect | API | States |
 | --- | --- | --- | --- | --- |
-| Run controls | **Run turn** | Exactly one agent turn (or the round-end step), then pause | `POST /api/runs/{run_id}/commands` `run_turn` | paused, finished |
-| Run controls | **Play** | Turns continuously, `play_delay_seconds` apart | `commands` `play` | paused, finished |
-| Run controls | **Pause** | Stop before the next turn; a running turn (and its model call) finishes and is saved first | `commands` `pause` | running, turn_active, waiting_model |
-| Run controls | **Step round** | The rest of the current round, then pause | `commands` `step_round` | paused, finished |
+| Run controls | **Advance 1 turn** | Exactly one agent turn (or the round-end step), then pause | `POST /api/runs/{run_id}/commands` `run_turn` | paused, finished |
+| Run controls | **Start simulation** | Turns continuously, `play_delay_seconds` apart | `commands` `play` | paused, finished |
+| Run controls | **Pause simulation** | Stop before the next turn; a running turn (and its model call) finishes and is saved first | `commands` `pause` | running, turn_active, waiting_model |
+| Run controls | **Finish round** | The rest of the current round, then pause | `commands` `step_round` | paused, finished |
 | Run controls | **Reset layout** (in the "?" help) | Reset all splitter sizes | | |
-| Rail header (*new*) | **Make a story of this run** | Open Story Mode for this run | | |
+| Session panel | **Make a story of this run** | Open Story Mode for this run | | |
 | Status bar | **View request in progress** | Open the pending model call in the record viewer | `GET /api/runs/{run_id}/pending_model_call` | waiting_model |
 | Status bar | **Recover (pause)** | Discard the failed attempt and reload the last saved turn | `commands` `pause` | error |
 | Status bar (*new*) | **Ask** ("Why did the run stop?") | Opens the drawer with that question prefilled | | error |
-| Timeline | **Return to live** | Follow the latest saved turn | | history |
-| Timeline | **◀ Previous round** / **Next round ▶** | View the last turn of the neighbouring round | `GET /api/runs/{run_id}/turns/{turn_id}` | |
-| Timeline | **‹ Previous turn** / **Next turn ›** | View the neighbouring turn | same | |
-| Timeline | **‹ Parent run** / **Open parent run at that turn** | On a continuation's first turn: open the parent run at the branch turn | | |
-| Timeline | Turn select | Pick any turn of the viewed round | `GET /api/runs/{run_id}/turns` | |
+| Timeline beneath the board | **Return to live** | Follow the latest saved turn | | history |
+| Timeline beneath the board | **◀ Previous round** / **Next round ▶** | View the last turn of the neighbouring round | `GET /api/runs/{run_id}/turns/{turn_id}` | |
+| Timeline beneath the board | **‹ Previous turn** / **Next turn ›** | View the neighbouring turn | same | |
+| Timeline beneath the board | **‹ Parent run** / **Open parent run at that turn** | On a continuation's first turn: open the parent run at the branch turn | | |
+| Timeline beneath the board | Turn select | Pick any turn of the viewed round | `GET /api/runs/{run_id}/turns` | |
 | Agents roster | Agent row | Select that agent and open its profile card (the Inspector tab shows it behind, unless God mode is open) | | |
+
+Start and pause share one button, so only three simulation command buttons are shown at once. Saved playback is separate:
+
+| Area | Label | Effect | API | States |
+| --- | --- | --- | --- | --- |
+| Timeline | **Jump to round** | Jump to the first recorded turn of a chosen round | Existing saved-turn GET | |
+| Timeline | **Replay from here** / **Stop replay** | Watch the selected turn and subsequent saved turns; stop on the last captured turn in history | Existing saved-turn GET only; no simulation commands | |
+| Timeline | **Replay this turn** | Restart the selected turn's visual cues in either view | | |
+| Timeline | **Replay tempo** | Slow (4 s), Normal (2.2 s) or Fast (1.3 s) per loaded turn | | |
+
+Replay waits for each checkpoint to finish loading and suspends while an entity profile or record is open, or the browser tab is hidden. Manual history navigation and simulation commands stop replay. Reduced-motion settings suppress transient movement and leave the existing static action marks/chips readable.
 
 ### Map (centre)
 
-A **Map view** switch at the end of the legend's controls row (in both views, like a map app's view
-toggle in a corner, so it costs the board no row) chooses the view: **2D map** (the SVG map) or
-**3D view** (the board described in "3D view (centre)"). The history strip stays above both, and
+A **Map view** switch in the top bar chooses the view: **2D map** (the SVG map) or
+**3D view** (the board described in "3D view (centre)"). The history strip stays beneath both, and
 nothing else on the page changes with the switch.
 
 | Area | Label | Effect |
 | --- | --- | --- |
-| Legend, end of the controls row | **Map view**: **2D map** / **3D view** | Switch the centre column between the SVG map and the 3D board; remembered per browser (`empyrean.map.view`, default 2D). The 3D code (three.js) is downloaded only when **3D view** is chosen; pointing at that radio prefetches it (keyboard focus does not). Keyboard: the checked radio is the one tab stop; arrows, Home and End switch, and the focus follows to the switch of the view that appears |
+| Board header | **Map view**: **2D map** / **3D view** | Switch the centre column between the SVG map and the 3D board; remembered per browser (`empyrean.map.view`, default 2D). The CPU Canvas 2D board code is downloaded only when **3D view** is chosen; pointing at that radio prefetches it (keyboard focus does not). Keyboard: the checked radio is the one tab stop; arrows, Home and End switch, and focus stays on the selected radio |
 | Toolbar | **Pan left** / **Pan up** / **Pan down** / **Pan right** | Move the view 3 cells (arrow keys pan 1, Shift+arrow 5 when the map has focus) |
-| Toolbar | **Zoom out** / **Zoom in** | Change the cell size (+ / - keys); zooming in spreads the dots of packed cells |
+| Toolbar | **Zoom out** / **Zoom in** | Change the cell size (+ / - keys, or mouse wheel over the board anchored under the cursor); zooming in spreads the dots of packed cells |
 | Toolbar | **Fit map** | Show the whole region |
 | Toolbar | **Origin** | Centre on (0, 0) |
 | Toolbar | **Center selection** | Centre on the selected cell |
@@ -154,12 +166,14 @@ nothing else on the page changes with the switch.
 | Legend | Kind chips, **Select all**, **Unselect all** | Show or hide the dots of a kind on the map only (occupant lists and the tooltip stay complete) |
 | Legend | **Action marks** | Show or hide the viewed turn's action marks (on by default; remembered per browser) |
 | Legend | **Key** (▾ / ▴) | Open or close the key under the controls: what the count badge, group tiles, rings, marks and terrain colours mean. Collapsed by default so the map keeps its height; remembered per browser |
-| History strip | **Back to live** | Leave history |
+| Timeline | **Return to live** | Leave history |
 
 What the 2D map draws:
 
+The initial view fits the whole region. Once you pan or zoom, that framing is retained until Fit map is chosen.
+
 * Dots have one size per zoom level, whatever the cell holds: 8 px at 24-36 px cells, 9 px at
-  44 px (the default zoom), growing to 24 px at 340 px. A cell with more occupants than fit at
+  44 px, growing to 24 px at 340 px. A cell with more occupants than fit at
   normal spacing is *packed*: its dots move closer together and a count badge in its top-right
   corner shows the total (a pill from 36 px cells, bare digits in the corner at 24-30 px).
   **Zoom in** spreads packed dots; at the largest zoom a cell that still holds more than fit shows
@@ -175,20 +189,21 @@ What the 2D map draws:
   entities the action or a world event touched: red hit, orange fed from, blue heard, green given,
   grey died, dashed queried, purple dashed operator voice, green grew or germinated, orange fruit,
   brown seed. An observe outlines the observed cell (dashed), a broadcast draws its reach as a
-  diamond, and amounts are printed (−damage, +gained). A failed action draws only its red badge
-  (a blocked move also its stroke). While a live turn runs, the agent deciding now has a pulsing
+  diamond, and amounts are printed (−damage, +gained). Brief directional particles show moves, attacks, messages and resource flows; action-specific pulses identify wait, recover, upgrade, observe, query and skill. A failed action flashes a red cross at the actor. While a live turn runs, the agent deciding now has a pulsing
   dashed ring. The key names these marks in short: "packed: zoom in", "group: bigger = more,
   blue = agent", "acting · pulses while deciding", "selected", "selected cell", "acted (red =
   failed)", "moved", "hit · fed · heard · given · died · queried", and the terrain colours.
 
 ### 3D view (centre)
 
-The viewed turn as a board: land flat, mountains raised, water sunk, one figure per entity
+The board uses CPU Canvas 2D projection, with no WebGL context or GPU assets. Frames run only when the view changes, camera controls are held, or a turn is animating; pixel ratio is capped at 1. The **Key** disclosure contains the explanatory legend.
+
+The viewed turn as a board: land flat with sparse grass strokes, mountains with faceted peaks, water sunk with still ripple lines, one figure per entity
 (agents, plants tinted by species, fruit, seeds, residue; dead agents and plants lie flat), a
 health disc under each living agent, the acting agent's dashed ring, the selected entity's ring
 and cell frame, and a chip over the actor naming the viewed turn's action or world event. With
 **Animations** on, the viewed turn plays once (moves slide, attacks lunge, messages ripple, new
-plants pop up) within 0.7 s. Cells with 5 or more occupants carry a count badge; seen from more
+plants pop up) within 0.7 s live or up to 1.4 s in saved replay. Cells with 5 or more occupants carry a count badge; seen from more
 than 60 units away the figures turn into columns as tall as the count, with badges from 2.
 
 | Area | Label | Effect |
@@ -209,8 +224,10 @@ than 60 units away the figures turn into columns as tall as the count, with badg
 | Status line, first line | (read-only) | The hovered figure ("a03 Cyrene at (3, 4): click to select it") or cell ("Cell (3, 4) land · 7 occupants"), else a summary of the keys |
 | Status line, second line | (read-only) | "Selected: (x, y) <terrain> · <entity> · Turn <id>: <actor> <what it did> · Layer 1 of 1", plus "Not drawn: <kinds>" when legend kinds are hidden |
 | Legend | Kind chips (**living agent**, **dead agent / plant**, **plant**, **fruit**, **seed**, **residue**), **Select all**, **Unselect all** | Show or hide the figures of a kind; the choice is stored with the 2D legend's and read when a view opens |
-| Fallback | **Back to 2D map** | Shown instead of the board when the browser has no WebGL 2 ("This browser cannot draw the 3D view (WebGL 2 is unavailable). The 2D map keeps working.") or the view could not load ("The 3D view could not load." and "Reload the page to try again, or go back to the 2D map.") |
-| Fallback | **Retry** | Rebuild the board after the browser lost its graphics context |
+| Fallback | **Back to 2D map** | Shown if the view could not load ("The 3D view could not load." and "Reload the page to try again, or go back to the 2D map.") |
+| Fallback | **Retry** | Rebuild the board if its Canvas 2D renderer could not start |
+
+Attacks show a directed red strike and target burst; failed actions puff red at the actor. Wait and skill pulse at the actor, voice pulses known recipients, and an absorb with no recorded source pulses at the actor. Resource beads travel in the recorded transfer direction. Terrain strokes are static and add no idle frames.
 
 Labels name the living agents that have room on screen. Labels, chips and count badges never
 overlap: in a crowd a label shows the agent's id only ("a03" instead of "a03 Cyrene"), and when even
@@ -220,7 +237,7 @@ agent names when space is short. Beyond 30 units a label shows only the id, beyo
 label is drawn, and at most 40 labels, badges, chips and floating numbers are drawn per frame. The
 keys work while the board has focus (click it first); Ctrl, Alt and Cmd chords are ignored.
 
-### Right column
+### Inspector & tools panel
 
 | Area | Label | Effect | API | States |
 | --- | --- | --- | --- | --- |

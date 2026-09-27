@@ -12,6 +12,16 @@ Requirement-to-test mapping is in [TEST_PLAN.md](TEST_PLAN.md). Known gaps are i
 
 ## Summary
 
+### Frontend presentation refinement — 2026-09-27 (LOCAL / MOCKED)
+
+- Production build and typecheck passed. Lint: zero errors, four pre-existing warnings. All 96 frontend state tests passed.
+- Full browser walkthrough: 29 passed, zero failed, eight AI-backed assistant steps skipped on the primary backend. The walkthrough used fake simulation models; the requested sweep replays were inspected without advancing their simulations.
+- Read-only map checks on SWEEP-B2v2 passed: 2D crowd counts and marks, 3D selection, camera controls, history, replay, and view persistence. The CPU renderer works with WebGL requests blocked and does not download Three.js.
+- Visually reviewed Two tribes, Blood arena II, and Three clans blood feud in light and dark modes. Sample CPU frame times were 1.8–3.3 ms; idle rendering stopped. Reduced-motion playback remained static. Checked widths 1600, 1280, 1024, and 390 px without horizontal page overflow.
+- Final camera refinement fits the near board corners; the 13-occupant Two tribes cell retains its count badge. Attack replay shows the target and recorded damage. Backend, simulation rules, API contracts, and application data flow were unchanged.
+
+Earlier dated results below remain historical.
+
 | Area | Label | Date | Result |
 | --- | --- | --- | --- |
 | Backend unit + end-to-end + assistant tests | MOCKED | 2026-09-26 17:33 UTC (after the working indicator and the story listing) | **683 passed, 4 skipped** (3 live, 1 Whisper test without its clip) of 687 collected, 114.8 s (682 passed at 09:22 after the fix pass) |
@@ -306,3 +316,20 @@ EMPYREAN_ALLOW_LIVE=1 .venv/bin/python scripts/assistant_playtest.py chat --arm 
 EMPYREAN_ALLOW_LIVE=1 .venv/bin/python scripts/run_sim.py --model claude-cli-haiku --live-check   # LIVE, one paid call
 (cd backend && env -u CLAUDECODE EMPYREAN_LIVE_TESTS=1 ../.venv/bin/pytest -q -m live)            # LIVE, 3 paid calls (about USD 0.017)
 ```
+
+### Replay and terrain refinements — 2026-09-27
+
+- Production build passes; frontend lint has 0 errors and the same 4 existing warnings; all 96 state tests pass, including updated visual attack cues and renamed assistant command labels.
+- Simulation browser regression: **21 passed, 0 failed** with assistant steps disabled (`qa/out/2026-09-27_17-39-14/log.json`). This covers the renamed Start/Pause, single-turn and round controls on fake-model runs, history, inspection, staging, recovery, 2D marks and CPU 3D navigation. Timeline locators now explicitly select turn controls rather than confusing the new round selector with the turn selector.
+- `qa/replay_refinement_check.mjs` uses SWEEP-B2v2 saved turns with Chromium GPU and WebGL disabled. It checks mouse-wheel zoom without page scroll, visible 2D cues, delayed loading, stop, inspector suspension, round and same-run route navigation, end-of-record history, repeated CPU 3D replay, reduced motion and mobile overflow. No simulation command requests are permitted by the check. Screenshots are written to `/tmp/empyrean-replay-check/`.
+- Terrain and attack effects were also visually reviewed on SWEEP-B1v1: the 33×33 CPU board took approximately 4.4 ms per sampled frame; terrain detail adds no idle animation. Saved replay stretches only visual timing, never simulation timing.
+
+### Board workspace correction — 2026-09-27
+
+The run page now gives the map the full workspace width, with simulation controls in the top bar and a compact timeline below. Session/agents, inspector/tools and activity open as dismissible panels without resizing the map. The 2D initial camera fits the whole region.
+
+Read-only Chromium review of SWEEP-B2v2, with GPU/WebGL disabled, measured the 3D viewport at 1328×473 on a 1366×768 window (previously 736×220), 1562×705 at 1600×1000, and 986×439 at 1024×768. The 390×844 phone layout keeps a roughly 366×418 board and scrolls for the remaining controls. Both views were checked at all four sizes, including opening/closing Session, God mode and Activity; utility panels did not change the board bounds and no page errors occurred.
+
+The replay regression passes, including explicit board-size and unchanged-bounds assertions, wheel zoom, saved replay, loading/stop/end, inspector suspension and reduced motion. The simulation workflow checks passed controls, history, occupants, agent records, plant rules, God mode staging, resume and error recovery. The profile test was updated to wait for the selected checkpoint to load instead of asserting against the previous cached turn; its focused run passed (`qa/out/2026-09-27_17-52-21/log.json`). Browser selectors now open utility panels explicitly and use the compact timeline's history indicator.
+
+Final focused map regression: **3 passed, 0 failed** (`qa/out/2026-09-27_17-54-49/log.json`), covering 2D marks and CPU 3D labels, selection, keyboard/pointer navigation, zoom, framing, history replay and switching views. The test now locates the 2D/3D switch in the top bar and opens/closes the inspector when using its Find control. Production build and docs consistency checks pass; lint retains the same four existing warnings.

@@ -116,10 +116,10 @@ export function chipFromContext(ctx: AssistantContext): ContextChip {
 // ---------------------------------------------------------------------------
 
 export const COMMAND_LABELS: Record<RunCommand, string> = {
-  run_turn: "Run turn",
-  play: "Play",
-  pause: "Pause",
-  step_round: "Step round",
+  run_turn: "Advance 1 turn",
+  play: "Start simulation",
+  pause: "Pause simulation",
+  step_round: "Finish round",
 };
 
 export interface DescribeOptions {
@@ -154,7 +154,7 @@ export function describeAction(action: BriefAction | null, options: DescribeOpti
       const state = options.onScreenRunId === action.run_id && options.runState ? ` (state ${options.runState})` : "";
       const lines = [`Sends ${label}${times} to run ${runLabel(action.run_id, options)}${state}.`];
       if (action.rounds) lines.push(`A backend job steps ${action.rounds} rounds one at a time and stops early if you pause or the run errors.`);
-      if (action.command === "play") lines.push("Play keeps running turns until you pause, the run finishes or its budget is reached.");
+      if (action.command === "play") lines.push("Start simulation keeps running turns until you pause, the run finishes or its budget is reached.");
       return lines;
     }
     case "stage_interventions": {

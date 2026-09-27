@@ -11,6 +11,7 @@
  */
 
 import "./App.css";
+import "./design.css";
 import { AssistantDrawer } from "./components/assistant/AssistantDrawer";
 import { useHashRoute, type Route } from "./hooks/useHashRoute";
 import { EntryPage } from "./pages/EntryPage";

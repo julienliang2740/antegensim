@@ -878,10 +878,10 @@ test("describeAction renders the primary section from the typed action, never fr
     "Nothing is spent until you play it.",
   ]);
   const step = d({ type: "run_command", run_id: "run_1", command: "step_round", rounds: 3 }, { runNames: { run_1: "Arena" }, onScreenRunId: "run_1", runState: "paused" });
-  assert.equal(step[0], 'Sends Step round ×3 to run "Arena" (run_1) (state paused).');
+  assert.equal(step[0], 'Sends Finish round ×3 to run "Arena" (run_1) (state paused).');
   assert.match(step[1], /3 rounds/);
   const play = d({ type: "run_command", run_id: "run_2", command: "play", rounds: null });
-  assert.equal(play[0], "Sends Play to run run_2.");
+  assert.equal(play[0], "Sends Start simulation to run run_2.");
   const staged = d({
     type: "stage_interventions",
     run_id: "run_1",
@@ -910,7 +910,7 @@ test("approve labels name the effect; run commands need their run on screen", ()
   assert.equal(a({ type: "create_run", name: "x", agent_count: 6, overlay: {} }), "Approve: create run");
   assert.equal(a({ type: "run_command", run_id: "r", command: "step_round", rounds: 3 }), "Approve: step 3 rounds");
   assert.equal(a({ type: "run_command", run_id: "r", command: "step_round", rounds: 1 }), "Approve: step 1 round");
-  assert.equal(a({ type: "run_command", run_id: "r", command: "play", rounds: null }), "Approve: play");
+  assert.equal(a({ type: "run_command", run_id: "r", command: "play", rounds: null }), "Approve: start simulation");
   assert.equal(a({ type: "stage_interventions", run_id: "r", interventions: [{ type: "remove_entity", entity_id: "p1" }] }), "Approve: stage 1 edit");
   assert.equal(a({ type: "open_run", run_id: "r" }), "Open run");
   assert.equal(a(null), "Approve");
@@ -1897,8 +1897,14 @@ test("map3dLayout: orderForSlots, countBadge, LOD", () => {
 test("map3dCamera: frameRegion and topView look at the board centre", () => {
   const region = { min_x: -10, max_x: 10, min_y: -10, max_y: 10 };
   const framed = map3dCamera.frameRegion(region, 0, 1);
-  const d = (1.15 * 10.5) / Math.tan((25 * Math.PI) / 180);
   const tilt = (50 * Math.PI) / 180;
+  const tan = Math.tan((25 * Math.PI) / 180);
+  const framedDistance = (halfW, halfD, aspect) => 1.15 * Math.max(
+    halfD * Math.cos(tilt) + halfW / (aspect * tan),
+    halfD * Math.cos(tilt) + halfD * Math.sin(tilt) / (2 * (1 - 0.42) * tan),
+    -halfD * Math.cos(tilt) + halfD * Math.sin(tilt) / (2 * 0.42 * tan),
+  );
+  const d = framedDistance(10.5, 10.5, 1);
   m3dAssertClose(framed.yaw, 0);
   m3dAssertClose(framed.pitch, -tilt);
   m3dAssertClose(framed.x, 0);
@@ -1908,10 +1914,10 @@ test("map3dCamera: frameRegion and topView look at the board centre", () => {
   m3dAssertClose(map3dCamera.distanceTo(framed, [0, 0, 0]), d);
   // The look ray meets the board at its centre.
   m3dAssertVec(map3dCamera.boardHit(framed, 0), [0, 0, 0], 1e-6, "frame hit");
-  // A wide viewport frames a square board at the same distance (rows dominate); a wide board fits horizontally.
-  m3dAssertClose(map3dCamera.frameRegion(region, 0, 2).z, framed.z);
+  // A wide viewport needs less distance horizontally, but still fits the nearer south corners vertically.
+  m3dAssertClose(map3dCamera.distanceTo(map3dCamera.frameRegion(region, 0, 2), [0, 0, 0]), framedDistance(10.5, 10.5, 2));
   const wide = map3dCamera.frameRegion({ min_x: 0, max_x: 99, min_y: 0, max_y: 9 }, 0, 2);
-  m3dAssertClose(map3dCamera.distanceTo(wide, [49.5, 0, -4.5]), (1.15 * 0.5 * 50) / Math.tan((25 * Math.PI) / 180));
+  m3dAssertClose(map3dCamera.distanceTo(wide, [49.5, 0, -4.5]), framedDistance(50, 5, 2));
   // Layer 1 lifts everything by LAYER_GAP.
   m3dAssertClose(map3dCamera.frameRegion(region, 1, 1).y, framed.y + 3);
   const top = map3dCamera.topView(region, 0);
@@ -2103,19 +2109,18 @@ test("map3dTimeline: agent action clips arrive at the saved turn", () => {
   assert.equal(map3dTimeline.sampleTimeline(move, 450).done, false, "the trail still fades");
   // move failed: a puff only.
   assert.deepEqual(kinds(build(m3dEffect("move", { ok: false, from: { x: 0, y: 0 }, to: { x: 0, y: 1 }, at: { x: 0, y: 0 } }))), ["puff"]);
-  // attack, not killed: lunge, flash, floating damage.
+  // attack, not killed: directed strike, target burst, flash, floating damage.
   const attack = build(m3dEffect("attack", { actor: "a01", targets: ["a02"], amount: 5, label: "attacked a02 (5 damage)" }));
-  assert.deepEqual(kinds(attack), ["lunge", "flash", "float"]);
-  assert.equal(attack.clips[2].text, "-5");
-  assert.equal(attack.clips[1].id, "a02");
-  assert.deepEqual([attack.clips[1].t0, attack.clips[1].t1], [120, 600]);
+  assert.deepEqual(kinds(attack), ["lunge", "beam", "puff", "flash", "float"]);
+  assert.equal(attack.clips[4].text, "-5");
+  assert.equal(attack.clips[3].id, "a02");
+  assert.deepEqual([attack.clips[3].t0, attack.clips[3].t1], [120, 600]);
   const hit = map3dTimeline.sampleTimeline(attack, 150);
   assert.equal(hit.entities.get("a02").tint, "bad");
   assert.ok(Math.hypot(...hit.entities.get("a01").offset) > 0.1, "the attacker lunges");
-  assert.equal(hit.fx.length, 1);
-  assert.equal(hit.fx[0].kind, "float");
-  assert.equal(hit.fx[0].text, "-5");
-  assert.ok(hit.fx[0].position[1] > 0.6, "the number floats above the target");
+  assert.deepEqual(hit.fx.map((effect) => effect.kind), ["beam", "puff", "float"]);
+  assert.equal(hit.fx[2].text, "-5");
+  assert.ok(hit.fx[2].position[1] > 0.6, "the number floats above the target");
   // attack that killed, with the death of the same id in the same turn: exactly one tilt.
   const kill = build(m3dEffect("attack", { actor: "a01", targets: ["a02"], amount: 9, label: "attacked a02 (9 damage, killed)" }), m3dEffect("death", { actor: "world", targets: ["a02"], at: { x: 3, y: 3 } }));
   assert.equal(kinds(kill).filter((k) => k === "tilt").length, 1);
@@ -2123,8 +2128,8 @@ test("map3dTimeline: agent action clips arrive at the saved turn", () => {
   m3dAssertClose(dying.entities.get("a02").tilt, -Math.PI / 2, 1e-12, "starts upright");
   m3dAssertClose(dying.entities.get("a02").offset[1], 0.15, 1e-12, "starts lifted, sinks onto the saved pose");
   assert.equal(map3dTimeline.sampleTimeline(kill, 650).entities.has("a02"), false, "tilt and flash are over");
-  // failed attack: chip only.
-  assert.deepEqual(kinds(build(m3dEffect("attack", { ok: false, targets: ["a02"] }))), []);
+  // Failed actions give the actor a brief red attempt cue.
+  assert.deepEqual(kinds(build(m3dEffect("attack", { ok: false, targets: ["a02"] }))), ["puff"]);
   // broadcast: ripple to the communication range and a bounce per recipient.
   const broadcast = build(m3dEffect("message", { actor: "a01", broadcast: true, targets: ["a02", "a03", "zz"], at: { x: 0, y: 0 } }));
   assert.deepEqual(kinds(broadcast), ["ripple", "bounce", "bounce"]);
@@ -2138,11 +2143,11 @@ test("map3dTimeline: agent action clips arrive at the saved turn", () => {
   assert.ok(map3dTimeline.sampleTimeline(broadcast, 475).entities.get("a02").offset[1] > 0.1, "bounce peak");
   const unknownRange = build(m3dEffect("message", { actor: "a02", broadcast: true, at: { x: 3, y: 3 } }));
   assert.equal(unknownRange.clips[0].value, map3dTimeline.DEFAULT_COMM_RANGE);
-  // send: a beam per recipient; a failed send is chip only.
+  // Send draws a directed beam; failed sends show the actor's attempt.
   const send = build(m3dEffect("message", { actor: "a01", targets: ["a02"], label: "sent a message to a02" }));
   assert.deepEqual(kinds(send), ["beam"]);
   assert.deepEqual([send.clips[0].from, send.clips[0].to], [[0, 0, 0], [3, 0, -3]]);
-  assert.deepEqual(kinds(build(m3dEffect("message", { ok: false, targets: ["a02"] }))), []);
+  assert.deepEqual(kinds(build(m3dEffect("message", { ok: false, targets: ["a02"] }))), ["puff"]);
   // absorb / transfer: particles and a floating gain.
   const absorb = build(m3dEffect("absorb", { actor: "a01", targets: ["f01"], amount: 3 }));
   assert.deepEqual(kinds(absorb), ["particles", "float"]);
@@ -2169,9 +2174,9 @@ test("map3dTimeline: agent action clips arrive at the saved turn", () => {
   assert.deepEqual(kinds(query), ["beam"]);
   assert.equal(query.clips[0].t1, 300);
   assert.deepEqual(kinds(build(m3dEffect("query", { actor: "a01", targets: [] }))), [], "query self: chip only");
-  assert.deepEqual(kinds(build(m3dEffect("wait"))), []);
-  assert.deepEqual(kinds(build(m3dEffect("skill"))), []);
-  assert.deepEqual(kinds(build(m3dEffect("voice", { actor: "operator", targets: ["a01"] }))), []);
+  assert.deepEqual(kinds(build(m3dEffect("wait"))), ["pulse"]);
+  assert.deepEqual(kinds(build(m3dEffect("skill"))), ["pulse"]);
+  assert.deepEqual(kinds(build(m3dEffect("voice", { actor: "operator", targets: ["a01"] }))), ["pulse"]);
   assert.deepEqual(map3dTimeline.buildTimeline([], ctx), { clips: [], duration: 0 });
   assert.equal(map3dTimeline.sampleTimeline(map3dTimeline.buildTimeline([], ctx), 0).done, true);
 });
@@ -2204,7 +2209,7 @@ test("map3dTimeline: world clips, staggered spawns, scaling, reduced motion and 
   assert.equal(byKind("tilt").length, 1);
   assert.equal(byKind("flash").length, 1);
   assert.equal(byKind("float")[0].text, "-5");
-  assert.equal(tl.clips.filter((c) => c.effectKind === "voice").length, 0);
+  assert.equal(tl.clips.filter((c) => c.effectKind === "voice").length, 2);
   assert.equal(map3dTimeline.timelineDuration(tl), 600);
   const start = map3dTimeline.sampleTimeline(tl, 0);
   m3dAssertClose(start.entities.get("f01").scale, 0, 1e-12, "a spawned fruit starts invisible");

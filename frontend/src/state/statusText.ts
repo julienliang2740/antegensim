@@ -50,7 +50,7 @@ export function stateSentence(status: RunStatus, name: AgentNamer): string {
           : null;
   switch (status.state) {
     case "paused":
-      return "Paused at a turn boundary. Nothing runs until you press Run turn, Play or Step round.";
+      return "Paused at a turn boundary. Nothing runs until you start the simulation, advance one turn or finish the round.";
     case "running":
       return `Running (${command ?? "starting"}).`;
     case "turn_active":

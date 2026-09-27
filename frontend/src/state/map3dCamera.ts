@@ -68,6 +68,8 @@ export const GLIDE_MS = 300;
 /** frameRegion: the pitch it looks down at and the margin around the board. */
 export const FRAME_PITCH_DEG = -50;
 export const FRAME_MARGIN = 1.15;
+/** Fraction of viewport height where the board centre is projected. */
+export const FRAME_SCREEN_Y = 0.42;
 /** topView: pitch (just short of straight down, so yaw stays meaningful) and height per board size. */
 export const TOP_VIEW_PITCH_DEG = -89;
 export const TOP_VIEW_HEIGHT_FACTOR = 1.2;
@@ -407,8 +409,17 @@ export function frameRegion(region: Region, layer: number, aspect: number): Came
   const cols = region.max_x - region.min_x + 1;
   const rows = region.max_y - region.min_y + 1;
   const centre = cellToScene(regionCentre(region), layer);
-  const d = (FRAME_MARGIN * 0.5 * Math.max(cols / a, rows)) / Math.tan((FOV_DEG / 2) * DEG);
   const tilt = -FRAME_PITCH_DEG * DEG;
+  const halfW = cols / 2;
+  const halfD = rows / 2;
+  const tanHalfFov = Math.tan((FOV_DEG / 2) * DEG);
+  // The south corners are closer to an angled camera than the board centre.
+  // Fit their perspective width and height, and the far edge's top margin.
+  const d = FRAME_MARGIN * Math.max(
+    halfD * Math.cos(tilt) + halfW / (a * tanHalfFov),
+    halfD * Math.cos(tilt) + halfD * Math.sin(tilt) / (2 * (1 - FRAME_SCREEN_Y) * tanHalfFov),
+    -halfD * Math.cos(tilt) + halfD * Math.sin(tilt) / (2 * FRAME_SCREEN_Y * tanHalfFov),
+  );
   return {
     x: centre[0],
     y: centre[1] + d * Math.sin(tilt),

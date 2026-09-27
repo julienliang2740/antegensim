@@ -1,8 +1,8 @@
 /**
- * Sizes of the run page's adjustable panels (left rail, right column, log)
+ * Sizes of the run page's utility panels (session, inspector, log)
  * set with the drag splitters, remembered in localStorage and clamped to the
  * window so the map always keeps at least MIN_MAP_W pixels.  Null = the
- * default size.  Used only by the three-column layout (window >= 1200 px).
+ * default size. Used by desktop panel resize handles (window >= 1200 px).
  *
  * `reserveW` (rev 4): pixels the docked assistant drawer takes on the right
  * (state/assistantContext.dockReserve); it is subtracted from the window width
@@ -55,7 +55,7 @@ function save(sizes: PanelSizes): void {
 }
 
 export interface RunLayout {
-  /** True when the three-column layout (and the splitters) is in use. */
+  /** True when desktop panel resize handles are in use (legacy field name). */
   threeColumn: boolean;
   railW: number;
   sideW: number;
@@ -87,10 +87,10 @@ export function useRunLayout(sideWide: boolean, reserveW = 0): RunLayout {
   const reservedW = Math.max(0, Math.min(Math.round(reserveW), win.w));
   const pageW = win.w - reservedW;
   const large = pageW >= 1560;
-  const defaultRail = large ? 268 : 252;
-  const defaultSide = large ? 440 : 390;
+  const defaultRail = large ? 244 : 228;
+  const defaultSide = large ? 370 : 340;
   const defaultWide = Math.round(Math.min(620, pageW * 0.44));
-  const defaultLog = Math.round(win.h * 0.36);
+  const defaultLog = Math.round(win.h * 0.28);
 
   // Clamp: the map keeps MIN_MAP_W; the right column gives way first, then the rail.
   const spare = pageW - CHROME_W - MIN_MAP_W;

@@ -795,10 +795,12 @@
   pointer-events: none;
 }
 
-/* One dot per entity (mapDots.ts): colour by kind, white outline so touching dots stay distinct. */
-.insp-dot {
+/* One glyph per entity (mapDots.ts): colour and silhouette by kind; each stays within the original hit radius. */
+.insp-dot-shape {
   stroke: #ffffff;
   stroke-width: 1.2;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
 
 .insp-dot-agent {
@@ -828,6 +830,15 @@
 .insp-dot-hover {
   stroke: var(--insp-fg);
   stroke-width: 2.5;
+}
+
+.insp-dot-stem {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 1.15;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
 }
 
 .insp-dot-cross {
@@ -1430,7 +1441,7 @@
   overflow: visible;
 }
 
-/* The legend's sample dots: the kind colours of .insp-dot-<kind>, with the same white outline. */
+/* Legend glyphs use the same silhouettes and kind colours as the map dots. */
 .insp-dot-sample {
   stroke: #ffffff;
   stroke-width: 1.2;
@@ -2147,3 +2158,25 @@
   word-break: break-all;
   user-select: all;
 }
+
+/* Saved-turn cues use the same recorded effects as 3D; no continuous animation. */
+.turn-cue { fill: none; stroke: var(--insp-accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.turn-cue-bad { stroke: var(--insp-bad); }
+.turn-cue-good { stroke: var(--insp-good); }
+.turn-cue-resource { stroke: var(--insp-other); }
+.turn-cue-halo { stroke-width: 1.5; opacity: .55; }
+.turn-cue-particle { fill: var(--insp-accent); stroke: var(--insp-bg); stroke-width: 1; }
+.turn-cue-bad .turn-cue-particle { fill: var(--insp-bad); }
+.turn-cue-resource .turn-cue-particle { fill: var(--insp-other); }
+.turn-cue-trail { stroke-width: 2; opacity: .6; }
+.turn-cue-travel { transform: translate(var(--cue-x), var(--cue-y)); }
+.turn-cue-impact, .turn-cue-travel, .turn-cue-trail { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .turn-cue-impact { animation: turn-cue-impact var(--turn-motion-ms, 900ms) ease-out both; }
+  .turn-cue-travel { animation: turn-cue-travel var(--turn-motion-ms, 900ms) ease-in-out both; }
+  .turn-cue-trail { stroke-dasharray: 1; animation: turn-cue-trail var(--turn-motion-ms, 900ms) ease-out both; }
+  .insp-marks .insp-mark-ghost { animation-duration: var(--turn-motion-ms, 900ms); }
+}
+@keyframes turn-cue-impact { 0% { opacity: 0; transform: scale(.6); } 25%, 60% { opacity: 1; } 80% { transform: scale(1.3); } 100% { opacity: 0; transform: scale(1.3); } }
+@keyframes turn-cue-travel { 0% { opacity: 0; transform: translate(0, 0); } 12% { opacity: 1; } 75% { opacity: 1; transform: translate(var(--cue-x), var(--cue-y)); } 100% { opacity: 0; transform: translate(var(--cue-x), var(--cue-y)); } }
+@keyframes turn-cue-trail { 0% { opacity: 0; stroke-dashoffset: 1; } 25% { opacity: .7; } 65% { stroke-dashoffset: 0; opacity: .7; } 100% { opacity: 0; stroke-dashoffset: 0; } }
