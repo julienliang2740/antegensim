@@ -118,6 +118,28 @@ assistant (part of its always-loaded knowledge). Numbers are shipped defaults; s
 * **Scenario overlay**: a partial run request deep-merged onto the defaults
   (`scripts/scenarios/*.json`, `run_sim.py --request`, the assistant's create-run brief).
 
+## Map views
+
+* **2D map / 3D view**: the two views of the run page's centre column, chosen with the **Map view**
+  switch and remembered per browser. Both draw the viewed turn from the same data; the 3D view's
+  code (three.js) loads only when it is chosen.
+* **Effect**: one thing the viewed turn did (a move, attack, message, absorb, transfer, death,
+  growth, fruit, seed, germination, starvation, operator voice, …), read from the turn's saved
+  record and its own events. Both views draw their marks and animations from the effects only.
+* **Action mark**: a drawing on the 2D map of an effect of the viewed turn (live: the last saved
+  turn): the acting agent's badge with its action glyph (red = failed), a move arrow, rings on the
+  entities touched, links, the observed cell, the broadcast reach and printed amounts. The
+  **caption** in the first status line says the same in words.
+* **Packed cell**: a 2D cell whose occupants do not fit at normal spacing; its dots move closer
+  together and it gets a **count badge** (the total occupants, top-right corner). At the largest
+  zoom a cell that still does not fit is **over capacity**: it shows as many dots as fit.
+* **Group tile**: the one square per occupied cell that the 2D map draws below 24 px cells
+  (bigger = more occupants, blue = an agent is there).
+* **Action chip**: in the 3D view, the label with an icon over the actor that names the viewed
+  turn's action or world event; it stays while that turn is viewed.
+* **Layer (3D)**: one board of the 3D view's stack, 3 scene units above the one below it. A run has
+  one layer today ("Layer 1 of 1 · World"); the stack is a seam for later.
+
 ## Assistant
 
 * **Assistant**: the built-in helper in the drawer; see `docs/ASSISTANT.md`.

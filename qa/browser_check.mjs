@@ -17,7 +17,10 @@
 //      QA_ASSISTANT=auto|0|1 (assistant steps; see runAssistantSteps), QA_ONLY_ASSISTANT=1 with
 //      QA_RUN_ID=<run> (assistant steps only), QA_INSECURE_HOST (default qa-insecure.test),
 //      QA_ONLY_RESUME_ARCHIVE=1 (preflight plus the resume-select-archive-delete step only; it
-//      creates and deletes its own runs and never calls a model).
+//      creates and deletes its own runs and never calls a model),
+//      QA_ONLY_MAP=1 (preflight, the steps that create the fake-model QA run and commit round 1,
+//      then map-marks and map-3d; with QA_RUN_ID=<run> only preflight and the two map steps on
+//      that existing run: no run is created and no turn is run).
 // Exit status: 0 when every attempted step passed, 1 otherwise (the log is always written).
 
 import { chromium } from "playwright";
@@ -37,6 +40,9 @@ const OUT_DIR = path.join(QA_DIR, "out", STAMP);
 const VOICE_TEXT = `QA browser voice ${STAMP}`;
 const ASSISTANT_MODE = process.env.QA_ASSISTANT ?? "auto"; // auto | 0 | 1 (see runAssistantSteps)
 const INSECURE_HOST = process.env.QA_INSECURE_HOST ?? "qa-insecure.test";
+// QA_ONLY_MAP=1: only these steps run (the others are left out of the log, not skipped).
+const ONLY_MAP = process.env.QA_ONLY_MAP === "1";
+const MAP_ONLY_STEPS = new Set(["preflight", "entry", "new-session-cards", "create-run", "run-turn", "step-round", "map-marks", "map-3d"]);
 
 const log = {
   base_url: BASE_URL,
@@ -240,6 +246,7 @@ async function pickFakeDefaultModel(page, rec) {
 // ---------------------------------------------------------------------------
 
 async function step(page, id, title, fn, { needs = [] } = {}) {
+  if (ONLY_MAP && !MAP_ONLY_STEPS.has(id)) return null;
   stepCounter += 1;
   const rec = { n: stepCounter, id, title, ok: null, skipped: null, notes: [], found: {}, error: null, screenshot: null, ms: 0 };
   const started = Date.now();
@@ -377,6 +384,18 @@ async function runSteps(page) {
       state.defaults = await api("GET", "/defaults?agent_count=6");
     });
     await runResumeArchiveStep(page);
+    return;
+  }
+  if (ONLY_MAP && process.env.QA_RUN_ID) {
+    // The two map steps on an existing run: viewing it opens it paused and never runs a turn or calls a model.
+    await step(page, "preflight", "Backend health and defaults reachable", async () => {
+      await api("GET", "/health");
+      state.defaults = await api("GET", "/defaults?agent_count=6");
+    });
+    state.runId = process.env.QA_RUN_ID;
+    log.run_id = state.runId;
+    await runMapMarksStep(page);
+    await runMap3dStep(page);
     return;
   }
   if (process.env.QA_ONLY_ASSISTANT === "1") {
@@ -986,9 +1005,11 @@ async function runSteps(page) {
     );
   }
 
-  if (ASSISTANT_MODE !== "0") await runAssistantSteps(page);
-  await runResumeArchiveStep(page);
-  await runProfileCardStep(page);
+  if (ASSISTANT_MODE !== "0" && !ONLY_MAP) await runAssistantSteps(page);
+  if (!ONLY_MAP) await runResumeArchiveStep(page);
+  if (!ONLY_MAP) await runProfileCardStep(page);
+  await runMapMarksStep(page);
+  await runMap3dStep(page);
 }
 
 // ---------------------------------------------------------------------------
@@ -1092,6 +1113,612 @@ async function runProfileCardStep(page) {
     { needs: ["runId"] },
   );
 
+}
+
+// ---------------------------------------------------------------------------
+// Map marks and the 3D view (run after profile-card on the QA run; never call a model)
+// ---------------------------------------------------------------------------
+//
+// map-marks (2D): the viewed turn's action marks (g.insp-marks keyed by the turn id, the acting
+// agent's badge with its glyph, the move arrow) and their text twin in the first status line;
+// the marks group survives a live refresh; one dot size per zoom level; group tiles in far mode;
+// a packed cell's count badge lists every occupant; the Action marks chip and the Key button.
+// map-3d: the three.js chunk loads only when "3D view" is chosen; the board's counts against the
+// API; a selected agent's label sits on its cell and opens its profile card; keys, drag and
+// wheel move the camera; frame region matches map3dCamera.frameRegion; help card; the choice
+// persists across a reload; a history move replays; "2D map" restores the SVG.
+
+/** The badge glyph the 2D map draws for an action name (mapIndicators.glyphFor via turnEffects). */
+const ACTION_GLYPH = {
+  move: "move",
+  attack: "attack",
+  send: "message",
+  broadcast: "message",
+  absorb: "absorb",
+  transfer: "transfer",
+  recover: "recover",
+  upgrade: "upgrade",
+  wait: "wait",
+  observe: "observe",
+  query: "query",
+  run_skill: "skill",
+};
+const glyphOf = (name) => (name ? (ACTION_GLYPH[name] ?? "skill") : "none");
+
+const centreMap = (page) => page.locator("main.run-center");
+const viewRadio = (page, name) => page.locator('main.run-center [role="radiogroup"][aria-label="Map view"]').getByRole("radio", { name, exact: true });
+
+/** Console and page errors so far (a map step fails when it adds any). */
+const errorCount = () => log.console_errors.length + log.page_errors.length;
+function assertNoNewErrors(rec, before) {
+  const added = [...log.console_errors, ...log.page_errors].slice(before);
+  rec.found.new_console_or_page_errors = added.length;
+  if (added.length) throw new Error(`console or page errors during the step: ${JSON.stringify(added.slice(0, 3))}`);
+}
+
+/** Show the 2D map when a previous visit left the 3D view chosen. */
+async function show2dMap(page) {
+  const radio = viewRadio(page, "2D map");
+  if ((await radio.count()) && (await radio.getAttribute("aria-checked")) !== "true") await radio.click();
+  await waitVisible(page.locator("main.run-center .insp-map-svg"), "the 2D map");
+}
+
+async function zoomPx(page) {
+  return parseInt(await page.locator("main.run-center .insp-zoom-level").innerText(), 10);
+}
+
+/** Click Zoom in / Zoom out until the readout shows `px`. */
+async function zoomToPx(page, px) {
+  for (let i = 0; i < 20; i += 1) {
+    const now = await zoomPx(page);
+    if (now === px) return;
+    const name = now < px ? "Zoom in" : "Zoom out";
+    const button = centreMap(page).getByRole("button", { name, exact: true });
+    if (await button.isDisabled()) throw new Error(`cannot reach ${px} px: ${name} is disabled at ${now} px`);
+    await button.click();
+    await sleep(150);
+  }
+  throw new Error(`the zoom readout never reached ${px} px`);
+}
+
+/** Centre the 2D map on a point with Go to (this also selects the point). */
+async function goToPoint(page, p) {
+  const map = centreMap(page);
+  await map.getByLabel("Go to x").fill(String(p.x));
+  await map.getByLabel("Go to y").fill(String(p.y));
+  await map.getByRole("button", { name: /^Go$/ }).click();
+  await sleep(400);
+}
+
+/** Select an entity through the Inspector tab's "Find entity by id" (works in both map views), then close its card. */
+async function selectById(page, id) {
+  await page.locator("#tab-inspect").click();
+  await page.locator("#find-entity").fill(id);
+  await page.getByRole("button", { name: "Select entity", exact: true }).click();
+  await waitVisible(profileCard(page), `the profile card of ${id}`);
+  await closeProfileCard(page);
+  await sleep(300);
+}
+
+/** The dots drawn inside a cell of the 2D map, and the count badges inside it. */
+async function cellContents(page, key) {
+  return page.locator(`main.run-center [data-coord="${key}"]`).evaluate((rect) => {
+    const svg = rect.ownerSVGElement;
+    const box = rect.getBoundingClientRect();
+    const inside = (b) => {
+      const x = b.left + b.width / 2;
+      const y = b.top + b.height / 2;
+      return x >= box.left - 0.5 && x <= box.right + 0.5 && y >= box.top - 0.5 && y <= box.bottom + 0.5;
+    };
+    const dots = [...svg.querySelectorAll("circle.insp-dot")].filter((c) => inside(c.getBoundingClientRect())).length;
+    const badges = [...svg.querySelectorAll("g.insp-dot-badge")]
+      .filter((g) => inside(g.getBoundingClientRect()))
+      .map((g) => {
+        const b = g.getBoundingClientRect();
+        const text = g.querySelector("text");
+        return { count: g.getAttribute("data-count"), bare: text?.classList.contains("is-bare") ?? false, x: b.left + b.width / 2, y: b.top + b.height / 2 };
+      });
+    return { dots, badges };
+  });
+}
+
+async function dotRadii(page) {
+  return page.evaluate(() => [...new Set([...document.querySelectorAll("main.run-center .insp-map-svg circle.insp-dot")].map((c) => c.getAttribute("r")))]);
+}
+
+async function runMapMarksStep(page) {
+  await step(
+    page,
+    "map-marks",
+    "2D map: action marks and caption of the viewed turn, equal dots, group tiles, count badge, Action marks and Key",
+    async (rec) => {
+      const errorsBefore = errorCount();
+      await page.setViewportSize({ width: 1400, height: 900 });
+      await gotoRun(page, state.runId);
+      await closeDrawer(page);
+      await closeProfileCard(page);
+      await show2dMap(page);
+      const map = centreMap(page);
+      const s = await waitIdle(state.runId);
+      const live = await api("GET", `/runs/${state.runId}/state`);
+      const liveTurn = await api("GET", `/runs/${state.runId}/turns/${s.current_turn_id}`);
+      rec.found.live_turn = { id: s.current_turn_id, kind: liveTurn.turn.kind };
+      await page.mouse.move(5, 5); // off the map: the first status line shows the caption
+
+      const marksChip = map.getByRole("checkbox", { name: "Action marks", exact: true });
+      if ((await marksChip.getAttribute("aria-checked")) !== "true") {
+        rec.notes.push("the Action marks chip was off (stored in this browser); switched it on");
+        await marksChip.click();
+      }
+      const selectAll = map.locator(".insp-legend").getByRole("button", { name: "Select all", exact: true });
+      if (await selectAll.isEnabled()) {
+        rec.notes.push("some entity kinds were hidden (stored in this browser); pressed Select all");
+        await selectAll.click();
+      }
+
+      // 1. The live turn: one marks group keyed by the turn id, with the turn's kind; the caption names the turn.
+      const liveGroup = map.locator(`.insp-map-svg g.insp-marks[data-turn-id="${s.current_turn_id}"]`);
+      await liveGroup.waitFor({ state: "attached", timeout: STEP_TIMEOUT_MS });
+      rec.found.live_marks_kind = await liveGroup.getAttribute("data-kind");
+      if (rec.found.live_marks_kind !== liveTurn.turn.kind) throw new Error(`marks data-kind ${rec.found.live_marks_kind}, turn kind ${liveTurn.turn.kind}`);
+      const caption = map.locator(".insp-map-status-hover");
+      rec.found.live_caption = await caption.innerText();
+      if ((await caption.getAttribute("data-turn-id")) !== s.current_turn_id || !rec.found.live_caption.includes(s.current_turn_id)) {
+        throw new Error(`the first status line does not name turn ${s.current_turn_id}: "${rec.found.live_caption}"`);
+      }
+
+      // 2. The same group element survives a hover and a live refresh (it is keyed by the turn id, not remounted).
+      await liveGroup.evaluate((g) => {
+        g.dataset.qaMark = "kept";
+      });
+      const svgBox = await map.locator(".insp-map-svg").boundingBox();
+      await page.mouse.move(svgBox.x + svgBox.width / 2, svgBox.y + svgBox.height / 2);
+      await sleep(2800); // longer than one idle poll (2.5 s)
+      rec.found.marks_kept_after_refresh = (await map.locator('.insp-map-svg g.insp-marks[data-qa-mark="kept"]').count()) === 1;
+      if (!rec.found.marks_kept_after_refresh) throw new Error("the marks group was remounted by a hover or a live refresh of the same turn");
+      await page.mouse.move(5, 5);
+
+      // 3. An agent turn in history: the actor's badge carries the action's glyph; a successful move has an arrow.
+      const turns = await api("GET", `/runs/${state.runId}/turns`);
+      const agentTurns = turns.filter((t) => t.kind === "agent_turn" && t.action_name);
+      const pick = [...agentTurns].reverse().find((t) => t.action_name === "move" && t.ok === true) ?? agentTurns.at(-1);
+      if (!pick) throw new Error("the run has no agent turn with an action");
+      const view = await api("GET", `/runs/${state.runId}/turns/${pick.turn_id}`);
+      const actor = pick.acting_agent_id;
+      await gotoRun(page, state.runId, pick.turn_id);
+      await closeProfileCard(page);
+      await zoomToPx(page, 44);
+      await goToPoint(page, view.entities.agents[actor].position);
+      await page.mouse.move(5, 5);
+      const group = map.locator(`.insp-map-svg g.insp-marks[data-turn-id="${pick.turn_id}"]`);
+      await group.waitFor({ state: "attached", timeout: STEP_TIMEOUT_MS });
+      const badge = group.locator(`g.insp-mark-badge[data-actor="${actor}"]`);
+      await badge.first().waitFor({ state: "attached", timeout: STEP_TIMEOUT_MS });
+      const arrows = await group.locator("line.insp-mark-arrow").count();
+      rec.found.history_turn = {
+        id: pick.turn_id,
+        action: pick.action_name,
+        ok: pick.ok,
+        group_kind: await group.getAttribute("data-kind"),
+        badge_action: await badge.first().getAttribute("data-action"),
+        badge_ok: await badge.first().getAttribute("data-ok"),
+        arrows,
+        caption: await caption.innerText(),
+      };
+      if (rec.found.history_turn.group_kind !== "agent_turn") throw new Error(`marks data-kind ${rec.found.history_turn.group_kind} for an agent turn`);
+      if (rec.found.history_turn.badge_action !== glyphOf(pick.action_name)) throw new Error(`badge glyph ${rec.found.history_turn.badge_action}, expected ${glyphOf(pick.action_name)} for ${pick.action_name}`);
+      if (pick.action_name === "move" && pick.ok && arrows < 1) throw new Error("a successful move drew no arrow");
+      if (!rec.found.history_turn.caption.includes(pick.turn_id) || !rec.found.history_turn.caption.includes(actor)) {
+        throw new Error(`the caption does not name turn ${pick.turn_id} and ${actor}: "${rec.found.history_turn.caption}"`);
+      }
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-map-marks-turn.png`) }).catch(() => {});
+      await gotoRun(page, state.runId);
+      await closeProfileCard(page);
+      if (await page.locator(".map-history-strip").isVisible().catch(() => false)) {
+        await page.locator(".map-history-strip").getByRole("button", { name: /back to live/i }).click();
+        await sleep(500);
+      }
+
+      // 4. One dot size per zoom level: r 4.5 at 44 px, 5 at 56 px.
+      await map.getByRole("button", { name: "Fit map", exact: true }).click();
+      await zoomToPx(page, 44);
+      const r44 = await dotRadii(page);
+      await map.getByRole("button", { name: "Zoom in", exact: true }).click();
+      await sleep(200);
+      const r56 = await dotRadii(page);
+      rec.found.dot_radius = { "44px": r44, [`${await zoomPx(page)}px`]: r56 };
+      if (r44.length !== 1 || r44[0] !== "4.5") throw new Error(`dot radii at 44 px: ${JSON.stringify(r44)} (expected one size, 4.5)`);
+      if (r56.length !== 1 || r56[0] !== "5") throw new Error(`dot radii at 56 px: ${JSON.stringify(r56)} (expected one size, 5)`);
+
+      // 5. Far mode: one group tile per occupied cell at 10 px and no dots; digits on tiles of two or more at 18 px.
+      await map.getByRole("button", { name: "Fit map", exact: true }).click();
+      await zoomToPx(page, 10);
+      const occupied = Object.values(live.map.occupants).filter((ids) => ids.length > 0).length;
+      const far = await page.evaluate(() => ({
+        tiles: document.querySelectorAll("main.run-center .insp-map-svg rect.insp-tile").length,
+        dots: document.querySelectorAll("main.run-center .insp-map-svg circle.insp-dot").length,
+      }));
+      rec.found.far_10px = { ...far, occupied_cells: occupied, zoom_out_disabled: await map.getByRole("button", { name: "Zoom out", exact: true }).isDisabled() };
+      if (far.tiles !== occupied) throw new Error(`${far.tiles} group tiles at 10 px for ${occupied} occupied cells`);
+      if (far.dots !== 0) throw new Error(`${far.dots} dots drawn at 10 px (far mode draws tiles only)`);
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-map-far.png`) }).catch(() => {});
+      await zoomToPx(page, 18);
+      const digits = await page.evaluate(() =>
+        [...document.querySelectorAll("main.run-center .insp-map-svg rect.insp-tile[data-count]")]
+          .map((t) => ({ count: Number(t.getAttribute("data-count")), text: t.parentNode.querySelector("text.insp-tile-count")?.textContent ?? null }))
+          .filter((t) => t.count >= 2),
+      );
+      rec.found.tiles_with_digits_18px = digits.length;
+      const wrong = digits.filter((t) => t.text !== (t.count > 99 ? "99+" : String(t.count)));
+      if (wrong.length) throw new Error(`tiles without their count at 18 px: ${JSON.stringify(wrong.slice(0, 5))}`);
+
+      // 6. The most crowded cell: at 44 px every dot up to the packed capacity; a count badge when packed; the badge lists every occupant.
+      const [key, ids] = Object.entries(live.map.occupants).sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))[0];
+      const [cx, cy] = key.split(",").map(Number);
+      const n = ids.length;
+      await zoomToPx(page, 44);
+      await goToPoint(page, { x: cx, y: cy });
+      await page.mouse.move(5, 5);
+      const at44 = await cellContents(page, key);
+      rec.found.crowded = { key, occupants: n, dots_44px: at44.dots, badges_44px: at44.badges.map((b) => b.count) };
+      if (at44.dots > n || at44.dots < Math.min(n, 9)) throw new Error(`${at44.dots} dots in ${key} for ${n} occupants at 44 px`);
+      if (n > 9 && !at44.badges.some((b) => b.count === String(n))) throw new Error(`no count badge "${n}" on the packed cell ${key} at 44 px`);
+      let clicked = null;
+      for (const px of [44, 36, 30, 24]) {
+        await zoomToPx(page, px);
+        await page.mouse.move(5, 5);
+        const inCell = await cellContents(page, key);
+        const b = inCell.badges.find((x) => x.count === String(n));
+        if (!b) continue;
+        rec.found.crowded.packed_hint = await map.locator(".insp-map-zoomhint").innerText().catch(() => null);
+        await page.mouse.click(b.x, b.y);
+        const tip = await waitVisible(page.locator(".insp-tooltip"), "the cell tooltip after a count-badge click");
+        const tipText = await tip.innerText();
+        const missing = ids.filter((id) => !tipText.includes(id));
+        clicked = { px, style: b.bare ? "bare" : "pill", listed: n - missing.length, profile_card: await profileCard(page).isVisible().catch(() => false) };
+        if (missing.length) throw new Error(`the tooltip of the count badge misses ${missing}`);
+        if (clicked.profile_card) throw new Error("a count-badge click opened a profile card");
+        await page.keyboard.press("Escape");
+        await sleep(300);
+        break;
+      }
+      rec.found.badge_click = clicked;
+      if (!clicked) {
+        if (n > 4) throw new Error(`no count badge on ${key} (${n} occupants) at 44, 36, 30 or 24 px`);
+        rec.notes.push(`the most crowded cell ${key} holds ${n} occupants, which fit unpacked at every dot zoom level: the count-badge click was not exercised`);
+      }
+      await zoomToPx(page, 44);
+
+      // 7. The Action marks chip hides and restores the marks.
+      await marksChip.click();
+      await sleep(200);
+      rec.found.marks_off = { groups: await map.locator(".insp-map-svg g.insp-marks").count(), checked: await marksChip.getAttribute("aria-checked") };
+      if (rec.found.marks_off.groups !== 0 || rec.found.marks_off.checked !== "false") throw new Error(`Action marks off: ${JSON.stringify(rec.found.marks_off)}`);
+      await marksChip.click();
+      await sleep(200);
+      rec.found.marks_on = { groups: await map.locator(".insp-map-svg g.insp-marks").count(), checked: await marksChip.getAttribute("aria-checked") };
+      if (rec.found.marks_on.groups !== 1 || rec.found.marks_on.checked !== "true") throw new Error(`Action marks on: ${JSON.stringify(rec.found.marks_on)}`);
+
+      // 8. Key: collapsed by default; opens the explanations and the terrain entries; remembered per browser.
+      const keyButton = map.locator(".insp-legend").getByRole("button", { name: "Key", exact: true });
+      const keyStored = () => page.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter((k) => k.startsWith("empyrean.map.key.")).map((k) => [k, localStorage.getItem(k)])));
+      rec.found.key_initially_expanded = await keyButton.getAttribute("aria-expanded");
+      if (rec.found.key_initially_expanded === "true") {
+        rec.notes.push("the Key was open (stored in this browser); closing it first");
+        await keyButton.click();
+      }
+      if ((await map.locator(".insp-legend-key").count()) !== 0) throw new Error("the key items show while Key is collapsed");
+      await keyButton.click();
+      const key2 = await waitVisible(map.locator(".insp-legend-key"), "the map key after pressing Key");
+      const keyText = await key2.innerText();
+      rec.found.key_open = { expanded: await keyButton.getAttribute("aria-expanded"), stored: await keyStored(), has_packed: keyText.includes("packed: zoom in"), has_terrain: keyText.includes("mountain (impassable)") };
+      if (rec.found.key_open.expanded !== "true" || !rec.found.key_open.has_packed || !rec.found.key_open.has_terrain) throw new Error(`Key open: ${JSON.stringify(rec.found.key_open)}`);
+      if (!Object.values(rec.found.key_open.stored).includes("1")) throw new Error(`Key open is not stored: ${JSON.stringify(rec.found.key_open.stored)}`);
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-map-key.png`) }).catch(() => {});
+      await keyButton.click();
+      await sleep(200);
+      rec.found.key_closed = { expanded: await keyButton.getAttribute("aria-expanded"), items: await map.locator(".insp-legend-key").count() };
+      if (rec.found.key_closed.expanded !== "false" || rec.found.key_closed.items !== 0) throw new Error(`Key closed: ${JSON.stringify(rec.found.key_closed)}`);
+
+      // 9. Dark scheme screenshot; the legend and status lines leave the map at least 220 px.
+      await page.emulateMedia({ colorScheme: "dark" });
+      await sleep(300);
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-map-dark.png`) }).catch(() => {});
+      await page.emulateMedia({ colorScheme: "light" });
+      rec.found.map_viewport_height = Math.round((await map.locator(".insp-map-viewport").boundingBox()).height);
+      if (rec.found.map_viewport_height < 220) throw new Error(`the map viewport is ${rec.found.map_viewport_height} px tall`);
+      assertNoNewErrors(rec, errorsBefore);
+    },
+    { needs: ["runId"] },
+  );
+}
+
+/** The 3D view's data-* attributes (camera parsed). */
+async function map3dAttrs(page) {
+  const attrs = await page.evaluate(() => {
+    const root = document.querySelector(".map3d");
+    return root ? { ...root.dataset } : null;
+  });
+  if (attrs?.camera) attrs.cameraPose = JSON.parse(attrs.camera);
+  return attrs;
+}
+
+/** The pose of map3dCamera.frameRegion(region, 0, aspect) (vertical FOV 50 deg, pitch -50 deg, margin 1.15). */
+function expectedFrame(region, aspect) {
+  const cols = region.max_x - region.min_x + 1;
+  const rows = region.max_y - region.min_y + 1;
+  const d = (1.15 * 0.5 * Math.max(cols / aspect, rows)) / Math.tan((25 * Math.PI) / 180);
+  const tilt = (50 * Math.PI) / 180;
+  const cx = (region.min_x + region.max_x) / 2;
+  const cy = (region.min_y + region.max_y) / 2;
+  return { x: cx, y: d * Math.sin(tilt), z: -cy + d * Math.cos(tilt), yaw: 0, pitch: -tilt };
+}
+
+/** Hold a key on the focused 3D viewport for `ms`, then let one frame settle. */
+async function holdKey(page, code, ms) {
+  await page.keyboard.down(code);
+  await sleep(ms);
+  await page.keyboard.up(code);
+  await sleep(200);
+}
+
+async function runMap3dStep(page) {
+  await step(
+    page,
+    "map-3d",
+    "3D view: chunk only on demand, board counts, a label opens the card, keys, drag, wheel, frame, help, persistence, history replay, back to 2D",
+    async (rec) => {
+      const errorsBefore = errorCount();
+      await page.setViewportSize({ width: 1400, height: 900 });
+      await gotoRun(page, state.runId);
+      // A fresh page in the 2D view with the help card not yet seen (so the first 3D open shows it).
+      await page.evaluate(() => {
+        localStorage.setItem("empyrean.map.view", "2d");
+        localStorage.removeItem("empyrean.map3d.helpSeen");
+      });
+      await page.mouse.move(5, 5);
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await waitVisible(page.locator("main.run-center .insp-map-svg"), "the 2D map after a reload");
+      await sleep(800);
+      await closeDrawer(page);
+      await closeProfileCard(page);
+      await waitIdle(state.runId);
+      const live = await api("GET", `/runs/${state.runId}/state`);
+      const turns = await api("GET", `/runs/${state.runId}/turns`);
+      const e = live.entities;
+      const living = Object.values(e.agents).filter((a) => a.alive);
+      const acted = (id) => turns.filter((t) => t.kind === "agent_turn" && t.acting_agent_id === id).length;
+      const agent = [...living].sort((a, b) => acted(b.id) - acted(a.id) || a.id.localeCompare(b.id))[0] ?? null;
+      if (agent) {
+        // The selected agent's label always shows (a crowded label may drop out), so select it first.
+        await selectById(page, agent.id);
+        rec.found.agent = { id: agent.id, position: `${agent.position.x},${agent.position.y}`, turns: acted(agent.id) };
+      } else {
+        rec.notes.push("no living agent in this run: the label checks expect no label and the label click is not checked");
+      }
+
+      // 1. No three.js before the click; the chunk arrives with it.
+      const resources = () => page.evaluate(() => performance.getEntriesByType("resource").map((r) => r.name));
+      const chunkRe = /(Map3dView|three)[.-]/;
+      const before = (await resources()).filter((n) => chunkRe.test(n));
+      rec.found.chunk_before_click = before;
+      if (before.length) throw new Error(`the 3D chunk loaded before "3D view" was chosen: ${before.join(", ")}`);
+      const started = Date.now();
+      await viewRadio(page, "3D view").click();
+      await page.waitForSelector('.map3d[data-ready="1"], [data-webgl="unavailable"], .map3d-fallback[data-webgl="failed"]', { timeout: 30_000 });
+      rec.found.ready_ms = Date.now() - started;
+      if (await page.locator('[data-webgl="unavailable"]').count()) {
+        rec.notes.push("WebGL 2 is unavailable in this browser: checked the fallback only");
+        await waitVisible(page.getByText(/WebGL 2 is unavailable/), "the no-WebGL fallback text");
+        await waitVisible(page.getByRole("button", { name: "Back to 2D map", exact: true }), "Back to 2D map");
+        await viewRadio(page, "2D map").click();
+        return;
+      }
+      if (await page.locator('.map3d-fallback[data-webgl="failed"]').count()) {
+        throw new Error(`the 3D view could not load: ${await page.locator(".map3d-fallback").innerText()}`);
+      }
+      rec.found.chunk_after_click = (await resources()).filter((n) => /Map3dView/.test(n)).map((n) => n.replace(/^https?:\/\/[^/]+/, ""));
+      if (!rec.found.chunk_after_click.length) throw new Error("no Map3dView resource was requested after the click");
+      rec.found.svg_hidden_not_detached = (await page.locator("main.run-center .insp-map-svg").count()) === 1 && (await page.locator("main.run-center .insp-map-svg").isHidden());
+      if (!rec.found.svg_hidden_not_detached) throw new Error("the 2D map is not kept mounted and hidden under the 3D view");
+      if ((await viewRadio(page, "3D view").getAttribute("aria-checked")) !== "true") throw new Error('"3D view" is not aria-checked');
+
+      // 2. The help card opens on the first 3D open; Escape closes it.
+      const help = page.locator(".map3d-help");
+      rec.found.help_on_first_open = await help.waitFor({ state: "visible", timeout: 3000 }).then(() => true, () => false);
+      if (!rec.found.help_on_first_open) throw new Error("the help card did not open on the first 3D open");
+      if (!(await help.innerText()).includes("W A S D")) throw new Error("the help card does not list W A S D");
+      await page.keyboard.press("Escape");
+      await help.waitFor({ state: "detached", timeout: 3000 });
+
+      // 3. The board against the API.
+      const counts = { agents: Object.keys(e.agents).length, entities: ["agents", "plants", "fruits", "seeds", "residues"].reduce((sum, k) => sum + Object.keys(e[k] ?? {}).length, 0) };
+      const a = await map3dAttrs(page);
+      rec.found.board = {
+        renderer: a.renderer,
+        software: a.software,
+        draw_calls: Number(a.drawCalls),
+        triangles: Number(a.triangles),
+        frame_ms: Number(a.frameMs),
+        entities: Number(a.entities),
+        agents: Number(a.agents),
+        api: counts,
+        layer: a.layer,
+        lod: a.lod,
+      };
+      if (rec.found.board.entities !== counts.entities) throw new Error(`data-entities ${a.entities}, the API has ${counts.entities}`);
+      if (rec.found.board.agents !== counts.agents) throw new Error(`data-agents ${a.agents}, the API has ${counts.agents}`);
+      if (!(rec.found.board.draw_calls <= 24)) throw new Error(`data-draw-calls ${a.drawCalls} > 24`);
+      if (!(rec.found.board.triangles <= 120_000)) throw new Error(`data-triangles ${a.triangles} > 120000`);
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-map-3d-board.png`) }).catch(() => {});
+
+      // 4. Labels: only agents (plus the selection), the selected agent's on its cell; a click opens its card and
+      //    Escape closes it with the focus back on the board.
+      const animations = page.locator(".map3d-toolbar").getByRole("checkbox", { name: "Animations" });
+      if (await animations.isEnabled()) await animations.uncheck();
+      await page.mouse.move(5, 5);
+      await sleep(300);
+      const labelIds = await page.locator("button.map3d-label[data-entity-id]").evaluateAll((els) => els.map((el) => el.dataset.entityId));
+      const livingIds = new Set(living.map((x) => x.id));
+      rec.found.labels = { shown: labelIds.length, living_agents: living.length };
+      const strangers = labelIds.filter((id) => !livingIds.has(id));
+      if (strangers.length) throw new Error(`labels for entities that are not living agents: ${strangers}`);
+      if (labelIds.length > living.length) throw new Error(`${labelIds.length} labels for ${living.length} living agents`);
+      if (agent) {
+        const label = page.locator(`button.map3d-label[data-entity-id="${agent.id}"]`);
+        if ((await label.count()) !== 1) throw new Error(`no label for the selected agent ${agent.id}`);
+        rec.found.labels.selected_cell = await label.getAttribute("data-cell");
+        if (rec.found.labels.selected_cell !== rec.found.agent.position) throw new Error(`label of ${agent.id} on ${rec.found.labels.selected_cell}, the API says ${rec.found.agent.position}`);
+        rec.found.status_selected = await page.locator(".map3d-status-row").innerText();
+        await label.click();
+        const card = await waitVisible(profileCard(page), "the profile card after a label click");
+        rec.found.label_card = { id: await card.getAttribute("data-entity-id"), agent_card: /profile-kind-agent/.test((await card.getAttribute("class")) ?? "") };
+        if (rec.found.label_card.id !== agent.id || !rec.found.label_card.agent_card) throw new Error(`the label opened ${JSON.stringify(rec.found.label_card)}`);
+        await page.keyboard.press("Escape");
+        await card.waitFor({ state: "detached", timeout: 3000 });
+        await sleep(300);
+        rec.found.focus_after_card = await page.evaluate(() => document.activeElement?.className ?? null);
+        if (!/map3d-viewport/.test(rec.found.focus_after_card ?? "")) throw new Error(`focus after closing the card is on "${rec.found.focus_after_card}", not the 3D viewport`);
+      }
+
+      // 5. Keys (the viewport has focus): F frames, W flies north, Space up, Shift down, Q turns; F again equals frameRegion.
+      const viewport = page.locator(".map3d-viewport");
+      if (!agent) await viewport.focus();
+      await page.keyboard.press("f");
+      await sleep(700);
+      const c0 = (await map3dAttrs(page)).cameraPose;
+      await holdKey(page, "KeyW", 300);
+      const c1 = (await map3dAttrs(page)).cameraPose;
+      await holdKey(page, "Space", 200);
+      const c2 = (await map3dAttrs(page)).cameraPose;
+      await holdKey(page, "ShiftLeft", 200);
+      const c3 = (await map3dAttrs(page)).cameraPose;
+      await holdKey(page, "KeyQ", 200);
+      const c4 = (await map3dAttrs(page)).cameraPose;
+      rec.found.keys = { w_dz: +(c1.z - c0.z).toFixed(2), w_dy: +(c1.y - c0.y).toFixed(3), space_dy: +(c2.y - c1.y).toFixed(2), shift_dy: +(c3.y - c2.y).toFixed(2), q_dyaw: +(c4.yaw - c3.yaw).toFixed(2) };
+      if (!(c1.z < c0.z) || Math.abs(c1.y - c0.y) > 0.001) throw new Error(`W: ${JSON.stringify({ c0, c1 })}`);
+      if (!(c2.y > c1.y)) throw new Error("Space did not raise the camera");
+      if (!(c3.y < c2.y)) throw new Error("Shift did not lower the camera");
+      if (c4.yaw === c3.yaw) throw new Error("Q did not turn the camera");
+      await page.keyboard.press("f");
+      await sleep(700);
+      const framed = (await map3dAttrs(page)).cameraPose;
+      const vbox = await viewport.boundingBox();
+      const expect = expectedFrame(live.map.region, vbox.width / vbox.height);
+      rec.found.frame = { got: framed, expected: Object.fromEntries(Object.entries(expect).map(([k, v]) => [k, +v.toFixed(2)])) };
+      const off = ["x", "y", "z", "yaw", "pitch"].filter((k) => Math.abs(framed[k] - expect[k]) > 0.05);
+      if (off.length) throw new Error(`F does not frame the region (${off.join(", ")}): ${JSON.stringify(rec.found.frame)}`);
+
+      // 6. Drag looks (120 px = 30 degrees) without changing the selection; the wheel dollies toward the board.
+      const selectedBefore = await page.locator(".map3d-status-row").innerText();
+      const mx = vbox.x + vbox.width / 2;
+      const my = vbox.y + vbox.height / 2;
+      await page.mouse.move(mx, my);
+      await page.mouse.down();
+      await page.mouse.move(mx + 120, my, { steps: 6 });
+      await page.mouse.up();
+      await sleep(250);
+      const dragged = (await map3dAttrs(page)).cameraPose;
+      rec.found.drag_dyaw = +(dragged.yaw - framed.yaw).toFixed(4);
+      if (Math.abs(dragged.yaw - framed.yaw - 0.5236) > 0.05) throw new Error(`a 120 px drag turned the camera by ${rec.found.drag_dyaw} rad (expected 0.5236)`);
+      if ((await page.locator(".map3d-status-row").innerText()) !== selectedBefore) throw new Error("the drag changed the selection");
+      const r = live.map.region;
+      const centre = { x: (r.min_x + r.max_x) / 2, z: -(r.min_y + r.max_y) / 2 };
+      const dist = (c) => Math.hypot(c.x - centre.x, c.y, c.z - centre.z);
+      await page.mouse.wheel(0, -300);
+      await sleep(400);
+      const wheeled = (await map3dAttrs(page)).cameraPose;
+      rec.found.wheel = { before: +dist(dragged).toFixed(2), after: +dist(wheeled).toFixed(2) };
+      if (!(dist(wheeled) < dist(dragged))) throw new Error(`the wheel did not bring the camera closer: ${JSON.stringify(rec.found.wheel)}`);
+
+      // 7. One layer today: Layer up / Layer down disabled, PageUp changes nothing; ? opens the help card.
+      const toolbar = page.locator(".map3d-toolbar");
+      rec.found.layer_buttons_disabled = (await toolbar.getByRole("button", { name: "Layer up", exact: true }).isDisabled()) && (await toolbar.getByRole("button", { name: "Layer down", exact: true }).isDisabled());
+      if (!rec.found.layer_buttons_disabled) throw new Error("Layer up / Layer down are enabled with one layer");
+      await viewport.focus();
+      await page.keyboard.press("PageUp");
+      await sleep(200);
+      rec.found.layer_after_pageup = (await map3dAttrs(page)).layer;
+      if (rec.found.layer_after_pageup !== "1/1") throw new Error(`data-layer ${rec.found.layer_after_pageup} after PageUp`);
+      await page.keyboard.press("?");
+      await waitVisible(help, "the help card after ?");
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-map-3d-help.png`) }).catch(() => {});
+      await page.keyboard.press("Escape");
+      await help.waitFor({ state: "detached", timeout: 3000 });
+
+      // 8. The choice persists across a reload (and the help card stays closed once seen).
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.waitForSelector('.map3d[data-ready="1"]', { timeout: 30_000 });
+      rec.found.persisted = { stored: await page.evaluate(() => localStorage.getItem("empyrean.map.view")), help_shown_again: await help.isVisible().catch(() => false) };
+      if (rec.found.persisted.stored !== "3d") throw new Error(`empyrean.map.view is ${rec.found.persisted.stored} after choosing 3D`);
+      if (rec.found.persisted.help_shown_again) throw new Error("the help card opened again after it was seen");
+      await closeDrawer(page);
+
+      // 9. History: the newest successful move is drawn at its destination with its chip, and Replay turn animates it.
+      const move = [...turns].reverse().find((t) => t.kind === "agent_turn" && t.action_name === "move" && t.ok === true);
+      if (!move) {
+        rec.notes.push("no successful move in this run: history replay not checked");
+      } else {
+        const view = await api("GET", `/runs/${state.runId}/turns/${move.turn_id}`);
+        const to = view.turn.action_result?.effects?.to;
+        await gotoRun(page, state.runId, move.turn_id);
+        await page.waitForSelector(`.map3d[data-turn="${move.turn_id}"][data-ready="1"]`, { timeout: 15_000 });
+        await selectById(page, move.acting_agent_id);
+        await viewport.focus();
+        await page.keyboard.press("f");
+        await sleep(700);
+        await page.mouse.move(5, 5);
+        const actorLabel = page.locator(`button.map3d-label[data-entity-id="${move.acting_agent_id}"]`);
+        const chip = page.locator(`.map3d-chip[data-effect-kind="move"][data-actor="${move.acting_agent_id}"]`);
+        rec.found.history = {
+          turn: move.turn_id,
+          data_turn: (await map3dAttrs(page)).turn,
+          actor: move.acting_agent_id,
+          actor_cell: (await actorLabel.count()) ? await actorLabel.getAttribute("data-cell") : null,
+          api_to: to ? `${to.x},${to.y}` : null,
+          chip: (await chip.count()) ? await chip.first().innerText() : null,
+        };
+        if (rec.found.history.data_turn !== move.turn_id) throw new Error(`data-turn ${rec.found.history.data_turn}, expected ${move.turn_id}`);
+        if (rec.found.history.actor_cell !== rec.found.history.api_to) throw new Error(`the actor's label is on ${rec.found.history.actor_cell}, the move went to ${rec.found.history.api_to}`);
+        if (!rec.found.history.chip) throw new Error(`no move chip over ${move.acting_agent_id}`);
+        if (await animations.isEnabled()) await animations.check();
+        await toolbar.getByRole("button", { name: "Replay turn", exact: true }).click();
+        const t0 = Date.now();
+        let sawOne = null;
+        let backToZero = null;
+        while (Date.now() - t0 < 1500) {
+          const anim = (await map3dAttrs(page)).animating;
+          if (anim === "1" && sawOne === null) {
+            sawOne = Date.now() - t0;
+            await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-map-3d-history.png`) }).catch(() => {});
+          }
+          if (anim === "0" && sawOne !== null) {
+            backToZero = Date.now() - t0;
+            break;
+          }
+          await sleep(30);
+        }
+        rec.found.history.replay = { animating_after_ms: sawOne, done_after_ms: backToZero };
+        if (sawOne === null || sawOne > 300) throw new Error(`Replay turn: data-animating "1" after ${sawOne} ms (expected within 300 ms)`);
+        if (backToZero === null) throw new Error("Replay turn: still animating after 1.5 s");
+      }
+      await page.emulateMedia({ colorScheme: "dark" });
+      await sleep(700);
+      await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-map-3d-dark.png`) }).catch(() => {});
+      await page.emulateMedia({ colorScheme: "light" });
+
+      // 10. Back to the 2D map (so later runs and developers start in 2D).
+      await viewRadio(page, "2D map").click();
+      await waitVisible(page.locator("main.run-center .insp-map-svg"), "the 2D map after choosing 2D map");
+      rec.found.back_to_2d = { map3d_left: await page.locator(".map3d").count(), stored: await page.evaluate(() => localStorage.getItem("empyrean.map.view")) };
+      if (rec.found.back_to_2d.map3d_left !== 0 || rec.found.back_to_2d.stored !== "2d") throw new Error(`back to 2D: ${JSON.stringify(rec.found.back_to_2d)}`);
+      if (await page.locator(".map-history-strip").isVisible().catch(() => false)) {
+        await page.locator(".map-history-strip").getByRole("button", { name: /back to live/i }).click();
+      }
+      assertNoNewErrors(rec, errorsBefore);
+    },
+    { needs: ["runId"] },
+  );
 }
 
 // ---------------------------------------------------------------------------

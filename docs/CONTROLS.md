@@ -25,6 +25,7 @@ Pages (hash routes): `#/` entry, `#/new` New session, `#/resume` Resume session,
 | **Step round** | Run page, left rail | Finish the current round, then pause |
 | **Recover (pause)** | Status bar, error state | Discard the failed attempt; the next Run turn re-runs that turn |
 | **Return to live** | Timeline | Leave history and follow the latest saved turn |
+| **2D map** / **3D view** | Run page, end of the map legend's controls row (**Map view**) | Show the viewed turn as the SVG map or as a 3D board to fly over; remembered per browser |
 | **Inspector** / **Turn record** / **God mode** / **Rules** / **Storybook** (*new*) | Run page, right tabs | Occupants of a cell and a summary of the selection / the facts of the viewed turn / stage edits / read the rules / read the AI narrative |
 | Click an entity, or **Profile** | Map dot, occupant row, roster row, Inspector | Opens the entity's profile card over the page: Overview, Decisions, Skills, Knowledge, Messages, History (agents); Overview, Growth, Rules, History (plants) |
 | **Create continuation from turn <id>** | God mode tab | New run from the viewed checkpoint; the original is untouched |
@@ -129,20 +130,95 @@ at 1280 px and wider the assistant drawer docks on the right (*new*).
 
 ### Map (centre)
 
+A **Map view** switch at the end of the legend's controls row (in both views, like a map app's view
+toggle in a corner, so it costs the board no row) chooses the view: **2D map** (the SVG map) or
+**3D view** (the board described in "3D view (centre)"). The history strip stays above both, and
+nothing else on the page changes with the switch.
+
 | Area | Label | Effect |
 | --- | --- | --- |
+| Legend, end of the controls row | **Map view**: **2D map** / **3D view** | Switch the centre column between the SVG map and the 3D board; remembered per browser (`empyrean.map.view`, default 2D). The 3D code (three.js) is downloaded only when **3D view** is chosen; pointing at that radio prefetches it (keyboard focus does not). Keyboard: the checked radio is the one tab stop; arrows, Home and End switch, and the focus follows to the switch of the view that appears |
 | Toolbar | **Pan left** / **Pan up** / **Pan down** / **Pan right** | Move the view 3 cells (arrow keys pan 1, Shift+arrow 5 when the map has focus) |
-| Toolbar | **Zoom out** / **Zoom in** | Change the cell size (+ / - keys) |
+| Toolbar | **Zoom out** / **Zoom in** | Change the cell size (+ / - keys); zooming in spreads the dots of packed cells |
 | Toolbar | **Fit map** | Show the whole region |
 | Toolbar | **Origin** | Centre on (0, 0) |
 | Toolbar | **Center selection** | Centre on the selected cell |
 | Toolbar | **Go to** x / y + **Go** | Centre on and select a point inside the region |
 | Map | Click a cell / a dot; drag | Select a point (its occupants are listed in the Inspector) / an entity and open its profile card (a cell with one entity opens it too); pan |
+| Map | Count badge of a packed cell | Select the cell and pin its tooltip, which lists every occupant (no profile card opens) |
 | Cell tooltip | **Close (Esc)** | Close the hover details |
 | Cell tooltip | Entity row | Select that entity and open its profile card |
+| Status line, first line | (read-only) | The hovered dot or cell (over a count badge: "Cell (x, y) land · N occupants · click the count to list every occupant"); otherwise the viewed turn's caption, "Turn <id> · <name> (<id>) <what it did>" ("took no action", or for a round end "round <n> ended · 3 grew · 1 died"); while a live turn runs it ends with " · <name> (<id>) is deciding now" |
+| Status line, second line | "<N> cells packed: zoom in to spread the dots" | Shown when cells are packed (title: zoom in to spread them; the count badge shows each total). At the largest zoom it reads "<N> cells packed: click the count", or "<N> cells over capacity: click the count" when some cells still hold more dots than fit |
 | Status line | **show removed-entity markers (∅n)** | Mark cells where entities were removed |
-| Legend | Kind chips, **Select all**, **Unselect all** | Show or hide dots of a kind on the map only |
+| Legend | Kind chips, **Select all**, **Unselect all** | Show or hide the dots of a kind on the map only (occupant lists and the tooltip stay complete) |
+| Legend | **Action marks** | Show or hide the viewed turn's action marks (on by default; remembered per browser) |
+| Legend | **Key** (▾ / ▴) | Open or close the key under the controls: what the count badge, group tiles, rings, marks and terrain colours mean. Collapsed by default so the map keeps its height; remembered per browser |
 | History strip | **Back to live** | Leave history |
+
+What the 2D map draws:
+
+* Dots have one size per zoom level, whatever the cell holds: 8 px at 24-36 px cells, 9 px at
+  44 px (the default zoom), growing to 24 px at 340 px. A cell with more occupants than fit at
+  normal spacing is *packed*: its dots move closer together and a count badge in its top-right
+  corner shows the total (a pill from 36 px cells, bare digits in the corner at 24-30 px).
+  **Zoom in** spreads packed dots; at the largest zoom a cell that still holds more than fit shows
+  as many dots as fit and the total in its badge. Names appear under a lone dot from 36 px cells
+  and under a single row of dots from 160 px; otherwise the tooltip names the occupants.
+* Group tiles replace the dots below 24 px (10, 14 and 18 px cells): one square per occupied
+  cell, bigger for more occupants, blue when an agent is there, with the count in digits from
+  14 px (for two or more) and a thin kind bar on mixed cells.
+* Action marks show what the viewed turn did (live: the last saved turn). The acting agent
+  gets a purple badge whose glyph names the action (arrow = move, cross = attack, M message,
+  E absorb, T transfer, R recover, U upgrade, W wait, O observe, Q query, S skill, "·" no action;
+  red = failed). A move draws an arrow from a dashed ghost of the old position. Rings mark the
+  entities the action or a world event touched: red hit, orange fed from, blue heard, green given,
+  grey died, dashed queried, purple dashed operator voice, green grew or germinated, orange fruit,
+  brown seed. An observe outlines the observed cell (dashed), a broadcast draws its reach as a
+  diamond, and amounts are printed (−damage, +gained). A failed action draws only its red badge
+  (a blocked move also its stroke). While a live turn runs, the agent deciding now has a pulsing
+  dashed ring. The key names these marks in short: "packed: zoom in", "group: bigger = more,
+  blue = agent", "acting · pulses while deciding", "selected", "selected cell", "acted (red =
+  failed)", "moved", "hit · fed · heard · given · died · queried", and the terrain colours.
+
+### 3D view (centre)
+
+The viewed turn as a board: land flat, mountains raised, water sunk, one figure per entity
+(agents, plants tinted by species, fruit, seeds, residue; dead agents and plants lie flat), a
+health disc under each living agent, the acting agent's dashed ring, the selected entity's ring
+and cell frame, and a chip over the actor naming the viewed turn's action or world event. With
+**Animations** on, the viewed turn plays once (moves slide, attacks lunge, messages ripple, new
+plants pop up) within 0.7 s. Cells with 5 or more occupants carry a count badge; seen from more
+than 60 units away the figures turn into columns as tall as the count, with badges from 2.
+
+| Area | Label | Effect |
+| --- | --- | --- |
+| Toolbar | **Frame region** | The whole region from the south, looking north and down (F) |
+| Toolbar | **Top view** | Look straight down at the region (T) |
+| Toolbar | **Focus selection** | Fly to the selected cell (Home); disabled with no selected cell |
+| Toolbar | **Layer down** / **Layer up** | Activate the layer below / above (PageDown / PageUp). A run has one layer today, so both are disabled; the chip reads "Layer 1 of 1 · World" |
+| Toolbar | **Replay turn** | Play the viewed turn's animations again (R) |
+| Toolbar | **Animations** | Animate the viewed turn (on by default; off and disabled when the system asks for reduced motion; the chips stay either way) |
+| Toolbar | **Controls** | Show or hide the help card "3D map controls" (also ? or H). The card opens by itself on the first 3D open; **Close**, Escape or a click on the board hides it |
+| Board | Agent label ("a03 Cyrene") | Select that agent and open its profile card (a focused label also takes Enter); closing the card returns the focus to the board, so the keys work straight away |
+| Board | Click a figure | Select that entity and open its profile card |
+| Board | Click a tile | Select the cell (a lone occupant is selected and its card opens too) |
+| Board | Left drag / right or middle drag / wheel or pinch | Look around / pan across the board / zoom toward the point under the pointer. Drag, wheel and hover also work over labels |
+| Board | Hover | The first status line names the figure or cell under the pointer (hovering a label hovers its entity); resting on an occupied cell opens its tooltip |
+| Cell tooltip | **Close (Esc)** / entity row | Close it / select that entity and open its profile card (every occupant is a row; the hovered one is marked) |
+| Status line, first line | (read-only) | The hovered figure ("a03 Cyrene at (3, 4): click to select it") or cell ("Cell (3, 4) land · 7 occupants"), else a summary of the keys |
+| Status line, second line | (read-only) | "Selected: (x, y) <terrain> · <entity> · Turn <id>: <actor> <what it did> · Layer 1 of 1", plus "Not drawn: <kinds>" when legend kinds are hidden |
+| Legend | Kind chips (**living agent**, **dead agent / plant**, **plant**, **fruit**, **seed**, **residue**), **Select all**, **Unselect all** | Show or hide the figures of a kind; the choice is stored with the 2D legend's and read when a view opens |
+| Fallback | **Back to 2D map** | Shown instead of the board when the browser has no WebGL 2 ("This browser cannot draw the 3D view (WebGL 2 is unavailable). The 2D map keeps working.") or the view could not load ("The 3D view could not load." and "Reload the page to try again, or go back to the 2D map.") |
+| Fallback | **Retry** | Rebuild the board after the browser lost its graphics context |
+
+Labels name the living agents that have room on screen. Labels, chips and count badges never
+overlap: in a crowd a label shows the agent's id only ("a03" instead of "a03 Cyrene"), and when even
+that has no room it is left out until the camera moves. The hovered or selected entity's label
+always shows. A chip over an agent stacks above that agent's label, and world-event chips outrank
+agent names when space is short. Beyond 30 units a label shows only the id, beyond 60 units no
+label is drawn, and at most 40 labels, badges, chips and floating numbers are drawn per frame. The
+keys work while the board has focus (click it first); Ctrl, Alt and Cmd chords are ignored.
 
 ### Right column
 
@@ -360,5 +436,15 @@ tooltip says why otherwise.
 | Ctrl/Cmd+Enter (*new*) | assistant composer | Send |
 | Escape | record viewer, cell tooltip, agent card dialog, assistant drawer (focus inside), Dictate recording | Close / cancel the innermost one |
 | Arrows, Shift+arrows, + / - | map (focused) | Pan 1 / 5 cells, zoom |
+| Arrows, Home, End | **Map view** switch (focused) | Switch between **2D map** and **3D view** |
+| W A S D | 3D view (focused) | Fly forward, back and sideways (faster the higher the camera) |
+| Space / Shift | 3D view (focused) | Go up / go down |
+| Q E, ← → | 3D view (focused) | Turn left / right |
+| ↑ ↓ | 3D view (focused) | Look up / down |
+| PageUp / PageDown | 3D view (focused) | Layer up / layer down |
+| F / T / Home | 3D view (focused) | Frame the region / top view / fly to the selected cell |
+| R | 3D view (focused) | Replay the viewed turn |
+| ? or H | 3D view (focused) | Show or hide the help card |
+| Escape | 3D view (focused) | Close the help card, else the cell tooltip, else cancel a drag; otherwise it reaches the profile card |
 | Arrows, Home, End, double-click | splitters | Resize, min, max, reset |
 | Enter | find bar, map Go to, forms | Submit |

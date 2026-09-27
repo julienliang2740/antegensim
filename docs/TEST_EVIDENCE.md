@@ -1,6 +1,6 @@
 # Test evidence
 
-What was tested, how, and with what result. **Current as of 2026-09-26** (the assistant release and its verification pass), on the working tree at commit `bd240df`. Sections that were not re-run in this pass keep their original date in the heading (2026-09-25, before the assistant release); their numbers are historical.
+What was tested, how, and with what result. **Current as of 2026-09-26** (the assistant release and its verification pass), on the working tree at commit `bd240df`; later changes of the same day have their own dated rows (the latest: the 2D map fixes and the 3D view, 23:35-23:48 UTC). Sections that were not re-run in this pass keep their original date in the heading (2026-09-25, before the assistant release); their numbers are historical.
 
 Every section is labelled:
 
@@ -26,6 +26,7 @@ Requirement-to-test mapping is in [TEST_PLAN.md](TEST_PLAN.md). Known gaps are i
 | Replay of stored malformed CLI replies through salvage | LOCAL | 2026-09-26 | 83 payloads: 77 validate after salvage (the same-key unwrap rule shipped in `calls.salvage`; 28 before it) |
 | Resume page archive and delete (multi-select, archive view, restore, delete with confirmation) | MOCKED | 2026-09-26 18:05 UTC | Backend **693 passed, 4 skipped** (+10: `test_run_archive.py` 9, `test_api.py` 1); `state.test.mjs` **60 of 60** (+6 selection tests); tsc clean, lint 0 errors and the same 4 warnings; `docs check: clean`; browser **34 of 34** on a fake QA backend (port 8022, `qa/worlds-archive`; `qa/out/2026-09-26_17-57-24`) and step 34 again after the last UI change (`qa/out/2026-09-26_18-05-57`); USD 0. See "Resume page archive and delete" below |
 | Entity profile card (card over the run page replaces the inspector's full record; Inspector tab keeps the cell, occupants and a summary) | MOCKED | 2026-09-26 19:44 UTC | tsc clean; lint 0 errors and the same 4 warnings; `state.test.mjs` **66 of 66** (+5 profile tests); `docs check: clean`; browser **35 of 35** on the fake QA backend (port 8020 on the launcher with the fake agent default, `qa/out/2026-09-26_19-46-30`, 0 live calls; new step 35 `profile-card`; `select-occupants`, `agent-inspector`, `plant-rules` and `assistant-progress-and-refs` now go through the card; one expected 409 console line from the refused delete in step 34). The check now creates every run on `fake-heuristic`; before that fix, the shipped default `claude-cli-haiku` made 31 live CLI Haiku calls during this work (a demo run and one aborted check, 191k input and 14k output tokens). Screenshots `docs/evidence/screenshots/profile-*.png` (agent Overview and Decisions, plant Overview and Growth, fruit; light and dark) |
+| 2D map fixes (equal dots, count badges, group tiles, action marks, **Key**) and the 3D view | MOCKED | 2026-09-27 00:13-00:17 UTC | tsc clean; lint 0 errors and the same 4 warnings (`RunPage.tsx:202` now); `state.test.mjs` **96 of 96** (+30: 3 turnEffects, 7 map dots, 4 map indicators, 16 map3d); `docs check: clean`; backend **694 passed, 4 skipped** (the one flaky archive test fixed: it now waits for the closed worker to release the writer lock, 0 failures in 40 isolated runs against 2 in 30 before); browser **37 of 37** on the fake QA backend (`qa/out/2026-09-27_00-13-13`), and the map steps 3 of 3 on each of three saved runs on the primary servers without running a turn. 3D on SwiftShader: 9-12 draw calls, 730-5,844 triangles, 0.8-1.2 ms CPU per frame; USD 0. See "2D map fixes and the 3D view" below |
 | Resilience and completion criteria (13 scripts, 165 checks) | MOCKED | 2026-09-25 | 165 of 165 on the source before the assistant release (not re-run) |
 | Headless simulations | MOCKED | 2026-09-25 | 2 runs of 8 agents x 3 rounds, no errors (not re-run) |
 | Live simulations, live tests and a live UI session | LIVE | 2026-09-25 | 6 runs, the 3 live pytest tests (2 of 3, then 3 of 3), 102 calls, USD 0.782 (not re-run) |
@@ -144,6 +145,49 @@ before deleting". The only console error is that intended 409. Screenshots, each
 `resume-delete-dialog.png`, `resume-delete-refused.png` and `resume-dark-selection.png` (dark
 scheme). The same full run passed all 33 earlier steps.
 
+### 2D map fixes and the 3D view (2026-09-26): MOCKED
+
+Two new browser steps after `profile-card` (see `qa/README.md`): 36 `map-marks` (the 2D map) and 37
+`map-3d` (the 3D view). Headless Chromium 131 (Playwright 1.49.1) at 1400x900; WebGL 2 is drawn by
+SwiftShader ("ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader
+driver)", `data-software="1"`), with no launch flag. No model was called and no turn ran on the
+primary backend.
+
+| Pass | When (UTC) | UI / backend | Result | Log |
+| --- | --- | --- | --- | --- |
+| Full check, all fake (first build) | 2026-09-26 23:38-23:41 | Vite 5180 -> `qa/assistant_fake_server.py` on 8020 | 36 passed, 1 failed (`profile-card`: "the card covers the whole map", see below); 36 and 37 passed; the only console error is the intended 409 of step 34 | `qa/out/2026-09-26_23-38-41/log.json` |
+| Full check, all fake (final code) | 2026-09-27 00:13-00:15 | Vite 5180 -> 8020 | **37 of 37**; step 35 again sees the board above the card at 1440 x 900 (backdrop alpha 0.32); the only console error is the intended 409 of step 34 | `qa/out/2026-09-27_00-13-13/log.json` |
+| `QA_ONLY_MAP=1 QA_RUN_ID=…`, saved runs (final code) | 2026-09-27 00:15-00:17 | Vite 5173 -> primary backend 8000 (nothing ran) | 3 of 3 on each saved run: badge clicks listed 9 (bare, 30 px), 7 (bare, 30 px) and 14 (pill, 44 px) occupants without opening a card; history moves r00049_t02_a02 and r00022_t04_a06 replayed in 596 and 610 ms; no console or page error | `qa/out/2026-09-27_00-15-59/`, `…_00-16-27/`, `…_00-16-59/` |
+| `QA_ONLY_MAP=1`, new fake run | 23:35 | Vite 5180 -> 8020 | 8 of 8 (preflight, run creation, round 1, 36, 37) | `qa/out/2026-09-26_23-35-54/log.json` |
+| `QA_ONLY_MAP=1 QA_RUN_ID=…`, saved runs | 23:46-23:48 | Vite 5173 -> primary backend 8000 (live models; nothing ran) | 3 of 3 on each of `run_20260926_185253_0ad7`, `run_20260926_022058_ec4a`, `run_20260926_034607_b7c5`; no console or page error | `qa/out/2026-09-26_23-46-09/`, `…_23-46-37/`, `…_23-47-08/` |
+
+What the steps found (saved runs: 21 x 21 with 135 markers and no living agent / the 3 x 3 arena with 2 living of 12 agents / the one-cell arena with 14 entities; the fake QA run: 21 x 21, 8 agents, 32 markers):
+
+| Check | Result |
+| --- | --- |
+| Marks of a history agent turn | move r00049_t02_a02 (badge `move`, 1 arrow, caption "Turn r00049_t02_a02 · Boreas (a02) moved left"); move r00022_t04_a06; observe r00020_t03_a07; query r00002_t01_a04 on the QA run; the live group survived a hover and a 2.8 s refresh every time |
+| Dot radius | "4.5" at 44 px and "5" at 56 px on every run |
+| Far mode (10 px) | tiles = occupied cells: 59 of 59, 5 of 5, 1 of 1, 12 of 12; no dots; digits on every tile of two or more at 18 px |
+| Count badge | bare "9" at 30 px on (-1, 0) of the 21 x 21 run, bare "7" at 30 px on the arena, pill "14" at 44 px on the one-cell arena: each click listed every occupant and opened no profile card. The QA run's fullest cell holds 3 (never packs; recorded as a note) |
+| **Action marks** / **Key** | off removes the marks group, on restores it; Key collapsed by default, open shows "packed: zoom in" and the terrain entries and stores `empyrean.map.key.run` = "1" |
+| Map viewport | 666 px tall with the Key collapsed |
+| 3D chunk | no `Map3dView` or `three` resource before the click; `/src/components/map3d/Map3dView.tsx` after; ready in 620-885 ms (dev server) |
+| 3D counts | `data-entities` / `data-agents` = API: 135/8, 26/12, 14/8, 32/8; 9, 11, 12 and 12 draw calls; 5,844, 1,216, 730 and 2,604 triangles; `data-frame-ms` 0.8-1.2 |
+| 3D labels | only living agents, never more than their number (0 of 0, 2 of 2, 4 of 4, 4 of 8 on the QA run at the frame pose); the selected agent's label on its API cell; a click opened its profile card and Escape returned the focus to the board |
+| 3D camera | W moved z by -2.2 to -6.0 with y unchanged; Space up, Shift down, Q turned; F equalled `frameRegion` to 0.01 (x 0, y 19.84, z 16.64, pitch -0.87 on 21 x 21 boards); a 120 px drag turned 0.52 rad; the wheel moved closer (25.89 -> 18.17 units from the centre of a 21 x 21 board) |
+| 3D history | the actor's label on `effects.to` ("2,2", "0,1") with the chips "moved left" / "moved up"; **Replay turn**: `data-animating` "1" after 2-16 ms, "0" after 608-614 ms. The QA run and the one-cell arena have no successful move (recorded as a note) |
+| Persistence and return | 3D kept after a reload, the help card not shown again; **2D map** removed `.map3d` and stored "2d" |
+
+Found and fixed: the first build put the **Map view** switch in a row of its own above the map, which moved
+the board 30 px down, so at 1440 x 900 the profile card covered every map cell and step 35 failed. The
+switch now sits at the end of the legend's controls row in both views (the toolbar keeps its single row at
+1440 px, the map starts at y 55 again, 22 px above the card); below 1440 px the card covers the board as
+it did before the map changes (LIMITATIONS.md). The same pass applied the code review's patches (priority
+dots in overflowing cells, the 3D status line, radiogroup keys on the switch with the focus handed to the
+copy that appears, `// DOCS:` lines) and fixed the flaky archive test. Screenshots, each opened and checked by eye: `docs/evidence/screenshots/map-2d-marks-move.png`,
+`map-2d-key-open.png`, `map-2d-far-tiles.png`, `map-3d-arena.png`, `map-3d-history-replay.png`,
+`map-3d-help.png`.
+
 ### Legacy steps 1-17 and the reviewer passes (2026-09-25)
 
 Recorded on 2026-09-25, before the assistant release; the 17 steps still pass in the 2026-09-26 runs above. Full results: [evidence/browser_qa.md](evidence/browser_qa.md) (two passes, the second on the final code). Curated screenshots: `docs/evidence/screenshots/01-entry.png` … `18-resume-session.png`. Every screenshot was opened and checked by eye.
@@ -250,7 +294,7 @@ From the repository root:
 .venv/bin/python scripts/run_sim.py --model fake-heuristic --worlds-dir /tmp/w      # MOCKED
 bash qa/resilience/run_all.sh     # MOCKED; own backend on :8020, about 3.5 min; overwrites qa/resilience/out/
                                   # RES_PORT / RES_WORLDS / RES_OUT / RES_LOG select another port and folders; expect 165 of 165
-# browser check, all 35 steps on fake models (see qa/README.md)
+# browser check, all 37 steps on fake models (see qa/README.md)
 .venv/bin/python qa/assistant_fake_server.py
 (cd frontend && EMPYREAN_API_PROXY=http://127.0.0.1:8020 npx vite --port 5180 --strictPort)
 (cd qa && BASE_URL=http://127.0.0.1:5180 API_URL=http://127.0.0.1:8020 node browser_check.mjs)

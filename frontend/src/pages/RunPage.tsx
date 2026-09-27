@@ -63,6 +63,7 @@ import type { Agent, AgentKnowledgeView, ApiProblem, Entity, FieldChange, Interv
 import { findEntity, pointKey } from "../api/types";
 import { InspectorPanel, MapView, OccupantList, entitiesAtPoint, flattenEntities, removedList } from "../components/inspect";
 import type { AgentViewOverlay } from "../components/inspect";
+import { Map3dLoader, MapViewSwitch, prefetchMap3d } from "../components/map3d";
 import { LauncherButton } from "../components/assistant/Launcher";
 import { ActivityLog } from "../components/run/ActivityLog";
 import { AgentShortcuts } from "../components/run/AgentShortcuts";
@@ -90,13 +91,32 @@ import { MIN_LOG_H, MIN_RAIL_W, MIN_SIDE_W, useRunLayout } from "../hooks/useRun
 import { useThrottledKey } from "../hooks/useThrottledKey";
 import { clearContext, dockReserve, getDrawerState, publishContext, registerHandlers, subscribeDrawer } from "../state/assistantContext";
 import type { RunHandlers, RunTabId } from "../state/assistantContext";
+import { MAP_VIEW_STORAGE_KEY, parseMapViewMode } from "../state/map3dView";
+import type { MapViewMode } from "../state/map3dView";
 import { errorText, withReopen } from "../state/runSessions";
 import { allModelsFake, controlAvailability, isIdle } from "../state/statusText";
+import { turnEffects } from "../state/turnEffects";
 
 type Tab = RunTabId;
 
 /** Minimum time between commit-driven reloads while the run is busy. */
 const COMMIT_REFRESH_MS = 1000;
+
+function readMapViewMode(): MapViewMode {
+  try {
+    return parseMapViewMode(window.localStorage.getItem(MAP_VIEW_STORAGE_KEY));
+  } catch {
+    return parseMapViewMode(null);
+  }
+}
+
+function saveMapViewMode(mode: MapViewMode): void {
+  try {
+    window.localStorage.setItem(MAP_VIEW_STORAGE_KEY, mode);
+  } catch {
+    // Storage blocked (private window): the choice lives for this page only.
+  }
+}
 
 
 /** Error carrying backend-style problems, understood by the inspect components (problemsFromError). */
@@ -146,6 +166,9 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   const [wideSide, setWideSide] = useState(false);
   const [logCollapsed, setLogCollapsed] = useState(false);
   const sideWideNow = wideSide || tab === "god" || tab === "rules";
+  // "2D map" or "3D view" in the centre column (remembered per browser; the 3D chunk loads only when chosen).
+  const [mapViewMode, setMapViewMode] = useState<MapViewMode>(readMapViewMode);
+  useEffect(() => saveMapViewMode(mapViewMode), [mapViewMode]);
   // The docked assistant drawer takes room on the right (state/assistantContext.dockReserve).
   const drawer = useSyncExternalStore(subscribeDrawer, getDrawerState, getDrawerState);
   const [winW, setWinW] = useState(() => window.innerWidth);
@@ -226,6 +249,8 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
 
   const entities = useMemo(() => (viewed ? flattenEntities(viewed.entities) : []), [viewed]);
   const removed = useMemo(() => (viewed ? removedList(viewed.entities) : []), [viewed]);
+  // The viewed turn's effects: the 2D map's action marks and the 3D view's animations come from this one list.
+  const effects = useMemo(() => turnEffects(viewed), [viewed]);
   const occupants = useMemo(() => entitiesAtPoint(entities, selectedPoint), [entities, selectedPoint]);
   const agents = useMemo(() => entities.filter((e): e is Agent => e.kind === "agent"), [entities]);
   const others = useMemo(() => entities.filter((e) => e.kind !== "agent"), [entities]);
@@ -470,8 +495,11 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     );
   }
 
+  // The "Map view" switch sits at the end of the shown view's legend controls row (both views take it as legendExtra), so it adds no row to the board.
+  const viewSwitch = <MapViewSwitch value={mapViewMode} onChange={setMapViewMode} onPrefetch3d={prefetchMap3d} />;
   const allowed = controlAvailability(status, inFlight !== null || assistantBusy);
   const highlightAgentId = viewTurnId === null && status.active_turn_id ? status.acting_agent_id : viewed.turn.acting_agent_id;
+  const pendingAgentId = viewTurnId === null && status.active_turn_id ? status.acting_agent_id : null;
   const selectedTerrain = selectedPoint ? (viewed.map.cells[pointKey(selectedPoint)] ?? (inRegion(selectedPoint) ? "land" : null)) : null;
   const committedSeq = live.data && live.data.turn.turn_id === status.current_turn_id ? live.data.turn.event_seq_end : null;
   const stagedList = staged.data?.staged ?? [];
@@ -581,21 +609,50 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
             </button>
           </div>
         ) : null}
-        <MapView
-          map={viewed.map}
-          entities={entities}
-          removed={removed}
-          selectedPoint={selectedPoint}
-          selectedEntityId={selectedId}
-          onSelectPoint={selectPoint}
-          onSelectEntity={selectOccupant}
-          highlightAgentId={highlightAgentId}
-          rules={viewed.rules}
-          fill
-          persistKey="run"
-          agentView={agentView}
-          agentViewOverlay={agentViewOverlay}
-        />
+        {/* The 2D map stays mounted (hidden) while the 3D view is shown, so its zoom and pan survive the switch. */}
+        <div className="map-2d-host" hidden={mapViewMode === "3d"}>
+          <MapView
+            map={viewed.map}
+            entities={entities}
+            removed={removed}
+            selectedPoint={selectedPoint}
+            selectedEntityId={selectedId}
+            onSelectPoint={selectPoint}
+            onSelectEntity={selectOccupant}
+            highlightAgentId={highlightAgentId}
+            rules={viewed.rules}
+            fill
+            persistKey="run"
+            agentView={agentView}
+            agentViewOverlay={agentViewOverlay}
+            effects={effects}
+            turnId={viewed.turn.turn_id}
+            pendingAgentId={pendingAgentId}
+            legendExtra={viewSwitch}
+          />
+        </div>
+        {mapViewMode === "3d" ? (
+          <Map3dLoader
+            map={viewed.map}
+            entities={entities}
+            removed={removed}
+            selectedPoint={selectedPoint}
+            selectedEntityId={selectedId}
+            onSelectPoint={selectPoint}
+            onSelectEntity={selectOccupant}
+            highlightAgentId={highlightAgentId}
+            rules={viewed.rules}
+            persistKey="run"
+            agentView={agentView}
+            agentViewOverlay={agentViewOverlay}
+            effects={effects}
+            turnId={viewed.turn.turn_id}
+            live={viewTurnId === null}
+            paused={record !== null}
+            onBackTo2d={() => setMapViewMode("2d")}
+            legendExtra={viewSwitch}
+          />
+        ) : null}
         {record ? (
           <div className="record-overlay">
             <RecordViewer

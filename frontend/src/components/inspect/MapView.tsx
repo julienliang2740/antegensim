@@ -11,12 +11,22 @@
  *
  * Occupants: one dot per entity, colour-coded by kind (living agent blue, dead
  * agent or plant grey with an x, plant green, fruit orange, seed brown,
- * residue purple), laid out on a small grid inside the cell (mapDots.ts).
- * When a cell is too small for every dot, the dots that fit are drawn with a
- * "+N" count; zooming in reveals the rest.  The acting agent's dot has a
- * dashed ring, the selected entity's dot a thick ring.  Hovering a dot shows
- * the cell tooltip with that entity's row highlighted; clicking a dot selects
- * the entity (and its cell).  Below DOT_MIN_CELL_PX a cell shows one count.
+ * residue purple), laid out on a grid inside the cell (mapDots.ts).  Every
+ * dot at one zoom level has the same diameter; a crowded cell packs its dots
+ * tighter and shows the total in a count badge (clicking the badge pins the
+ * cell tooltip); a lone dot carries its id under it from 36 px cells.  Below
+ * DOT_MIN_CELL_PX (far mode) a cell is one kind-coloured square tile whose
+ * size grows with the count: circles are individuals, squares are groups.
+ *
+ * Action marks (state/mapIndicators.ts, from the `effects` prop = the viewed
+ * turn's turnEffects): a purple badge on the agent that acted with a glyph for
+ * its action (red when it failed), an arrow along its move, rings on the
+ * entities the turn touched, links across cells, the observed cell, a
+ * broadcast reach and the amounts moved.  The layer is keyed by `turnId`, so
+ * its short entrance animation plays once per turn change.  The status line
+ * shows the caption of the viewed turn when nothing is hovered.  The acting
+ * agent's dot has a dashed ring, which pulses while that agent is deciding
+ * (`pendingAgentId`); the selected entity's dot has a thick ring.
  *
  * The hover tooltip is rendered in a fixed layer on document.body (a portal),
  * beside the hovered cell and clamped to the browser window, so the map
@@ -24,7 +34,8 @@
  * requirement).  Agent view (`agentViewOverlay`): the map draws only what the
  * selected agent has observed, each entity at the position it was last seen,
  * and the agent itself at its believed position (spec "agent-view overlay
- * shows only permitted information").
+ * shows only permitted information"); marks are then the viewer's own badge and
+ * arrow only.
  *
  * `fill`: the map takes the height of its container (the run page's centre
  * column) instead of `heightPx`.  On first measurement a small region is
@@ -34,20 +45,20 @@
 import "../../inspect.css";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { KeyboardEvent, PointerEvent as ReactPointerEvent, Ref } from "react";
+import type { CSSProperties, KeyboardEvent, PointerEvent as ReactPointerEvent, Ref, ReactNode } from "react";
 import type { Point, RemovedEntity, Terrain } from "../../api/types";
 import { pointKey } from "../../api/types";
+import { captionFor, findActing, turnMarks } from "../../state/mapIndicators";
+import type { Glyph, Mark, TurnMarks } from "../../state/mapIndicators";
+import type { TurnEffect } from "../../state/turnEffects";
 import { KindTag, NumberInput } from "./common";
 import { fmtPoint } from "./format";
 import { entityMarkers, groupMarkersByPoint, groupRemovedByPoint, overlayMarkers } from "./logic";
 import type { MapMarker } from "./logic";
-import { DOT_LABEL_MIN_PX, DOT_MIN_CELL_PX, dotAt, dotKind, dotLabel, layoutCell } from "./mapDots";
-import type { CellDots, Dot, DotKind } from "./mapDots";
+import { DEFAULT_ZOOM_INDEX, DOT_MIN_CELL_PX, ZOOM_LEVELS, dotKind, dotLabel, dotSpec, hitCell, layoutCell, tileFor } from "./mapDots";
+import type { CellBadge, CellDots, Dot, DotKind, GroupTile } from "./mapDots";
 import type { MapViewProps } from "./props";
 
-/** Cell sizes in px for the zoom buttons (the last levels fit 16+ entities as large dots). */
-const ZOOM_LEVELS = [10, 14, 18, 24, 30, 36, 44, 56, 72, 96, 128, 160, 200, 260, 340];
-const DEFAULT_ZOOM_INDEX = 6; // 44 px
 /** Space for the axis labels. */
 const AXIS_LEFT = 38;
 const AXIS_TOP = 20;
@@ -66,11 +77,14 @@ const TOOLTIP_SWITCH_MS = 220;
 /** Tooltip: distance from the hovered cell and from the window edges. */
 const TOOLTIP_GAP = 6;
 const TOOLTIP_MARGIN = 8;
+const EMPTY_EFFECTS: readonly TurnEffect[] = [];
 
 interface Hover {
   key: string;
   /** The dot under the pointer, if any. */
   entityId: string | null;
+  /** The pointer is on the cell's count badge. */
+  badge: boolean;
 }
 
 export function MapView(props: MapViewProps) {
@@ -79,6 +93,9 @@ export function MapView(props: MapViewProps) {
   const fill = props.fill ?? false;
   const uid = useId().replace(/[^A-Za-z0-9_-]/g, "");
   const overlay = props.agentViewOverlay ?? null;
+  const effects = props.effects ?? EMPTY_EFFECTS;
+  const turnId = props.turnId ?? null;
+  const pendingAgentId = props.pendingAgentId ?? null;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ width: DEFAULT_WIDTH, height: props.heightPx ?? DEFAULT_HEIGHT, measured: false });
@@ -102,6 +119,12 @@ export function MapView(props: MapViewProps) {
   // Entity kinds hidden on the map by the legend toggles (occupant lists and the tooltip stay complete).
   const [hiddenKinds, setHiddenKinds] = useState<ReadonlySet<DotKind>>(() => loadHiddenKinds(props.persistKey));
   useEffect(() => saveHiddenKinds(props.persistKey, hiddenKinds), [props.persistKey, hiddenKinds]);
+  // The "Action marks" legend chip (default on).
+  const [showMarks, setShowMarks] = useState<boolean>(() => loadShowMarks(props.persistKey));
+  useEffect(() => saveShowMarks(props.persistKey, showMarks), [props.persistKey, showMarks]);
+  // The legend's "Key" (what dots, badges, rings and colours mean): collapsed by default, so the map keeps its height.
+  const [keyOpen, setKeyOpen] = useState<boolean>(() => loadKeyOpen(props.persistKey));
+  useEffect(() => saveKeyOpen(props.persistKey, keyOpen), [props.persistKey, keyOpen]);
   /** True while the view is "fit map": a resize of the map column fits the region again. */
   const [fitted, setFitted] = useState(false);
   function cancelTipTimer() {
@@ -230,6 +253,7 @@ export function MapView(props: MapViewProps) {
   const viewMaxX = Math.ceil(center.x + halfCols + 0.5);
   const viewMinY = Math.floor(center.y - halfRows - 0.5);
   const viewMaxY = Math.ceil(center.y + halfRows + 0.5);
+  const inView = (p: Point) => p.x >= viewMinX && p.x <= viewMaxX && p.y >= viewMinY && p.y <= viewMaxY;
   const isFullyVisible = (p: Point) =>
     cellLeft(p.x) >= AXIS_LEFT && cellLeft(p.x) + cellPx <= AXIS_LEFT + plotW && cellTop(p.y) >= AXIS_TOP && cellTop(p.y) + cellPx <= AXIS_TOP + plotH;
 
@@ -243,17 +267,19 @@ export function MapView(props: MapViewProps) {
       setFitted(false);
     }
   }
-  // A new selection (on the map, in a list, by "Find") closes the tooltip.
+  // A new selection (on the map, in a list, by "Find") closes the tooltip, unless a count-badge click
+  // just pinned it on the cell that is now selected (tip.badge: opened from the badge).
   const selectionKey = `${selectedKey ?? ""}|${selectedEntityId ?? ""}`;
   const [prevSelectionKey, setPrevSelectionKey] = useState(selectionKey);
   if (selectionKey !== prevSelectionKey) {
     setPrevSelectionKey(selectionKey);
-    if (tip !== null) setTip(null);
+    if (tip !== null && !(tip.badge && tip.key === selectedKey)) setTip(null);
   }
 
   // Omniscient: every entity.  Agent view: the agent's sightings and itself (nothing else).
   const markers = useMemo(() => (overlay ? overlayMarkers(overlay) : entityMarkers(entities, props.rules)), [overlay, entities, props.rules]);
   const byPoint = useMemo(() => groupMarkersByPoint(markers), [markers]);
+  const markerById = useMemo(() => new Map(markers.map((m) => [m.id, m] as const)), [markers]);
   // What the map draws: the legend toggles hide whole kinds (dots and counts only).
   const drawnByPoint = useMemo(
     () => (hiddenKinds.size === 0 ? byPoint : groupMarkersByPoint(markers.filter((m) => !hiddenKinds.has(dotKind(m))))),
@@ -266,14 +292,39 @@ export function MapView(props: MapViewProps) {
     () => (highlightId ? (markers.find((m) => m.kind === "agent" && m.id === highlightId) ?? null) : null),
     [markers, highlightId],
   );
+  const pendingMarker = useMemo(
+    () => (pendingAgentId ? (markers.find((m) => m.kind === "agent" && m.id === pendingAgentId) ?? null) : null),
+    [markers, pendingAgentId],
+  );
+
+  // The viewed turn's action marks (mapIndicators.ts): a pure function of the effects and the turn id.
+  const actingEffect = useMemo(() => findActing(effects), [effects]);
+  const communicationRange = useMemo(() => {
+    if (overlay || !actingEffect) return null;
+    const agent = entities.find((e) => e.kind === "agent" && e.id === actingEffect.actor);
+    return agent && agent.kind === "agent" ? agent.stats.communication_range : null;
+  }, [overlay, actingEffect, entities]);
+  const marks = useMemo(
+    () =>
+      turnMarks(effects, turnId ?? "", {
+        agentViewOf: overlay ? overlay.agentId : null,
+        agentViewAt: overlay ? overlay.believedPosition : null,
+        communicationRange,
+        positionOf: (id) => markerById.get(id)?.position ?? null,
+      }),
+    [effects, turnId, overlay, communicationRange, markerById],
+  );
+  const nameOf = (id: string) => markerById.get(id)?.title ?? id;
+  const caption = turnId ? captionFor(effects, turnId, nameOf, pendingAgentId) + (marks.dropped > 0 ? ` · +${marks.dropped} marks not drawn` : "") : null;
 
   const inRegion = (p: Point) => p.x >= region.min_x && p.x <= region.max_x && p.y >= region.min_y && p.y <= region.max_y;
   const terrainOf = (p: Point): Terrain | null => (inRegion(p) ? (map.cells[pointKey(p)] ?? "land") : null);
-  const priority = [highlightId, selectedEntityId];
-  const layoutOf = (key: string): CellDots | null => {
-    const list = drawnByPoint.get(key);
-    return list && list.length > 0 ? layoutCell(list, cellPx, priority) : null;
-  };
+  /** Entities that keep a dot when a cell overflows: acting, pending, selected, then everything a mark names. */
+  const priority = [highlightId, pendingAgentId, selectedEntityId, ...marks.markedIds];
+  // Layouts and far-mode tiles are computed once per render (in the cell loop below); the pointer
+  // handlers of this render and the marks layer read the same maps, so nothing is laid out twice.
+  const layouts = new Map<string, CellDots | null>();
+  const tiles = new Map<string, GroupTile | null>();
 
   // ---------------------------------------------------------------- actions
   const zoomTo = (index: number) => {
@@ -314,18 +365,18 @@ export function MapView(props: MapViewProps) {
     const rect = e.currentTarget.getBoundingClientRect();
     return { px: e.clientX - rect.left, py: e.clientY - rect.top };
   };
-  /** The cell and the dot under a pointer position (null outside the plot or the region). */
-  const hitTest = (px: number, py: number): { point: Point; key: string; dot: Dot | null } | null => {
+  /** The cell and the dot or count badge under a pointer position (null outside the plot or the region). */
+  const hitTest = (px: number, py: number): { point: Point; key: string; dot: Dot | null; badge: CellBadge | null } | null => {
     if (px < AXIS_LEFT || py < AXIS_TOP) return null;
     const point = cellAt(px, py);
     if (!inRegion(point)) return null;
     const key = pointKey(point);
-    const dot = dotAt(layoutOf(key), px - cellLeft(point.x), py - cellTop(point.y));
-    return { point, key, dot };
+    const hit = hitCell(layouts.get(key) ?? null, px - cellLeft(point.x), py - cellTop(point.y));
+    return { point, key, dot: hit?.kind === "dot" ? hit.dot : null, badge: hit?.kind === "badge" ? hit.badge : null };
   };
   const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>) => {
     if (e.button !== 0) return;
-    drag.current = { x: e.clientX, y: e.clientY, center, moved: false, pointerId: e.pointerId };
+    drag.current ={ x: e.clientX, y: e.clientY, center, moved: false, pointerId: e.pointerId };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
   const onPointerMove = (e: ReactPointerEvent<SVGSVGElement>) => {
@@ -343,8 +394,8 @@ export function MapView(props: MapViewProps) {
     }
     const { px, py } = localXY(e);
     const hit = hitTest(px, py);
-    const next: Hover | null = hit ? { key: hit.key, entityId: hit.dot?.marker.id ?? null } : null;
-    if (next?.key !== hover?.key || next?.entityId !== hover?.entityId) setHover(next);
+    const next: Hover | null = hit ? { key: hit.key, entityId: hit.dot?.marker.id ?? null, badge: hit.badge !== null } : null;
+    if (next?.key !== hover?.key || next?.entityId !== hover?.entityId || next?.badge !== hover?.badge) setHover(next);
     followTip(next);
   };
   /** Move the tooltip to the hovered cell: at once from nothing or within the same cell, after a short delay to another cell. */
@@ -377,11 +428,18 @@ export function MapView(props: MapViewProps) {
     if (!d || d.moved) return;
     const { px, py } = localXY(e);
     const hit = hitTest(px, py);
-    if (hit) {
-      closeTip();
-      suppressKey.current = hit.key;
-      selectCell(hit.point, hit.dot?.marker.id ?? null);
+    if (!hit) return;
+    if (hit.badge) {
+      // The count badge: select the cell and pin its tooltip, so every occupant is one click away.
+      cancelTipTimer();
+      suppressKey.current = null;
+      setTip({ key: hit.key, entityId: null, badge: true });
+      if (inRegion(hit.point)) onSelectPoint(hit.point);
+      return;
     }
+    closeTip();
+    suppressKey.current = hit.key;
+    selectCell(hit.point, hit.dot?.marker.id ?? null);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const step = e.shiftKey ? 5 : 1;
@@ -412,9 +470,14 @@ export function MapView(props: MapViewProps) {
   const regionW = (region.max_x - region.min_x + 1) * cellPx;
   const regionH = (region.max_y - region.min_y + 1) * cellPx;
 
+  // With dots the acting agent carries its own ring; the dashed cell outline is kept for far-mode cells.
+  const dotsShown = cellPx >= DOT_MIN_CELL_PX;
+  const farMode = !dotsShown;
   const terrainCells = [];
   const occupantCells = [];
-  let hiddenAnywhere = false;
+  let packedCells = 0;
+  /** Packed cells whose dots do not all fit even packed (the badge shows the total). */
+  let overCells = 0;
   for (const y of ys) {
     for (const x of xs) {
       const key = `${x},${y}`;
@@ -431,30 +494,36 @@ export function MapView(props: MapViewProps) {
       }
       const occupants = drawnByPoint.get(key);
       if (occupants && occupants.length > 0) {
-        const layout = layoutCell(occupants, cellPx, priority);
-        if (layout) {
-          if (layout.hidden > 0) hiddenAnywhere = true;
-          occupantCells.push(
-            <CellDotsView
-              key={`d-${key}`}
-              left={left}
-              top={top}
-              layout={layout}
-              actingId={highlightId}
-              selectedId={selectedEntityId}
-              hoverId={hover?.key === key ? hover.entityId : null}
-            />,
-          );
+        if (dotsShown) {
+          const layout = layoutCell(occupants, cellPx, priority);
+          layouts.set(key, layout);
+          if (layout) {
+            if (layout.mode !== "roomy") packedCells += 1;
+            if (layout.mode === "over") overCells += 1;
+            occupantCells.push(
+              <CellDotsView
+                key={`d-${key}`}
+                left={left}
+                top={top}
+                layout={layout}
+                actingId={highlightId}
+                pendingId={pendingAgentId}
+                selectedId={selectedEntityId}
+                hoverId={hover?.key === key ? hover.entityId : null}
+              />,
+            );
+          }
         } else {
-          hiddenAnywhere = hiddenAnywhere || occupants.length > 1;
-          occupantCells.push(<AggregateMarker key={`d-${key}`} left={left} top={top} cellPx={cellPx} occupants={occupants} />);
+          const tile = tileFor(occupants, cellPx);
+          tiles.set(key, tile);
+          if (tile) occupantCells.push(<GroupTileView key={`d-${key}`} left={left} top={top} cellPx={cellPx} tile={tile} />);
         }
       }
       if (showRemoved) {
         const removedHere = removedByPoint.get(key);
         if (removedHere && removedHere.length > 0 && cellPx >= 30) {
           occupantCells.push(
-            <text key={`r-${key}`} x={left + cellPx - 3} y={top + 11} className="insp-map-removed" textAnchor="end">
+            <text key={`r-${key}`} x={left + 3} y={top + cellPx - 3} className="insp-map-removed" textAnchor="start">
               ∅{removedHere.length}
             </text>,
           );
@@ -491,10 +560,21 @@ export function MapView(props: MapViewProps) {
     cellTop(tipPoint.y) + cellPx > AXIS_TOP &&
     cellTop(tipPoint.y) < AXIS_TOP + plotH;
   const hiddenKindNames = DOT_KINDS.filter((k) => hiddenKinds.has(k.kind)).map((k) => k.label);
-  // With dots the acting agent carries its own ring; the dashed cell outline is kept for zoomed-out cells.
-  const dotsShown = cellPx >= DOT_MIN_CELL_PX;
   const zoomOutLimit = zoomIndex <= 0;
   const zoomInLimit = zoomIndex >= ZOOM_LEVELS.length - 1;
+  const highlightPending = highlightMarker !== null && pendingMarker !== null && highlightMarker.id === pendingMarker.id;
+  const badgeMark = marks.marks.find((m): m is Extract<Mark, { type: "badge" }> => m.type === "badge") ?? null;
+  const cellsWord = (n: number) => `${n} ${n === 1 ? "cell" : "cells"}`;
+  // Zooming in spreads packed dots, except at the last zoom level: there the count badge is the way to
+  // everyone.  The status line is one short line; the hint's title says it in full.
+  const packedHint: { text: string; title: string } | null =
+    packedCells === 0
+      ? null
+      : !zoomInLimit
+        ? { text: `${cellsWord(packedCells)} packed: zoom in to spread the dots`, title: "Zoom in (+) to spread the dots of the packed cells; the count badge shows each cell's total" }
+        : overCells > 0
+          ? { text: `${cellsWord(overCells)} over capacity: click the count`, title: "At the largest zoom some cells hold more than fit: the count badge shows the total, click it to list every occupant" }
+          : { text: `${cellsWord(packedCells)} packed: click the count`, title: "The count badge shows the cell's total; click it to list every occupant" };
 
   return (
     <div className={`insp insp-mapview${fill ? " insp-mapview-fill" : ""}`}>
@@ -520,7 +600,7 @@ export function MapView(props: MapViewProps) {
           <span className="insp-zoom-level" title="Cell size at this zoom">
             {cellPx} px
           </span>
-          <button type="button" className="insp-btn insp-btn-icon" onClick={() => zoomTo(zoomIndex + 1)} disabled={zoomInLimit} aria-label="Zoom in" title="Zoom in (+): crowded cells show every dot">
+          <button type="button" className="insp-btn insp-btn-icon" onClick={() => zoomTo(zoomIndex + 1)} disabled={zoomInLimit} aria-label="Zoom in" title="Zoom in (+): crowded cells spread their dots">
             +
           </button>
           <button type="button" className="insp-btn" onClick={fitRegion} title="Show the whole region">
@@ -583,7 +663,7 @@ export function MapView(props: MapViewProps) {
           ref={svgRef}
           width={width}
           height={height}
-          className={`insp-map-svg${hover?.entityId ? " insp-map-svg-dot" : ""}`}
+          className={`insp-map-svg${hover?.entityId || hover?.badge ? " insp-map-svg-dot" : ""}`}
           role="img"
           aria-label={`Map of region x ${region.min_x}..${region.max_x}, y ${region.min_y}..${region.max_y}`}
           onPointerDown={onPointerDown}
@@ -606,6 +686,9 @@ export function MapView(props: MapViewProps) {
             <pattern id={`${uid}-water`} patternUnits="userSpaceOnUse" width={12} height={8}>
               <path d="M0,5 q3,-3 6,0 t6,0" className="insp-pat-water" fill="none" />
             </pattern>
+            <marker id={`${uid}-arrowhead`} markerWidth={4} markerHeight={4} refX={3.5} refY={2} orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L4,2 L0,4 z" className="insp-mark-arrowhead" />
+            </marker>
           </defs>
           <rect x={AXIS_LEFT} y={AXIS_TOP} width={plotW} height={plotH} className="insp-map-outside" />
           <g clipPath={`url(#${uid}-plot)`}>
@@ -618,12 +701,30 @@ export function MapView(props: MapViewProps) {
               <line x1={regionLeft} x2={regionLeft + regionW} y1={cellTop(0) + cellPx / 2} y2={cellTop(0) + cellPx / 2} className="insp-map-originline" />
             ) : null}
             {/* Outlines first so the dots stay fully readable on top of them. */}
-            {dotsShown ? null : outline(highlightMarker ? highlightMarker.position : null, "insp-map-highlight", 1.5, "hl")}
+            {dotsShown ? null : outline(highlightMarker ? highlightMarker.position : null, `insp-map-highlight${highlightPending ? " insp-ring-pending" : ""}`, 1.5, "hl")}
+            {dotsShown || highlightPending ? null : outline(pendingMarker ? pendingMarker.position : null, "insp-map-highlight insp-ring-pending", 1.5, "pd")}
             {dotsShown ? null : outline(selectedMarkerPoint, "insp-map-entity-sel", 2.5, "es")}
             {outline(hoverPoint, "insp-map-hover", 0.75, "hv")}
             {outline(selectedPoint, "insp-map-sel-outer", 1.5, "so")}
             {outline(selectedPoint, "insp-map-sel-inner", 3.5, "si")}
             {occupantCells}
+            {showMarks && turnId ? (
+              <g key={turnId} className="insp-marks" data-turn-id={turnId} data-kind={marks.kind} data-action={badgeMark?.glyph ?? ""} pointerEvents="none">
+                <MarksLayer
+                  marks={marks}
+                  cellPx={cellPx}
+                  farMode={farMode}
+                  uid={uid}
+                  cellLeft={cellLeft}
+                  cellTop={cellTop}
+                  layouts={layouts}
+                  tiles={tiles}
+                  inView={inView}
+                  plotW={plotW}
+                  plotH={plotH}
+                />
+              </g>
+            ) : null}
           </g>
           <rect x={0} y={0} width={width} height={AXIS_TOP} className="insp-map-axisband" />
           <rect x={0} y={0} width={AXIS_LEFT} height={height} className="insp-map-axisband" />
@@ -671,9 +772,14 @@ export function MapView(props: MapViewProps) {
       </div>
 
       {/* Two fixed-height single lines (long text is cut with an ellipsis): hovering changes their
-          text, never their height, so the map above never moves under the pointer. */}
+          text, never their height, so the map above never moves under the pointer.  The first line
+          shows the viewed turn's caption (the text twin of the action marks) when nothing is hovered. */}
       <div className="insp-map-status">
-        <div className="insp-map-status-line insp-map-status-hover" title="Hover a dot or cell for quick stats; click a dot to select that entity, a cell to list everything there.">
+        <div
+          className="insp-map-status-line insp-map-status-hover"
+          data-turn-id={turnId ?? undefined}
+          title="Hover a dot or cell for quick stats; click a dot to select that entity, a cell to list everything there, a count badge to list a packed cell."
+        >
           {hoverPoint ? (
             hoverMarker ? (
               <>
@@ -682,8 +788,11 @@ export function MapView(props: MapViewProps) {
             ) : (
               <>
                 Cell {fmtPoint(hoverPoint)} {terrainOf(hoverPoint)} · {hoverOccupants.length} {overlay ? "known here" : "occupants"}
+                {hover?.badge ? " · click the count to list every occupant" : ""}
               </>
             )
+          ) : caption !== null ? (
+            <>{caption}</>
           ) : (
             <>Hover a dot or cell for quick stats; click a dot to select it, a cell to list everything there.</>
           )}
@@ -693,7 +802,11 @@ export function MapView(props: MapViewProps) {
             Selected: {selectedPoint ? `${fmtPoint(selectedPoint)} ${terrainOf(selectedPoint) ?? "outside region"}` : "none"}
             {selectedMarker ? ` · ${selectedMarker.title}` : ""}
           </span>
-          {hiddenAnywhere ? <span className="insp-map-status-item insp-map-zoomhint">Some cells show “+N”: zoom in to see every dot.</span> : null}
+          {packedHint ? (
+            <span className="insp-map-status-item insp-map-zoomhint" title={packedHint.title}>
+              {packedHint.text}
+            </span>
+          ) : null}
           {hiddenKindNames.length > 0 ? <span className="insp-map-status-item insp-map-kindhint">Not drawn: {hiddenKindNames.join(", ")}</span> : null}
           {overlay ? null : (
             <label className="insp-small insp-map-status-item">
@@ -714,6 +827,11 @@ export function MapView(props: MapViewProps) {
         }
         onShowAll={() => setHiddenKinds(new Set())}
         onHideAll={() => setHiddenKinds(new Set(DOT_KINDS.map((k) => k.kind)))}
+        showMarks={showMarks}
+        onToggleMarks={() => setShowMarks((on) => !on)}
+        keyOpen={keyOpen}
+        onToggleKey={() => setKeyOpen((open) => !open)}
+        extra={props.legendExtra}
       />
     </div>
   );
@@ -723,44 +841,42 @@ export function MapView(props: MapViewProps) {
 // Dots
 // ---------------------------------------------------------------------------
 
-function CellDotsView(props: { left: number; top: number; layout: CellDots; actingId: string | null; selectedId: string | null; hoverId: string | null }) {
+function CellDotsView(props: { left: number; top: number; layout: CellDots; actingId: string | null; pendingId: string | null; selectedId: string | null; hoverId: string | null }) {
   const { left, top, layout } = props;
   return (
     <g pointerEvents="none" transform={`translate(${left} ${top})`}>
       {layout.dots.map((d) => (
-        <EntityDot key={d.marker.id} dot={d} acting={d.marker.id === props.actingId} selected={d.marker.id === props.selectedId} hovered={d.marker.id === props.hoverId} />
+        <EntityDot
+          key={d.marker.id}
+          dot={d}
+          acting={d.marker.id === props.actingId}
+          pending={d.marker.id === props.pendingId}
+          selected={d.marker.id === props.selectedId}
+          hovered={d.marker.id === props.hoverId}
+          label={layout.labels === "below" ? dotLabel(d.marker) : null}
+          labelY={layout.labelY}
+          labelFontSize={layout.labelFontSize}
+        />
       ))}
-      {layout.more ? (
-        <text x={layout.more.x} y={layout.more.y} textAnchor="middle" className="insp-dot-more" style={{ fontSize: layout.more.fontSize }}>
-          +{layout.hidden}
-        </text>
-      ) : null}
+      {layout.badge ? <CountBadge badge={layout.badge} /> : null}
     </g>
   );
 }
 
-function EntityDot(props: { dot: Dot; acting: boolean; selected: boolean; hovered: boolean }) {
-  const { dot, acting, selected, hovered } = props;
+function EntityDot(props: { dot: Dot; acting: boolean; pending: boolean; selected: boolean; hovered: boolean; label: string | null; labelY: number; labelFontSize: number }) {
+  const { dot, acting, pending, selected, hovered, label } = props;
   const { cx, cy, r } = dot;
-  const diameter = r * 2;
   const cross = r * 0.5;
-  const label = diameter >= DOT_LABEL_MIN_PX ? dotLabel(dot.marker) : null;
-  const fontSize = Math.min(13, Math.max(8, diameter * (label && label.length > 3 ? 0.3 : 0.36)));
   return (
     <g>
       {selected ? <circle cx={cx} cy={cy} r={r + Math.max(3, r * 0.28)} className="insp-dot-ring-selected" /> : null}
-      {acting ? <circle cx={cx} cy={cy} r={r + Math.max(2, r * 0.16)} className="insp-dot-ring-acting" /> : null}
+      {acting || pending ? <circle cx={cx} cy={cy} r={r + Math.max(2, r * 0.16)} className={`insp-dot-ring-acting${pending ? " insp-ring-pending" : ""}`} /> : null}
       <circle cx={cx} cy={cy} r={r} className={`insp-dot insp-dot-${dot.kind}${hovered ? " insp-dot-hover" : ""}`} />
       {dot.kind === "dead" ? (
         <path d={`M${cx - cross},${cy - cross} L${cx + cross},${cy + cross} M${cx + cross},${cy - cross} L${cx - cross},${cy + cross}`} className="insp-dot-cross" />
       ) : null}
-      {label && dot.kind !== "dead" ? (
-        <text x={cx} y={cy + fontSize * 0.36} textAnchor="middle" className="insp-dot-label" style={{ fontSize }}>
-          {label}
-        </text>
-      ) : null}
-      {label && dot.kind === "dead" ? (
-        <text x={cx} y={cy + r + fontSize + 1} textAnchor="middle" className="insp-dot-label-below" style={{ fontSize: Math.min(11, fontSize) }}>
+      {label ? (
+        <text x={cx} y={props.labelY} textAnchor="middle" className="insp-dot-label-below" style={{ fontSize: props.labelFontSize }}>
           {label}
         </text>
       ) : null}
@@ -768,23 +884,270 @@ function EntityDot(props: { dot: Dot; acting: boolean; selected: boolean; hovere
   );
 }
 
-/** Zoomed far out: one circle with the occupant count (blue when a living agent is there). */
-function AggregateMarker(props: { left: number; top: number; cellPx: number; occupants: MapMarker[] }) {
-  const { left, top, cellPx, occupants } = props;
-  const r = Math.max(3.5, cellPx * 0.36);
-  const hasAgent = occupants.some((m) => m.kind === "agent" && !m.dead);
-  const single = occupants.length === 1 ? occupants[0] : null;
-  const cls = single ? `insp-dot insp-dot-${single.dead ? "dead" : single.kind}` : hasAgent ? "insp-dot insp-dot-agent" : "insp-dot insp-dot-mixed";
+/** The total-occupant count of a packed cell: a pill in the top-right corner, or bare digits in that corner in small cells (no dot sits under either). */
+function CountBadge(props: { badge: CellBadge }) {
+  const b = props.badge;
+  if (b.style === "pill") {
+    return (
+      <g className="insp-dot-badge" data-count={b.count}>
+        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={b.h / 2} className="insp-dot-badge-bg" />
+        <text x={b.x + b.w / 2} y={b.y + b.h / 2 + 0.36 * b.fontSize} textAnchor="middle" className="insp-dot-badge-text" style={{ fontSize: b.fontSize }}>
+          {b.text}
+        </text>
+      </g>
+    );
+  }
+  return (
+    <g className="insp-dot-badge" data-count={b.count}>
+      <text x={b.x + b.w - 1.25} y={b.y + b.h / 2 + 0.36 * b.fontSize} textAnchor="end" className="insp-dot-badge-text is-bare" style={{ fontSize: b.fontSize }}>
+        {b.text}
+      </text>
+    </g>
+  );
+}
+
+/** Far mode: one kind-coloured square per occupied cell, bigger with the count, digits from 14 px, a kind bar when mixed. */
+function GroupTileView(props: { left: number; top: number; cellPx: number; tile: GroupTile }) {
+  const { left, top, cellPx, tile } = props;
+  const cx = left + cellPx / 2;
+  const cy = top + cellPx / 2;
+  const half = tile.side / 2;
+  const segments: { kind: DotKind; x: number; w: number }[] = [];
+  if (tile.showBar) {
+    const total = tile.shares.reduce((sum, s) => sum + s.count, 0);
+    const barW = tile.side - 2;
+    let x = cx - half + 1;
+    tile.shares.forEach((s, i) => {
+      const last = i === tile.shares.length - 1;
+      const w = last ? Math.max(1, cx + half - 1 - x) : Math.max(1, (barW * s.count) / total);
+      segments.push({ kind: s.kind, x, w });
+      x += w;
+    });
+  }
   return (
     <g pointerEvents="none">
-      <circle cx={left + cellPx / 2} cy={top + cellPx / 2} r={r} className={cls} />
-      {occupants.length > 1 && cellPx >= 14 ? (
-        <text x={left + cellPx / 2} y={top + cellPx / 2 + r * 0.4} textAnchor="middle" className="insp-dot-label" style={{ fontSize: r * 1.15 }}>
-          {occupants.length}
+      <rect x={cx - half} y={cy - half} width={tile.side} height={tile.side} rx={1.5} className={`insp-tile insp-tile-${tile.kind}`} data-count={tile.count} />
+      {segments.map((s) => (
+        <rect key={s.kind} x={s.x} y={cy + half - 3} width={s.w} height={2} className={`insp-kbar insp-kbar-${s.kind}`} />
+      ))}
+      {tile.showCount ? (
+        <text x={cx} y={cy + 0.36 * tile.fontSize} textAnchor="middle" className="insp-tile-count" style={{ fontSize: tile.fontSize }}>
+          {tile.text}
         </text>
       ) : null}
     </g>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Action marks of the viewed turn (mapIndicators.ts decides what; this draws where)
+// ---------------------------------------------------------------------------
+
+interface Anchor {
+  x: number;
+  y: number;
+  r: number;
+}
+
+const GLYPH_LETTERS: Record<Glyph, string> = {
+  move: "",
+  attack: "",
+  message: "M",
+  absorb: "E",
+  transfer: "T",
+  recover: "R",
+  upgrade: "U",
+  wait: "W",
+  observe: "O",
+  query: "Q",
+  skill: "S",
+  none: "·",
+};
+
+const DIRECTION_ANGLE: Record<string, number> = { up: 0, right: 90, down: 180, left: 270 };
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+function MarksLayer(props: {
+  marks: TurnMarks;
+  cellPx: number;
+  farMode: boolean;
+  uid: string;
+  cellLeft(x: number): number;
+  cellTop(y: number): number;
+  layouts: ReadonlyMap<string, CellDots | null>;
+  tiles: ReadonlyMap<string, GroupTile | null>;
+  inView(p: Point): boolean;
+  plotW: number;
+  plotH: number;
+}) {
+  const { cellPx: C, farMode, cellLeft, cellTop, layouts, tiles, inView } = props;
+  const D = farMode ? Math.max(4, C * 0.6) : dotSpec(C).d;
+  const centre = (p: Point) => ({ x: cellLeft(p.x) + C / 2, y: cellTop(p.y) + C / 2 });
+  /** Where a mark for entity `id` at cell `point` sits: its dot's centre, else the cell centre (hidden kinds, far mode, unknown ids). */
+  const anchorOf = (id: string | null, point: Point): Anchor => {
+    const key = pointKey(point);
+    const dot = id ? layouts.get(key)?.dots.find((d) => d.marker.id === id) : undefined;
+    if (dot) return { x: cellLeft(point.x) + dot.cx, y: cellTop(point.y) + dot.cy, r: dot.r };
+    const c = centre(point);
+    return { x: c.x, y: c.y, r: farMode ? (tiles.get(key)?.side ?? C - 2) / 2 : D / 2 };
+  };
+  const badgeMark = props.marks.marks.find((m) => m.type === "badge");
+  /** The acting agent's dot: amounts on other entities are printed on the side away from it, clear of its badge. */
+  const actorAnchor = badgeMark ? anchorOf(badgeMark.id, badgeMark.at) : null;
+  const out = [];
+  let i = 0;
+  for (const m of props.marks.marks) {
+    i += 1;
+    const points = m.type === "arrow" || m.type === "link" ? [m.from, m.to] : [m.at];
+    if (!points.some(inView)) continue;
+    switch (m.type) {
+      case "badge": {
+        const cls = `insp-mark-badge${m.ok ? "" : " is-failed"}${m.glyph === "none" ? " is-none" : ""}`;
+        if (farMode) {
+          out.push(
+            <g key={i} className={`${cls} is-mini`} data-actor={m.id} data-action={m.glyph} data-ok={m.ok}>
+              <rect x={cellLeft(m.at.x) + C - 8} y={cellTop(m.at.y)} width={8} height={8} rx={1.5} />
+            </g>,
+          );
+          break;
+        }
+        const a = anchorOf(m.id, m.at);
+        const b = clamp(Math.round(1.25 * D), 11, 20);
+        const cx = a.x + 0.5 * D;
+        const cy = a.y - 0.5 * D;
+        const s = 0.75 * b;
+        const fs = 0.72 * b;
+        out.push(
+          <g key={i} className={cls} data-actor={m.id} data-action={m.glyph} data-ok={m.ok}>
+            <rect x={cx - b / 2} y={cy - b / 2} width={b} height={b} rx={2.5} />
+            {m.glyph === "move" ? (
+              <g transform={`translate(${cx - s / 2} ${cy - s / 2}) scale(${s / 10})`}>
+                <path d="M5,8.5 V1.5 M2,4.5 L5,1.5 L8,4.5" transform={`rotate(${DIRECTION_ANGLE[m.direction ?? "up"]} 5 5)`} strokeWidth={1.6} />
+              </g>
+            ) : m.glyph === "attack" ? (
+              <g transform={`translate(${cx - s / 2} ${cy - s / 2}) scale(${s / 10})`}>
+                <path d="M2,2 L8,8 M8,2 L2,8" strokeWidth={1.8} />
+              </g>
+            ) : (
+              <text x={cx} y={cy + 0.36 * fs} textAnchor="middle" style={{ fontSize: fs }}>
+                {GLYPH_LETTERS[m.glyph]}
+              </text>
+            )}
+          </g>,
+        );
+        break;
+      }
+      case "arrow": {
+        const strokeWidth = farMode ? 1.5 : clamp(0.06 * C, 2, 4);
+        if (m.ok) {
+          const A = centre(m.from);
+          const anchor = anchorOf(m.id, m.to);
+          const dx = anchor.x - A.x;
+          const dy = anchor.y - A.y;
+          const len = Math.hypot(dx, dy);
+          if (len === 0) break;
+          const ux = dx / len;
+          const uy = dy / len;
+          // Far mode (cells below 24 px, no origin circle): from the origin cell's centre to 1 px before the
+          // tile, so the line spans about C − r − 1 px instead of the few px the dot-mode offsets leave.
+          const start = farMode ? 0 : 0.25 * C;
+          const back = farMode ? anchor.r + 1 : anchor.r + 3;
+          const x1 = A.x + start * ux;
+          const y1 = A.y + start * uy;
+          const x2 = anchor.x - back * ux;
+          const y2 = anchor.y - back * uy;
+          const ghostStyle = { "--dx": `${A.x - anchor.x}px`, "--dy": `${A.y - anchor.y}px` } as unknown as CSSProperties;
+          out.push(
+            <g key={i} data-actor={m.id}>
+              {farMode ? null : <circle className="insp-mark-origin" cx={A.x} cy={A.y} r={D / 2} />}
+              <line className="insp-mark-arrow" x1={x1} y1={y1} x2={x2} y2={y2} pathLength={1} strokeWidth={strokeWidth} markerEnd={`url(#${props.uid}-arrowhead)`} />
+              {farMode ? null : <circle className="insp-mark-ghost" cx={anchor.x} cy={anchor.y} r={D / 2} style={ghostStyle} />}
+            </g>,
+          );
+        } else {
+          // Blocked: a short bar-ended stroke from the agent toward the cell it could not enter.
+          const anchor = anchorOf(m.id, m.from);
+          const B = centre(m.to);
+          const dx = B.x - anchor.x;
+          const dy = B.y - anchor.y;
+          const len = Math.hypot(dx, dy);
+          if (len === 0) break;
+          const ux = dx / len;
+          const uy = dy / len;
+          const x1 = anchor.x + (anchor.r + 2) * ux;
+          const y1 = anchor.y + (anchor.r + 2) * uy;
+          const x2 = x1 + 0.35 * C * ux;
+          const y2 = y1 + 0.35 * C * uy;
+          const px = -uy * 0.15 * C;
+          const py = ux * 0.15 * C;
+          out.push(
+            <g key={i} data-actor={m.id}>
+              <line className="insp-mark-arrow is-failed" x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={strokeWidth} />
+              <line className="insp-mark-arrow is-failed" x1={x2 - px} y1={y2 - py} x2={x2 + px} y2={y2 + py} strokeWidth={strokeWidth} />
+            </g>,
+          );
+        }
+        break;
+      }
+      case "ring": {
+        const a = anchorOf(m.id || null, m.at);
+        out.push(<circle key={i} className={`insp-mark-ring insp-tone-${m.tone}`} data-entity={m.id} data-tone={m.tone} cx={a.x} cy={a.y} r={a.r + Math.max(2.5, 0.3 * a.r)} />);
+        break;
+      }
+      case "link": {
+        const a = anchorOf(m.fromId, m.from);
+        const b = anchorOf(m.toId, m.to);
+        // A link to a cell (observe) stops at the cell's edge, not at its centre.
+        const bR = m.toId === null && !farMode ? C / 2 - 4 : b.r + 2;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const len = Math.hypot(dx, dy);
+        if (len === 0) break;
+        const ux = dx / len;
+        const uy = dy / len;
+        out.push(
+          <line
+            key={i}
+            className={`insp-mark-link insp-tone-${m.tone}${m.dashed ? " is-dashed" : ""}`}
+            x1={a.x + (a.r + 2) * ux}
+            y1={a.y + (a.r + 2) * uy}
+            x2={b.x - bR * ux}
+            y2={b.y - bR * uy}
+          />,
+        );
+        break;
+      }
+      case "cell":
+        out.push(<rect key={i} className="insp-mark-cell" x={cellLeft(m.at.x) + 2} y={cellTop(m.at.y) + 2} width={C - 4} height={C - 4} />);
+        break;
+      case "reach": {
+        const span = (m.radiusCells + 0.5) * C;
+        if (span > 2 * Math.max(props.plotW, props.plotH)) break;
+        const c = centre(m.at);
+        out.push(<polygon key={i} className="insp-mark-reach" points={`${c.x + span},${c.y} ${c.x},${c.y + span} ${c.x - span},${c.y} ${c.x},${c.y - span}`} />);
+        break;
+      }
+      case "amount": {
+        // Far mode: 11 px numbers on cells under 24 px would smear into a blob over the tiles; the rings
+        // still show who was affected and the caption carries the totals.
+        if (farMode) break;
+        // Top-left of the dot by default (opposite the actor's own badge); on another entity that lies
+        // to the right of the actor, top-right instead, so the number never sits on the actor's badge.
+        const a = anchorOf(m.id, m.at);
+        const right = actorAnchor !== null && m.id !== props.marks.actorId && a.x >= actorAnchor.x;
+        out.push(
+          <text key={i} className={`insp-mark-amount insp-tone-${m.tone}`} textAnchor={right ? "start" : "end"} x={right ? a.x + 0.4 * D : a.x - 0.4 * D} y={a.y - 0.5 * D - 2}>
+            {m.text}
+          </text>,
+        );
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return <>{out}</>;
 }
 
 // ---------------------------------------------------------------------------
@@ -919,8 +1282,54 @@ function LegendDot(props: { kind: string; dead?: boolean; ring?: "acting" | "sel
     <svg width={18} height={18} viewBox="0 0 18 18" aria-hidden="true" className="insp-legend-dot">
       {props.ring === "selected" ? <circle cx={9} cy={9} r={7.5} className="insp-dot-ring-selected" /> : null}
       {props.ring === "acting" ? <circle cx={9} cy={9} r={7.5} className="insp-dot-ring-acting" /> : null}
-      <circle cx={9} cy={9} r={props.ring ? 4.5 : 6} className={`insp-dot insp-dot-${props.kind}`} />
+      <circle cx={9} cy={9} r={props.ring ? 4.5 : 6} className={`insp-dot-sample insp-dot-${props.kind}`} />
       {props.dead ? <path d="M6,6 L12,12 M12,6 L6,12" className="insp-dot-cross" /> : null}
+    </svg>
+  );
+}
+
+/** A far-mode group tile (agent blue). */
+function LegendTile() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 14 14" aria-hidden="true" className="insp-legend-dot">
+      <rect x={0.5} y={0.5} width={13} height={13} rx={1.5} className="insp-tile insp-tile-agent" />
+    </svg>
+  );
+}
+
+/** The acting agent's badge with the move glyph. */
+function LegendBadge() {
+  return (
+    <svg width={11} height={11} viewBox="0 0 11 11" aria-hidden="true" className="insp-legend-dot insp-mark-badge">
+      <rect x={0} y={0} width={11} height={11} rx={2} />
+      <g transform="translate(1.375 1.375) scale(0.825)">
+        <path d="M5,8.5 V1.5 M2,4.5 L5,1.5 L8,4.5" strokeWidth={1.6} />
+      </g>
+    </svg>
+  );
+}
+
+/** A move: the dashed origin, the arrow, its head. */
+function LegendArrow() {
+  return (
+    <svg width={18} height={10} viewBox="0 0 18 10" aria-hidden="true" className="insp-legend-dot">
+      <circle cx={3} cy={5} r={2.5} className="insp-mark-origin" />
+      <line x1={6.5} y1={5} x2={12.5} y2={5} className="insp-mark-arrow" strokeWidth={2} />
+      <path d="M12,2 L17,5 L12,8 z" className="insp-mark-arrowhead" />
+    </svg>
+  );
+}
+
+/** Six rings in the order the text names them: hit (red), fed (orange), heard (blue), given (green), died (grey), queried (dashed). */
+function LegendRings() {
+  return (
+    <svg width={70} height={12} viewBox="0 0 70 12" aria-hidden="true" className="insp-legend-dot">
+      <circle cx={6} cy={6} r={4} className="insp-mark-ring insp-tone-bad" />
+      <circle cx={18} cy={6} r={4} className="insp-mark-ring insp-tone-absorb" />
+      <circle cx={30} cy={6} r={4} className="insp-mark-ring insp-tone-message" />
+      <circle cx={42} cy={6} r={4} className="insp-mark-ring insp-tone-good" />
+      <circle cx={54} cy={6} r={4} className="insp-mark-ring insp-tone-dead" />
+      <circle cx={66} cy={6} r={4} className="insp-mark-ring insp-tone-query" />
     </svg>
   );
 }
@@ -936,6 +1345,8 @@ const DOT_KINDS: { kind: DotKind; label: string; dead?: boolean }[] = [
 ];
 
 const HIDDEN_KINDS_STORAGE = "empyrean.map.hiddenKinds.";
+const MARKS_STORAGE = "empyrean.map.marks.";
+const KEY_STORAGE = "empyrean.map.key.";
 
 function loadHiddenKinds(persistKey: string | undefined): ReadonlySet<DotKind> {
   if (!persistKey) return new Set();
@@ -958,13 +1369,65 @@ function saveHiddenKinds(persistKey: string | undefined, hidden: ReadonlySet<Dot
   }
 }
 
+/** "Action marks" chip: on unless the stored value is "0". */
+function loadShowMarks(persistKey: string | undefined): boolean {
+  if (!persistKey) return true;
+  try {
+    return window.localStorage.getItem(MARKS_STORAGE + persistKey) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function saveShowMarks(persistKey: string | undefined, on: boolean): void {
+  if (!persistKey) return;
+  try {
+    window.localStorage.setItem(MARKS_STORAGE + persistKey, on ? "1" : "0");
+  } catch {
+    // Storage blocked (private window): the chip still works for this page.
+  }
+}
+
+/** The legend's "Key": collapsed unless the stored value is "1". */
+function loadKeyOpen(persistKey: string | undefined): boolean {
+  if (!persistKey) return false;
+  try {
+    return window.localStorage.getItem(KEY_STORAGE + persistKey) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveKeyOpen(persistKey: string | undefined, open: boolean): void {
+  if (!persistKey) return;
+  try {
+    window.localStorage.setItem(KEY_STORAGE + persistKey, open ? "1" : "0");
+  } catch {
+    // Storage blocked (private window): the button still works for this page.
+  }
+}
+
 /**
- * Legend (always shown under the map).  The entity kinds are toggle chips: ON (boxed in blue)
- * draws that kind on the map, OFF (dimmed, no box) hides its dots and counts; occupant lists
- * and the cell tooltip stay complete.  Rings and terrain are plain legend entries.  Chips have
- * the same size in both states, so toggling never moves the map.
+ * Legend (always shown under the map): one row of controls and a collapsible key.  The entity
+ * kinds are toggle chips: ON (boxed in blue) draws that kind on the map, OFF (dimmed, no box)
+ * hides its dots and counts; occupant lists and the cell tooltip stay complete.  "Action marks"
+ * is a chip of the same kind for the viewed turn's marks.  "Key" opens the explanations
+ * (packed cells, group tiles, rings, marks, terrain) under the controls; it is collapsed by
+ * default so the map keeps its height, and the status line and tooltip explain on hover.
+ * Chips have the same size in both states, so toggling never moves the map.
  */
-function MapLegend(props: { hidden: ReadonlySet<DotKind>; onToggle(kind: DotKind): void; onShowAll(): void; onHideAll(): void }) {
+function MapLegend(props: {
+  hidden: ReadonlySet<DotKind>;
+  onToggle(kind: DotKind): void;
+  onShowAll(): void;
+  onHideAll(): void;
+  showMarks: boolean;
+  onToggleMarks(): void;
+  keyOpen: boolean;
+  onToggleKey(): void;
+  /** Drawn at the end of the controls row (the run page's "Map view" switch). */
+  extra?: ReactNode;
+}) {
   return (
     <div className="insp-legend" aria-label="Map legend">
       <span className="insp-legend-title">Show</span>
@@ -991,31 +1454,68 @@ function MapLegend(props: { hidden: ReadonlySet<DotKind>; onToggle(kind: DotKind
         Unselect all
       </button>
       <span className="insp-legend-sep" />
-      <span className="insp-legend-item">
-        <span className="insp-legend-more">+N</span> more than fit: zoom in
-      </span>
-      <span className="insp-legend-item">
-        <LegendDot kind="agent" ring="acting" /> acting agent
-      </span>
-      <span className="insp-legend-item">
-        <LegendDot kind="agent" ring="selected" /> selected entity
-      </span>
-      <span className="insp-legend-item">
-        <span className="insp-swatch insp-swatch-selected" /> selected cell
-      </span>
-      <span className="insp-legend-sep" />
-      <span className="insp-legend-item">
-        <span className="insp-swatch insp-swatch-land" /> land
-      </span>
-      <span className="insp-legend-item">
-        <span className="insp-swatch insp-swatch-mountain" /> mountain (impassable)
-      </span>
-      <span className="insp-legend-item">
-        <span className="insp-swatch insp-swatch-water" /> water (no plants)
-      </span>
-      <span className="insp-legend-item">
-        <span className="insp-swatch insp-swatch-outside" /> outside region
-      </span>
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={props.showMarks}
+        className={`insp-legend-chip${props.showMarks ? " is-on" : ""}`}
+        title={props.showMarks ? "Hide the viewed turn's action marks on the map" : "Show the viewed turn's action marks on the map"}
+        onClick={props.onToggleMarks}
+      >
+        Action marks
+      </button>
+      <button
+        type="button"
+        className={`insp-btn insp-btn-small insp-legend-keybtn${props.keyOpen ? " is-open" : ""}`}
+        aria-expanded={props.keyOpen}
+        title="What the dots, badges, rings and colours mean"
+        onClick={props.onToggleKey}
+      >
+        Key <span aria-hidden="true">{props.keyOpen ? "▴" : "▾"}</span>
+      </button>
+      {props.extra}
+      {props.keyOpen ? (
+        <div className="insp-legend-key" role="group" aria-label="Map key">
+          <span className="insp-legend-item">
+            <span className="insp-legend-badge">14</span> packed: zoom in
+          </span>
+          <span className="insp-legend-item">
+            <LegendTile /> group: bigger = more, blue = agent
+          </span>
+          <span className="insp-legend-item">
+            <LegendDot kind="agent" ring="acting" /> acting · pulses while deciding
+          </span>
+          <span className="insp-legend-item">
+            <LegendDot kind="agent" ring="selected" /> selected
+          </span>
+          <span className="insp-legend-item">
+            <span className="insp-swatch insp-swatch-selected" /> selected cell
+          </span>
+          <span className="insp-legend-sep" />
+          <span className="insp-legend-item">
+            <LegendBadge /> acted (red = failed)
+          </span>
+          <span className="insp-legend-item">
+            <LegendArrow /> moved
+          </span>
+          <span className="insp-legend-item">
+            <LegendRings /> hit · fed · heard · given · died · queried
+          </span>
+          <span className="insp-legend-sep" />
+          <span className="insp-legend-item">
+            <span className="insp-swatch insp-swatch-land" /> land
+          </span>
+          <span className="insp-legend-item">
+            <span className="insp-swatch insp-swatch-mountain" /> mountain (impassable)
+          </span>
+          <span className="insp-legend-item">
+            <span className="insp-swatch insp-swatch-water" /> water (no plants)
+          </span>
+          <span className="insp-legend-item">
+            <span className="insp-swatch insp-swatch-outside" /> outside region
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -25,7 +25,7 @@ Row format (parsed): `` | `<repo path>` | purpose | audience | assistant: yes|no
 | `docs/LIMITATIONS.md` | Known limits and defects, each with a next step | operators, developers, assistant | assistant: yes |
 | `docs/sample_run/README.md` | A trimmed real run folder and how to read it | developers | assistant: no |
 | `frontend/README.md` | Frontend structure, commands and conventions | developers | assistant: no |
-| `qa/README.md` | The browser check (17 legacy + 16 assistant steps, the fake QA server) and the resilience harness | QA | assistant: no |
+| `qa/README.md` | The browser check (37 steps: 17 legacy, 16 assistant, Resume page housekeeping, the profile card, the 2D map marks and the 3D view; the fake QA server) and the resilience harness | QA | assistant: no |
 | `llm_world_technical_spec.md` | Source requirements: the technical specification (v0.5) | developers | assistant: no |
 | `llm_world_running_design.md` | Source requirements: the world design (v0.7) | developers | assistant: no |
 

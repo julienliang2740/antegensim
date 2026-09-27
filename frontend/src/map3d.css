@@ -1,0 +1,449 @@
+/*
+ * Styles of the 3D view (src/components/map3d/**).  Imported by Map3dView.tsx,
+ * so it ships in the lazily loaded chunk.  Every colour is an --insp-* token
+ * from inspect.css (the .map3d root carries the insp class), so dark mode is
+ * inherited.  The view switch and the centre-column host rules live in App.css.
+ */
+
+.map3d {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+}
+
+.map3d-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+}
+
+.map3d-toolbar .insp-btn kbd {
+  font: inherit;
+  font-size: 11px;
+  opacity: 0.7;
+  margin-left: 3px;
+}
+
+.map3d-layer-chip {
+  font-size: 12.5px;
+  padding: 1px 8px;
+  border: 1px solid var(--insp-border);
+  border-radius: 12px;
+  background: var(--insp-panel);
+  white-space: nowrap;
+}
+
+.map3d-toolbar .insp-small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.map3d-viewport {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 220px;
+  overflow: hidden;
+  touch-action: none;
+  border: 1px solid var(--insp-border-strong);
+  border-radius: 4px;
+  background: var(--insp-bg);
+  user-select: none;
+  outline: none;
+}
+
+.map3d-viewport:focus-visible {
+  outline: 2px solid var(--insp-accent);
+  outline-offset: 1px;
+}
+
+.map3d-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.map3d-viewport.is-dragging .map3d-canvas {
+  cursor: grabbing;
+}
+
+.map3d-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.map3d-labels > * {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+}
+
+/* Label rules are scoped to .map3d-labels: the label is a <button> inside .insp, and
+   `.insp button` (0,1,1: foreground colour, 13 px) would otherwise beat a bare class. */
+.map3d-labels .map3d-label {
+  pointer-events: auto;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  padding: 1px 5px;
+  border: 0;
+  border-radius: 3px;
+  color: var(--insp-bg);
+  background: color-mix(in srgb, var(--insp-fg) 85%, transparent);
+  white-space: nowrap;
+  margin-top: -4px;
+}
+
+.map3d-labels .map3d-label:hover,
+.map3d-labels .map3d-label.map3d-label-focus {
+  color: var(--insp-bg);
+  background: var(--insp-fg);
+  outline: 1.5px solid var(--insp-entity-sel);
+}
+
+.map3d-labels .map3d-label:focus-visible {
+  outline: 2px solid var(--insp-accent);
+  outline-offset: 1px;
+}
+
+.map3d-badge {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--insp-bg);
+  background: var(--insp-fg);
+  border: 1px solid var(--insp-bg);
+}
+
+.map3d-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px 1px 4px;
+  border-radius: 10px;
+  border: 1.5px solid var(--insp-border-strong);
+  background: var(--insp-bg);
+  color: var(--insp-fg);
+  font-size: 11.5px;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  margin-top: -6px;
+}
+
+.map3d-chip-glyph {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+
+.map3d-chip-failed .map3d-chip-text {
+  text-decoration: line-through;
+}
+
+.map3d-chip-failed {
+  border-color: var(--insp-bad);
+  color: var(--insp-bad);
+}
+
+.map3d-chip-move,
+.map3d-chip-message,
+.map3d-chip-observe,
+.map3d-chip-query {
+  border-color: var(--insp-accent);
+}
+
+.map3d-chip-attack,
+.map3d-chip-starvation {
+  border-color: var(--insp-bad);
+}
+
+.map3d-chip-absorb,
+.map3d-chip-transfer,
+.map3d-chip-upgrade {
+  border-color: var(--insp-warn-border);
+}
+
+.map3d-chip-recover,
+.map3d-chip-growth,
+.map3d-chip-fruit,
+.map3d-chip-seed,
+.map3d-chip-germination {
+  border-color: var(--insp-plant);
+}
+
+.map3d-chip-death {
+  border-color: var(--insp-dead);
+}
+
+.map3d-chip-voice {
+  border-color: var(--insp-highlight);
+}
+
+.map3d-float {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--insp-fg);
+  text-shadow: 0 0 3px var(--insp-bg), 0 0 3px var(--insp-bg);
+  white-space: nowrap;
+}
+
+.map3d-float-bad {
+  color: var(--insp-bad);
+}
+
+.map3d-float-good {
+  color: var(--insp-good);
+}
+
+.map3d-float-warn,
+.map3d-float-resource {
+  color: var(--insp-warn-border);
+}
+
+.map3d-float-accent {
+  color: var(--insp-accent);
+}
+
+.map3d-tick {
+  font-size: 10.5px;
+  color: var(--insp-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.map3d-tick-zero {
+  color: var(--insp-fg);
+  font-weight: 700;
+}
+
+.map3d-compass {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: auto;
+  top: auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--insp-bg) 75%, transparent);
+  border: 1px solid var(--insp-border);
+  will-change: auto;
+}
+
+.map3d-compass svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(var(--map3d-compass-rotation, 0rad));
+  transform-origin: 50% 50%;
+}
+
+.map3d-compass line {
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.map3d-compass .map3d-compass-x {
+  stroke: var(--insp-bad);
+}
+
+.map3d-compass .map3d-compass-y {
+  stroke: var(--insp-good);
+}
+
+.map3d-compass circle {
+  fill: var(--insp-fg);
+}
+
+.map3d-compass text {
+  font-size: 7px;
+  font-weight: 700;
+  fill: var(--insp-fg);
+  text-anchor: middle;
+}
+
+.map3d-compass .map3d-compass-xlabel {
+  text-anchor: start;
+  fill: var(--insp-bad);
+}
+
+.map3d-compass .map3d-compass-ylabel {
+  fill: var(--insp-good);
+}
+
+.map3d-focus-hint {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--insp-fg);
+  background: color-mix(in srgb, var(--insp-bg) 85%, transparent);
+  border: 1px solid var(--insp-border);
+  pointer-events: none;
+}
+
+.map3d-lost {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: color-mix(in srgb, var(--insp-bg) 90%, transparent);
+  color: var(--insp-fg);
+}
+
+.map3d-status {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  font-size: 12.5px;
+}
+
+.map3d-status-line {
+  height: 19px;
+  line-height: 19px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map3d-help {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 5;
+  max-width: min(420px, calc(100% - 16px));
+  max-height: calc(100% - 16px);
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--insp-border-strong);
+  border-radius: 6px;
+  background: var(--insp-bg);
+  color: var(--insp-fg);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  font-size: 12.5px;
+}
+
+.map3d-help-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.map3d-help-table {
+  border-collapse: collapse;
+}
+
+.map3d-help-table th {
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 1px 10px 1px 0;
+  vertical-align: top;
+  font-family: ui-monospace, Consolas, "DejaVu Sans Mono", monospace;
+  font-size: 12px;
+}
+
+.map3d-help-table td {
+  padding: 1px 0;
+  color: var(--insp-muted);
+}
+
+.map3d-help-note {
+  margin: 6px 0 0;
+  color: var(--insp-muted);
+}
+
+.map3d-legend-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.map3d-legend-icon .fill-agent {
+  fill: var(--insp-agent);
+}
+
+.map3d-legend-icon .fill-dead {
+  fill: var(--insp-dead);
+}
+
+.map3d-legend-icon .fill-plant {
+  fill: var(--insp-plant);
+}
+
+.map3d-legend-icon .fill-fruit {
+  fill: var(--insp-other);
+}
+
+.map3d-legend-icon .fill-seed {
+  fill: var(--insp-seed);
+}
+
+.map3d-legend-icon .fill-residue {
+  fill: var(--insp-residue);
+}
+
+.map3d-legend-icon .ring-acting {
+  fill: none;
+  stroke: var(--insp-highlight);
+  stroke-width: 2;
+  stroke-dasharray: 3 2;
+}
+
+.map3d-legend-icon .ring-selected {
+  fill: none;
+  stroke: var(--insp-entity-sel);
+  stroke-width: 2;
+}
+
+.map3d-legend-icon .cell-frame {
+  fill: none;
+  stroke: var(--insp-sel-inner);
+  stroke-width: 2;
+  paint-order: stroke;
+}
+
+.map3d-legend-icon .cell-frame-outer {
+  fill: none;
+  stroke: var(--insp-sel-outer);
+  stroke-width: 4;
+}
+
+.map3d-fallback {
+  padding: 12px;
+  border: 1px solid var(--insp-border);
+  border-radius: 6px;
+  background: var(--insp-panel);
+}
+
+.map3d-fallback p {
+  margin: 0 0 8px;
+}
+
+.map3d-fallback-detail {
+  font-size: 12px;
+}

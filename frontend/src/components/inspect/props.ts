@@ -12,6 +12,8 @@
  */
 
 import type { Agent, ContextOverrides, ContextSettings, EffectiveSettingsView, Entity, FieldChange, Intervention, InterventionRecord, MapState, ModelCapabilities, ModelInfo, ObservedEntity, PlantSpeciesRule, Point, RemovedEntity, RulesConfig, RunSettings, Terrain, TurnView } from "../../api/types";
+import type { ReactNode } from "react";
+import type { TurnEffect } from "../../state/turnEffects";
 
 /**
  * Agent view (spec "An optional agent-view overlay shows only permitted
@@ -30,9 +32,14 @@ export interface AgentViewOverlay {
 
 /**
  * SVG grid of `map.region` with terrain, axes, one colour-coded dot per
- * occupant (with "+N" when a cell is too small for every dot), pan (drag,
- * arrow buttons, keyboard arrows), zoom buttons, "Go to (x, y)" and a hover
- * tooltip with up to 8 occupants (the hovered dot's row highlighted).  Positions come from `entities`
+ * occupant (one dot size per zoom level; a packed cell shows every dot tighter
+ * plus a total-count badge; below 24 px cells a kind-coloured group tile whose
+ * size grows with the count), pan (drag, arrow buttons, keyboard arrows), zoom
+ * buttons, "Go to (x, y)" and a hover tooltip listing every occupant (the
+ * hovered dot's row highlighted).  With `effects` and `turnId` the map draws
+ * the viewed turn's action marks (state/mapIndicators.ts): a badge on the
+ * acting agent, its move arrow, rings on the entities the turn touched, and
+ * the caption in the status line.  Positions come from `entities`
  * (entity.position), so pass every entity of the viewed turn, dead included
  * (`flattenEntities(turn.entities)`).
  */
@@ -62,6 +69,17 @@ export interface MapViewProps {
   agentView?: boolean;
   /** Agent view: draw only this agent's sightings (at their last observed positions) and the agent at its believed position. */
   agentViewOverlay?: AgentViewOverlay | null;
+  /** The viewed turn's effects (state/turnEffects.ts::turnEffects(viewed)), drawn as action marks (state/mapIndicators.ts). */
+  effects?: readonly TurnEffect[];
+  /** The viewed turn's id: keys the marks layer so its entrance animation plays once per turn change, and names the turn in the status line. */
+  turnId?: string | null;
+  /** Live only: the agent whose turn is in progress (its dashed ring pulses); null when nothing is pending. */
+  pendingAgentId?: string | null;
+  /**
+   * Rendered at the end of the legend's controls row (after **Key**).  The run page puts the "Map
+   * view" switch here (and in the 3D view's legend), so the switch costs the board no row of its own.
+   */
+  legendExtra?: ReactNode;
 }
 
 /** Scrollable list of every entity at a point, grouped by kind, each row clickable. */

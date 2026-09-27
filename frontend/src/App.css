@@ -1047,9 +1047,82 @@ body.is-resizing-y * {
   padding: 6px 8px;
 }
 
-.run-center > .insp-mapview {
+.run-center > .insp-mapview,
+.run-center > .map-2d-host > .insp-mapview {
   flex: 1 1 0;
   min-height: 0;
+}
+
+/* The 2D map's host: a flex column so the map keeps its full-height layout; hidden while the 3D view is shown
+   (the attribute needs its own rule because the host is a flex box). */
+.map-2d-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.map-2d-host[hidden] {
+  display: none;
+}
+
+/* The 3D view fills the same slot; its fallbacks and the loading line sit at the top. */
+.run-center > .map3d {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.run-center > .map3d-fallback,
+.run-center > .map3d-loading {
+  flex: none;
+}
+
+/* "Map view" switch: 2D map / 3D view radios at the right end of the shown view's legend controls
+   row (both views take it as legendExtra, so it adds no row to the board). */
+.map-view-switch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  margin-left: auto;
+  font-size: 12.5px;
+}
+
+/* In the 3D fallbacks (no WebGL 2, chunk failed) the switch keeps its place above the message. */
+.map3d-fallback > .map-view-switch {
+  margin: 0 0 6px auto;
+}
+
+.map-view-switch-label {
+  color: var(--muted);
+  margin-right: 4px;
+}
+
+.map-view-radio {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.map-view-radio:hover {
+  color: var(--fg);
+}
+
+.map-view-radio.is-checked {
+  border-color: var(--accent);
+  background: var(--accent-bg, var(--panel));
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.map-view-radio:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 /* History mode: a thin strip over the map says which turn it shows. */

@@ -7,15 +7,20 @@
  *
  * URL parameters (for screenshots): `point=x,y` preselects a point,
  * `entity=<id>` an entity, `turn=history` opens the older turn,
- * `agentView=1` turns the agent view on.
+ * `agentView=1` turns the agent view on, `view=3d` renders the 3D view
+ * (components/map3d) instead of the SVG map and `layers=2` stacks the older
+ * fixture turn as a translucent layer below the shown one.
  */
 
 import "./harness.css";
 import { useMemo, useState } from "react";
 import type { ApiProblem, Entity, Intervention, Point, TurnView } from "../api/types";
 import { findEntity, parsePointKey, pointKey } from "../api/types";
-import { GodModePanel, InspectorPanel, MapView, OccupantList, entitiesAtPoint, flattenEntities, removedList } from "../components/inspect";
+import { GodModePanel, InspectorPanel, MapView, OccupantList, entitiesAtPoint, entityMarkers, flattenEntities, removedList } from "../components/inspect";
 import type { AgentViewOverlay } from "../components/inspect";
+import Map3dView from "../components/map3d/Map3dView";
+import type { LayerInput } from "../components/map3d";
+import { turnEffects } from "../state/turnEffects";
 import { INITIAL_STAGED, MODELS, effectiveSettings, historyTurn, knowledgeFor, liveTurn } from "./fixtures";
 
 /** Error shaped like client.ts ApiClientError (status + problems). */
@@ -29,6 +34,12 @@ class FakeApiError extends Error {
 }
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** A fixture turn as one board of the 3D view's stack. */
+function layerOf(view: TurnView, label: string): LayerInput {
+  const entities = flattenEntities(view.entities);
+  return { id: view.turn.turn_id, label, map: view.map, markers: entityMarkers(entities, view.rules), entities: new Map(entities.map((e) => [e.id, e])) };
+}
 
 /** A few of the backend's staging checks, so the harness shows problem lists. */
 function fakeValidate(iv: Intervention, turn: TurnView): ApiProblem[] {
@@ -66,8 +77,12 @@ export function InspectHarness() {
   const [godDisabled, setGodDisabled] = useState(false);
   const [log, setLog] = useState<string[]>([]);
 
+  const view3d = params.get("view") === "3d";
+  const twoLayers = params.get("layers") === "2";
   const turn = viewHistory ? history : live;
   const entities = useMemo(() => flattenEntities(turn.entities), [turn]);
+  const effects = useMemo(() => turnEffects(turn), [turn]);
+  const layers = useMemo(() => (twoLayers ? [layerOf(history, "Round 1 end"), layerOf(turn, turn.live ? "Live" : "Viewed turn")] : undefined), [twoLayers, history, turn]);
   const removed = useMemo(() => removedList(turn.entities), [turn]);
   const liveEntities = useMemo(() => flattenEntities(live.entities), [live]);
   const occupants = useMemo(() => entitiesAtPoint(entities, selectedPoint), [entities, selectedPoint]);
@@ -109,26 +124,54 @@ export function InspectHarness() {
       </header>
 
       <section className="harness-row harness-row-map" id="harness-map">
-        <div className="harness-map">
-          <MapView
-            map={turn.map}
-            entities={entities}
-            removed={removed}
-            selectedPoint={selectedPoint}
-            selectedEntityId={selectedEntityId}
-            onSelectPoint={(p) => {
-              setSelectedPoint(p);
-              note(`onSelectPoint(${p.x}, ${p.y})`);
-            }}
-            onSelectEntity={(id) => {
-              setSelectedEntityId(id);
-              note(`onSelectEntity(${id})`);
-            }}
-            highlightAgentId={turn.turn.acting_agent_id}
-            rules={turn.rules}
-            agentView={agentView}
-            agentViewOverlay={agentViewOverlay}
-          />
+        <div className="harness-map" style={view3d ? { height: 600 } : undefined}>
+          {view3d ? (
+            <Map3dView
+              map={turn.map}
+              entities={entities}
+              removed={removed}
+              selectedPoint={selectedPoint}
+              selectedEntityId={selectedEntityId}
+              onSelectPoint={(p) => {
+                setSelectedPoint(p);
+                note(`onSelectPoint(${p.x}, ${p.y})`);
+              }}
+              onSelectEntity={(id) => {
+                setSelectedEntityId(id);
+                note(`onSelectEntity(${id})`);
+              }}
+              highlightAgentId={turn.turn.acting_agent_id}
+              rules={turn.rules}
+              agentView={agentView}
+              agentViewOverlay={agentViewOverlay}
+              effects={effects}
+              turnId={turn.turn.turn_id}
+              live={!viewHistory}
+              paused={false}
+              layers={layers}
+              onBackTo2d={() => note("onBackTo2d()")}
+            />
+          ) : (
+            <MapView
+              map={turn.map}
+              entities={entities}
+              removed={removed}
+              selectedPoint={selectedPoint}
+              selectedEntityId={selectedEntityId}
+              onSelectPoint={(p) => {
+                setSelectedPoint(p);
+                note(`onSelectPoint(${p.x}, ${p.y})`);
+              }}
+              onSelectEntity={(id) => {
+                setSelectedEntityId(id);
+                note(`onSelectEntity(${id})`);
+              }}
+              highlightAgentId={turn.turn.acting_agent_id}
+              rules={turn.rules}
+              agentView={agentView}
+              agentViewOverlay={agentViewOverlay}
+            />
+          )}
         </div>
         <div className="harness-occupants">
           <OccupantList
