@@ -1,6 +1,6 @@
 /**
  * Pure helpers for the New session form (spec "Sessions and run controls":
- * editable cards prefilled with defaults, add/remove within 6–12, validate
+ * editable cards prefilled with defaults, add/remove within 6–64 (the backend's config.MIN_AGENTS..MAX_AGENTS), validate
  * and explain invalid values by path; INTERFACES section 9 "Setup
  * validation" problem paths such as agents[2].position).
  */
@@ -8,7 +8,7 @@
 import type { Agent, AgentCard, ApiProblem, ModelInfo, PlantSpeciesRule, RunCreateRequest } from "../api/types";
 
 export const MIN_AGENTS = 6;
-export const MAX_AGENTS = 12;
+export const MAX_AGENTS = 64;
 
 /** Problems whose path is exactly one of `paths`. */
 export function problemsAt(problems: readonly ApiProblem[], ...paths: string[]): ApiProblem[] {
@@ -138,7 +138,7 @@ export function trimmedName(name: string): string {
 
 /** What the drawer stores when a create_run brief is opened in the setup form instead of executed. */
 export interface SetupDraft {
-  /** Number of agent cards the defaults are fetched with (6..12). */
+  /** Number of agent cards the defaults are fetched with (6..64). */
   agent_count: number;
   /** Partial RunCreateRequest (the brief's overlay plus its name). */
   partial: Record<string, unknown>;

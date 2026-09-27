@@ -15,7 +15,7 @@ assistant (part of its always-loaded knowledge). Numbers are shipped defaults; s
 * **Agent**: a model-driven entity created from an agent card. Stays on the map after death with
   `alive = false`.
 * **Agent card**: the setup form entry for one agent (id, name, model, position, stats, persona,
-  notebook, initial skills, context overrides). A run has 6 to 12 cards.
+  notebook, initial skills, context overrides). A run has 6 to 64 cards.
 * **Persona**: operator-written text injected into the agent's stable rules.
 * **Plant / species**: a stationary source of energy and essence growing through stages
   (`fruit_tree`: sprout, sapling, mature). **Vitality** is a plant's essence.

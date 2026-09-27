@@ -100,7 +100,7 @@ Only one backend process may have a given run open at a time. A second process g
 ### Create a run
 
 1. On the entry page choose **New session**.
-2. The form starts with 8 prefilled agent cards. You can have 6 to 12 (**Add agent**; **Remove** in the table or **Remove this agent** in the card dialog). Each card has an id, a name, a start point, all stats and a model. The form also holds the world settings (seed, plants, fruit), the context and memory settings, the play delay and an optional real-money budget (`real_budget_usd`).
+2. The form starts with 8 prefilled agent cards. You can have 6 to 64 (**Add agent**; **Remove** in the table or **Remove this agent** in the card dialog). Each card has an id, a name, a start point, all stats and a model. The form also holds the world settings (seed, plants, fruit), the context and memory settings, the play delay and an optional real-money budget (`real_budget_usd`).
 3. **Validate setup** lists every problem by its path, for example `agents[2].stats.compute: must be a finite number >= 0`. Nothing is created until the problems are fixed.
 4. **Create and open** creates the run. It always opens **Paused** at `r00000_init`.
 
@@ -243,7 +243,7 @@ Only the `fake` and `claude_cli` adapters have been run on this machine. The oth
 .venv/bin/python scripts/run_sim.py --request scripts/scenarios/arena_fight.json --rounds 5
 ```
 
-Options: `--model KEY` (default `fake-heuristic`), `--agents N` (6 to 12, default 8), `--rounds R` (default 3), `--seed S` (default 1), `--worlds-dir PATH` (default `EMPYREAN_WORLDS_DIR` or `worlds/`), `--name NAME`, `--request FILE` (a JSON overlay: `world`, `rules` and `context` are deep-merged, other keys such as `agents` replace the default; see `scripts/scenarios/`), `--assistant` (run the assistant service in-process so the storybook is written; a paid narrator writes only with `EMPYREAN_ALLOW_LIVE=1`), `--live-check`, `--timeout SECONDS` (default 900).
+Options: `--model KEY` (default `fake-heuristic`), `--agents N` (6 to 64, default 8), `--rounds R` (default 3), `--seed S` (default 1), `--worlds-dir PATH` (default `EMPYREAN_WORLDS_DIR` or `worlds/`), `--name NAME`, `--request FILE` (a JSON overlay: `world`, `rules` and `context` are deep-merged, other keys such as `agents` replace the default; see `scripts/scenarios/`), `--assistant` (run the assistant service in-process so the storybook is written; a paid narrator writes only with `EMPYREAN_ALLOW_LIVE=1`), `--live-check`, `--timeout SECONDS` (default 900).
 
 **Live models cost real money.** The script refuses any model whose provider is not `fake` unless `EMPYREAN_ALLOW_LIVE=1` is set:
 

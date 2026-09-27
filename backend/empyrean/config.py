@@ -31,6 +31,8 @@ from typing import Any
 from dotenv import load_dotenv
 
 from .schemas import (
+    MAX_AGENT_CARDS,
+    MIN_AGENT_CARDS,
     AccountingRules,
     AgentCard,
     AgentStats,
@@ -215,8 +217,9 @@ DEFAULT_WORLD = WorldConfig(
     max_entities_per_observation_page=40,
 )
 
-# Agents start spread near the origin (assumption A-WORLD-4).
-DEFAULT_AGENT_POSITIONS: list[Point] = [
+# Agents start spread near the origin (assumption A-WORLD-4): the first 12 cards within Manhattan
+# radius 2, further cards (up to MAX_AGENTS) on the next rings, generated below.
+_FIRST_AGENT_POSITIONS: list[Point] = [
     Point(x=0, y=0),
     Point(x=1, y=0),
     Point(x=0, y=1),
@@ -231,6 +234,26 @@ DEFAULT_AGENT_POSITIONS: list[Point] = [
     Point(x=1, y=-1),
 ]
 
+
+def _ring_positions(count: int) -> list[Point]:
+    """``_FIRST_AGENT_POSITIONS`` followed by the remaining points of each Manhattan ring around
+    the origin (distance 1, 2, 3, ...), each ring in a fixed order (x ascending, then y
+    ascending), until ``count`` points; deterministic, no duplicates."""
+    points = [p.model_copy() for p in _FIRST_AGENT_POSITIONS]
+    seen = {(p.x, p.y) for p in points}
+    distance = 1
+    while len(points) < count:
+        ring = sorted((x, y) for x in range(-distance, distance + 1) for y in range(-distance, distance + 1) if abs(x) + abs(y) == distance)
+        for x, y in ring:
+            if len(points) >= count:
+                break
+            if (x, y) not in seen:
+                seen.add((x, y))
+                points.append(Point(x=x, y=y))
+        distance += 1
+    return points[:count]
+
+
 DEFAULT_AGENT_NAMES: list[str] = [
     "Aster",
     "Boreas",
@@ -244,10 +267,22 @@ DEFAULT_AGENT_NAMES: list[str] = [
     "Jarek",
     "Kallias",
     "Lysandra",
+    # cards 13-64 (MAX_AGENTS)
+    "Myrrine", "Nereus", "Orestes", "Phaedra", "Quilla", "Rhea", "Selene", "Theron", "Urania", "Vesna",
+    "Wystan", "Xanthe", "Yara", "Zephyr", "Alcyone", "Brisa", "Castor", "Delia", "Elara", "Fenna",
+    "Galen", "Hesper", "Ilias", "Jora", "Kora", "Leda", "Melis", "Nyx", "Oriel", "Pallas",
+    "Quenby", "Rhodes", "Sabra", "Talos", "Ulric", "Vela", "Wren", "Xenia", "Yael", "Zeno",
+    "Arion", "Bellis", "Corin", "Dione", "Evander", "Fiora", "Gideon", "Hestia", "Isidore", "Jessa",
+    "Kalyx", "Lorcan",
 ]
 
-MAX_AGENTS = 12  # spec suggests 6-11 initially; 12 allowed for arena-style experiments
-MIN_AGENTS = 6
+# The spec suggests 6-11 agents; 12 was allowed for arena experiments and 64 since 2026-09-27 for
+# large battles (every run pays one model call per living agent per round, so cost and time grow
+# with the count).
+MAX_AGENTS = MAX_AGENT_CARDS  # 64; the schema's RunCreateRequest.agents bounds are the single source
+MIN_AGENTS = MIN_AGENT_CARDS  # 6
+
+DEFAULT_AGENT_POSITIONS: list[Point] = _ring_positions(MAX_AGENTS)
 
 # ---------------------------------------------------------------------------
 # Context / memory defaults (technical spec: "Budget delivery and inspection")
@@ -920,7 +955,7 @@ ASSUMPTIONS: dict[str, Assumption] = {
     ),
     "A-WORLD-4": Assumption(
         key="config.DEFAULT_AGENT_POSITIONS",
-        default="spread within Manhattan radius 2 of the origin",
+        default="the first 12 cards spread within Manhattan radius 2 of the origin; cards 13-64 on the next Manhattan rings (out to radius 6)",
         citation="Spec: 'New session' (starting coordinate per card)",
         rationale="Agents start near each other so same-point communication is possible.",
     ),

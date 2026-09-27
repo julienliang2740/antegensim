@@ -418,7 +418,7 @@ export function InstructionsPage(props: { section?: string | null }) {
             </tr>
           </tbody>
         </table>
-        <p>A run has 6 to 12 agents. The New session page prefills {N.cards} cards; any value on a card can be changed.</p>
+        <p>A run has 6 to 64 agents. The New session page prefills {N.cards} cards; any value on a card can be changed.</p>
       </Section>
 
       <Section id="resources">

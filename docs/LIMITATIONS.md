@@ -67,6 +67,14 @@ Disk used by QA so far: `qa/resilience/worlds` holds about 516 MB (runs on the p
 
 - *Next step:* delete the QA run folders once the evidence has been reviewed.
 
+## Runs with many agents
+
+The agent limit is 64 (`config.MAX_AGENTS`, raised from 12 on 2026-09-27). Only a short fake-model run has used more than 12 agents: 64 agents for 3 rounds ran in about 10 s per round of engine time and wrote about 200 KB per turn (39 MB for 197 turns). Live runs store far more because knowledge grows over the run: the 12-agent, 98-round live "Blood arena" run takes 1.5 GB (about 2.9 MB per turn), so a 100-round live run with 64 agents (about 6,500 turns) could need tens of GB of disk. Every living agent that is not running a skill makes one model call per round, so a 64-agent round costs about five times a 12-agent round in money and time (about 5-8 s per Haiku call, taken one after another), and storage grows with the number of agents whose knowledge changes each turn. The run page's roster, the map and the default 21 × 21 region were designed around a dozen agents; with 64 the default start positions reach Manhattan radius 6 around the origin.
+
+The assistant's create-run brief writes its overlay within the chat output allowance (6000 tokens, `config.ASSISTANT_OUTPUT_TOKENS`), sized for about a dozen cards; a brief that writes a custom persona for each of many more agents can run out and fail.
+
+- *Next step:* a 64-agent fake-model run to measure turn time and storage, then a short live run; consider a larger default region for big casts; let briefs describe card patterns instead of writing every card.
+
 ## Provider adapters verified only with mocked payloads
 
 Only two adapters have run for real on this machine: `fake` and `claude_cli` (`claude-cli-haiku`). The `anthropic`, `openai`, `fireworks`, `bedrock` and `foundry` adapters are covered only by unit tests against recorded or mocked payloads (request shape, usage normalisation, error classification), because no credentials exist here. Their real request acceptance, schema handling, usage and cost reporting, retries and rate limits are unproven.

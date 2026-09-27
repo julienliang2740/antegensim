@@ -15,7 +15,7 @@ Pages (hash routes): `#/` entry, `#/new` New session, `#/resume` Resume session,
 
 | Control | Where | What it does |
 | --- | --- | --- |
-| **New session** | Entry page | Opens the setup form (6-12 agent cards, world, rules) |
+| **New session** | Entry page | Opens the setup form (6-64 agent cards, world, rules) |
 | **Resume session** | Entry page | Lists saved runs; opening one resumes it paused at its last saved turn |
 | **How the world works** | Entry page | The rules explained, with numbers read from the backend defaults |
 | **Story Mode** (*new*) | Entry page | Turn a run into a chaptered story |

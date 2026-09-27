@@ -11,7 +11,7 @@ in `docs/INTERFACES.md`; words are defined in `docs/GLOSSARY.md`; every button i
 ## Overview
 
 Empyrean is a local, turn-based artificial-life world in which every agent is a language model.
-A run holds 6 to 12 agents (8 prefilled) on a grid. Time advances in **rounds**; in each round
+A run holds 6 to 64 agents (8 prefilled) on a grid. Time advances in **rounds**; in each round
 every living agent gets exactly one **turn**, in initiative order (highest speed first). On its
 turn an agent either continues a running saved **skill** or makes one paid **model decision**:
 the engine builds a bounded **decision packet** from what that agent knows, the model returns one

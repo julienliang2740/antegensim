@@ -34,7 +34,7 @@ Rules
 Route table (all JSON; see docs/INTERFACES.md "API" for request/response models):
 
     GET    /api/health                                   -> {"ok": true, "version": SCHEMA_VERSION}
-    GET    /api/defaults?agent_count=8                   -> RunCreateRequest (6..12 prefilled cards)
+    GET    /api/defaults?agent_count=8                   -> RunCreateRequest (6..64 prefilled cards)
     GET    /api/models?include_assistant=0&include_test=0 -> list[ModelInfo] (assistant-only refs hidden unless include_assistant=1; test-only fakes hidden unless include_test=1)
     GET    /api/assumptions                              -> AssumptionsView (registry defaults)
     POST   /api/world/preview       WorldPreviewRequest  -> MapState (terrain only)

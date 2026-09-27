@@ -1,7 +1,7 @@
 /**
  * New session (spec U10, U11, U16 and "Sessions and run controls"): usable
  * world and plant settings, editable run-default context settings, a model
- * choice, and eight prefilled agent cards (6–12) shown as a table with one
+ * choice, and eight prefilled agent cards (6–64) shown as a table with one
  * row per agent; a row opens the full card in a dialog.  "Validate setup" asks the
  * backend for every problem at once (POST /runs/validate) and shows each one
  * next to its field and in a summary; "Create and open" saves the initial

@@ -109,11 +109,16 @@ ENV_CODE_GLOBS = [
 
 # (regex, why) forbidden in the checked docs, docs/*.md and frontend/src + backend/empyrean text.
 STALE_PHRASES: list[tuple[str, str]] = [
-    (r"\b6\s*(?:–|-|to)\s*11\s+(?:agents|cards|prefilled|initial)", "the agent range is 6-12 (config.MIN_AGENTS/MAX_AGENTS)"),
-    (r"\b6 to 11\b", "the agent range is 6-12"),
-    (r"\b6\.\.11\b", "the agent range is 6..12"),
-    (r"between 6 and 11", "the agent range is 6-12"),
-    (r"a01\.\.a11", "default agent ids run a01..a12"),
+    (r"\b6\s*(?:–|-|to)\s*11\s+(?:agents|cards|prefilled|initial)", "the agent range is 6-64 (config.MIN_AGENTS/MAX_AGENTS)"),
+    (r"\b6 to 11\b", "the agent range is 6-64"),
+    (r"\b6\.\.11\b", "the agent range is 6..64"),
+    (r"between 6 and 11", "the agent range is 6-64"),
+    (r"a01\.\.a11", "default agent ids run a01..a64"),
+    # The limit was 12 until 2026-09-27; it is 64 now.
+    (r"\b6\s*(?:–|-|to)\s*12\b(?!\s*turns)", "the agent range is 6-64 (config.MIN_AGENTS/MAX_AGENTS)"),
+    (r"between 6 and 12", "the agent range is 6-64"),
+    (r"\b6\.\.12\b", "the agent range is 6..64"),
+    (r"At most 12 agents", "the agent limit is 64"),
     (r"Add agent card", "the button is 'Add agent'"),
     (r"Remove this card", "the button is 'Remove this agent'"),
     (r"Shared files are frozen|files? \(`schemas\.py`.*\) are \*\*frozen\*\*", "change control is in CLAUDE.md, not a frozen-file process"),

@@ -267,7 +267,8 @@ def test_health_defaults_models_assumptions(client: TestClient) -> None:
     assert body == {"ok": True, "version": config.default_rules().__class__.__module__ and "0.1.0"}
     defaults = client.get("/api/defaults?agent_count=6").json()
     assert len(defaults["agents"]) == 6 and defaults["default_model_key"] == config.DEFAULT_MODEL_KEY
-    bad = client.get("/api/defaults?agent_count=13")
+    assert len(client.get(f"/api/defaults?agent_count={config.MAX_AGENTS}").json()["agents"]) == config.MAX_AGENTS == 64
+    bad = client.get(f"/api/defaults?agent_count={config.MAX_AGENTS + 1}")
     assert bad.status_code == 422 and bad.json()["error"] == "validation_error" and bad.json()["problems"][0]["path"] == "agent_count"
     assert client.get("/api/models").json()[0]["key"] == "fake-heuristic"
     assumptions = client.get("/api/assumptions").json()

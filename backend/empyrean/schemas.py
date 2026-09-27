@@ -66,6 +66,10 @@ KnowledgeKind = Literal["observation", "query", "action_result", "message", "ope
 # turn-id literal "live" and the event actors "world"/"system"/"operator".
 RESERVED_AGENT_IDS: tuple[str, ...] = ("self", "here", "run", "live", "world", "system", "operator")
 
+# Agent cards per run (config.MIN_AGENTS / MAX_AGENTS re-export these; 64 since 2026-09-27).
+MIN_AGENT_CARDS = 6
+MAX_AGENT_CARDS = 64
+
 # Stats that must stay integers after upgrades and operator edits.
 INTEGER_STATS: tuple[str, ...] = ("speed", "vision_range", "communication_range", "skill_count_limit", "skill_block_limit")
 
@@ -1928,7 +1932,7 @@ class TurnIndexEntry(StrictModel):
 
 class AgentCard(StrictModel):
     """Semantic setup checks (RunManager.create_run / validate_setup, reported as 422 problems
-    with paths like ``agents[2].position``): 6-12 cards; unique ids and names; position inside
+    with paths like ``agents[2].position``): 6-64 cards (config.MIN_AGENTS..MAX_AGENTS); unique ids and names; position inside
     the region (forced to land by generate_world, A-WORLD-6); stats >= 0; health <= max_health;
     essence <= essence_capacity; model exists and is available; effective context settings
     valid for the model; initial_skills compile; initial_plants species exist."""
@@ -1966,7 +1970,7 @@ class RunCreateRequest(StrictModel):
     max_rounds: Optional[int] = Field(default=None, ge=1)
     play_delay_seconds: float = Field(default=0.2, ge=0, le=60)
     real_budget_usd: Optional[float] = Field(default=None, ge=0)
-    agents: list[AgentCard] = Field(min_length=6, max_length=12)
+    agents: list[AgentCard] = Field(min_length=MIN_AGENT_CARDS, max_length=MAX_AGENT_CARDS)
 
 
 class ApiProblem(StrictModel):

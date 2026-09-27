@@ -151,7 +151,7 @@ A brief is the model's proposal of one typed action. Actions:
 
 | Action | Arguments | Executes |
 | --- | --- | --- |
-| `create_run` | `name`, `agent_count` (6-12), `overlay` (partial run request) | `POST /api/runs` with the overlay deep-merged onto `GET /api/defaults` (dicts merge; lists and values replace; agent cards merge by index); the run opens paused, nothing is spent |
+| `create_run` | `name`, `agent_count` (6-64), `overlay` (partial run request) | `POST /api/runs` with the overlay deep-merged onto `GET /api/defaults` (dicts merge; lists and values replace; agent cards merge by index); the run opens paused, nothing is spent |
 | `run_command` | `run_id`, `command` (`run_turn` / `play` / `pause` / `step_round`), `rounds` (1-50, only with `step_round`) | the command; with `rounds` a sequencer steps round by round and reports "round k/N"; a pause or error stops it |
 | `stage_interventions` | `run_id`, `interventions[]` (any intervention except `apply_working_files`) | stages each with origin `assistant` and note `assistant: <summary>`; all are validated first and already-staged ones are unstaged if a later one fails |
 | `create_continuation` | `run_id`, `from_turn_id`, `name` | `POST .../continuations` |

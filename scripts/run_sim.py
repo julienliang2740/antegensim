@@ -37,7 +37,7 @@ allowed only when ``EMPYREAN_ALLOW_LIVE=1`` is also set (``auto_live_allowed``);
 otherwise only a fake narrator (``EMPYREAN_ASSISTANT_MODEL_NARRATOR=fake-assistant``)
 writes entries.  Without ``--assistant`` the assistant routes answer 503.
 """
-# DOCS: --agents accepts config.MIN_AGENTS..MAX_AGENTS (6-12); --request overlays use the shared
+# DOCS: --agents accepts config.MIN_AGENTS..MAX_AGENTS (6-64); --request overlays use the shared
 # deep_merge of empyrean.assistant.briefs; --assistant never spends without EMPYREAN_ALLOW_LIVE=1.
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ IDLE_STATES = ("paused", "error", "finished")
 # Mirrors config.MIN_AGENTS / MAX_AGENTS (config is imported only after --worlds-dir is applied;
 # a test keeps these equal).
 MIN_AGENTS = 6
-MAX_AGENTS = 12
+MAX_AGENTS = 64
 
 
 # ---------------------------------------------------------------------------

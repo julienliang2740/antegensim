@@ -1163,7 +1163,7 @@ export interface RunCreateRequest {
   max_rounds?: number | null;
   play_delay_seconds?: number;
   real_budget_usd?: number | null;
-  agents: AgentCard[]; // 6..12
+  agents: AgentCard[]; // 6..64
 }
 
 export interface ApiProblem {
