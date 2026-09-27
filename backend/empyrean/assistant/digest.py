@@ -1460,6 +1460,7 @@ def opening_digest(run_id: str) -> dict[str, Any]:
                     "health": _num(stats.get("health")),
                     "compute": _num(stats.get("compute")),
                     "attack": _num(stats.get("attack")),
+                    "attack_cap": _num(stats.get("attack_cap")),
                     "speed": stats.get("speed"),
                     "vision": stats.get("vision_range"),
                     "model": overrides.get(aid) or default_key,

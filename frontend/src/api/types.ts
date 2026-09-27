@@ -36,7 +36,8 @@ export type UpgradeAttribute =
   | "essence_absorption"
   | "skill_count_limit"
   | "skill_block_limit"
-  | "attack";
+  | "attack"
+  | "attack_cap";
 
 export const UPGRADE_ATTRIBUTES: UpgradeAttribute[] = [
   "essence_capacity",
@@ -49,6 +50,7 @@ export const UPGRADE_ATTRIBUTES: UpgradeAttribute[] = [
   "skill_count_limit",
   "skill_block_limit",
   "attack",
+  "attack_cap",
 ];
 
 export type FailureReason =
@@ -120,6 +122,10 @@ export interface UpgradeSchedule {
   attack_base_compute: number;
   attack_base_essence: number;
   attack_growth: number;
+  /** The damage cap per attack is priced like attack: attack_cap_base_* x attack_cap_growth^n (A-ACT-19). */
+  attack_cap_base_compute: number;
+  attack_cap_base_essence: number;
+  attack_cap_growth: number;
   increments: Record<string, number>; // integer stats need integer increments
   hard_caps: Record<string, number>;
 }
@@ -583,6 +589,8 @@ export interface AgentStats {
   health: number;
   max_health: number;
   attack: number;
+  /** Most damage one attack can deal; a larger budget is cut to attack_cap / attack and only that is charged (A-ACT-19). */
+  attack_cap: number;
   speed: number;
   vision_range: number;
   communication_range: number;
@@ -793,6 +801,7 @@ export interface BelievedSelf {
   health: number | null;
   max_health: number | null;
   attack: number | null;
+  attack_cap: number | null;
   speed: number | null;
   vision_range: number | null;
   communication_range: number | null;

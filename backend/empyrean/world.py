@@ -590,6 +590,24 @@ def _useful_recovery(world: WorldState, agent: Agent, compute_budget: float) -> 
     return max(0.0, min(float(compute_budget), missing / per_compute))
 
 
+def effective_attack_budget(agent: Agent, compute_budget: float) -> float:
+    """The part of an attack's nominal budget that can do damage: ``compute_budget`` cut to
+    ``attack_cap / attack`` when ``attack * compute_budget`` would exceed ``stats.attack_cap``
+    (A-ACT-19).  Only this part is charged.  With ``attack <= 0`` the budget is returned as is
+    (it deals no damage either way)."""
+    budget = float(compute_budget)
+    attack = float(agent.stats.attack)
+    cap = float(agent.stats.attack_cap)
+    if attack > 0 and attack * budget > cap:
+        return max(0.0, cap / attack)
+    return budget
+
+
+def attack_damage(agent: Agent, compute_budget: float) -> float:
+    """``min(attack * compute_budget, attack_cap)`` (A-ACT-19); never negative."""
+    return max(0.0, min(float(agent.stats.attack) * float(compute_budget), float(agent.stats.attack_cap)))
+
+
 def quote_action(world: WorldState, agent: Agent, action: WorldAction, via_skill: bool) -> ActionQuote:
     """Effective price of ``action`` for ``agent`` in the given mode.
 
@@ -600,8 +618,9 @@ def quote_action(world: WorldState, agent: Agent, action: WorldAction, via_skill
       The transferred amount is never discounted and never a "cost".
     * recover: ``base_compute = min(compute_budget, (max_health - health) / health_per_compute)``
       (useful nominal amount; 0 at full health); discounted in a skill.
-    * attack: ``base_compute = compute_budget``; discounted in a skill; damage is
-      ``attack * compute_budget`` regardless of discount.
+    * attack: ``base_compute = effective_attack_budget`` (the budget cut to ``attack_cap /
+      attack``, A-ACT-19); discounted in a skill; damage is ``min(attack * compute_budget,
+      attack_cap)`` regardless of discount.
     * upgrade: from ``upgrade_quotes``; ``essence`` never discounted; ``allowed`` copied.
     * ``attempt_fee = min(rules.accounting.failure_fee_cap, base_compute) * (discount if via_skill else 1)``
       (both modes).
@@ -625,7 +644,7 @@ def quote_action(world: WorldState, agent: Agent, action: WorldAction, via_skill
     elif name == "recover":
         base = _useful_recovery(world, agent, args.compute_budget)
     elif name == "attack":
-        base = float(args.compute_budget)
+        base = effective_attack_budget(agent, args.compute_budget)
     elif name == "upgrade":
         quote = upgrade_quotes(world, agent, via_skill)[args.attribute]
         base = float(quote["base_compute"])
@@ -665,7 +684,8 @@ def upgrade_quotes(world: WorldState, agent: Agent, via_skill: bool) -> dict[str
     """Per attribute: ``{base_compute, skill_compute, compute, essence, next_value, allowed}``.
 
     ``compute`` is the effective price in the current mode.  Prices: standard
-    ``base * growth**n``, attack ``attack_base * attack_growth**n`` with ``n =
+    ``base * growth**n``, attack ``attack_base * attack_growth**n``, attack_cap
+    ``attack_cap_base * attack_cap_growth**n`` (A-ACT-19) with ``n =
     upgrade_counts[attr]``.  At a hard cap (``value >= cap - eps``): prices still show the
     formula for display, ``next_value = current value`` and ``allowed = False`` (A-ACT-18).
     Otherwise ``next_value = min(cap, value + increment)`` (rounded to 9 decimals for the
@@ -681,6 +701,10 @@ def upgrade_quotes(world: WorldState, agent: Agent, via_skill: bool) -> dict[str
             growth = schedule.attack_growth ** count
             base = schedule.attack_base_compute * growth
             essence = schedule.attack_base_essence * growth
+        elif attribute == "attack_cap":
+            growth = schedule.attack_cap_growth ** count
+            base = schedule.attack_cap_base_compute * growth
+            essence = schedule.attack_cap_base_essence * growth
         else:
             growth = schedule.standard_growth ** count
             base = schedule.standard_base_compute * growth
@@ -728,7 +752,7 @@ def self_query_data(world: WorldState, agent: Agent, via_skill: bool) -> dict[st
     """The ``query(self)`` data block (design doc query table) using POST-payment balances.
 
     Keys: position, health, max_health, compute, essence, essence_capacity, attack,
-    speed, vision_range, communication_range, compute_absorption, essence_absorption,
+    attack_cap, speed, vision_range, communication_range, compute_absorption, essence_absorption,
     skill_count_limit, skill_block_limit, costs, upgrade_quotes, quote_mode ("direct" |
     "skill"), round.
     ``costs`` = {normal: {...prices}, skill: {...prices*discount}, discount,
@@ -744,6 +768,7 @@ def self_query_data(world: WorldState, agent: Agent, via_skill: bool) -> dict[st
         "essence": stats.essence,
         "essence_capacity": stats.essence_capacity,
         "attack": stats.attack,
+        "attack_cap": stats.attack_cap,
         "speed": stats.speed,
         "vision_range": stats.vision_range,
         "communication_range": stats.communication_range,
@@ -772,7 +797,7 @@ def _can_absorb(entity: Entity, resource: str, eps: float) -> bool:
 def public_entity_data(world: WorldState, viewer: Agent, entity: Entity, round_no: int) -> dict[str, Any]:
     """What ``query(entity_id)`` returns for a non-self entity (A-ACT-5), as seen by ``viewer``:
 
-    agent: id, name, kind, position, health, max_health, attack, speed, alive, round
+    agent: id, name, kind, position, health, max_health, attack, attack_cap, speed, alive, round
     plant: id, kind, position, species, stage_index, stage_name, size, alive,
            vitality (=essence), fruit_ids, seed_ids (both filtered to entities the viewer
            can see), round
@@ -789,6 +814,7 @@ def public_entity_data(world: WorldState, viewer: Agent, entity: Entity, round_n
                 "health": entity.stats.health,
                 "max_health": entity.stats.max_health,
                 "attack": entity.stats.attack,
+                "attack_cap": entity.stats.attack_cap,
                 "speed": entity.stats.speed,
                 "alive": entity.alive,
             }
@@ -1274,9 +1300,10 @@ def _plan_recover(world: WorldState, agent: Agent, args: Any, quote: ActionQuote
 
 
 def _plan_attack(world: WorldState, agent: Agent, args: Any) -> _Plan:
-    """Design "Conflict injury": damage = attack x nominal budget; agent death at health <= 0
-    resolved immediately; plants lose living essence, lethal at <= 0 with residue from the
-    pre-hit essence (A-PLANT-5)."""
+    """Design "Conflict injury": damage = attack x nominal budget, at most the attacker's
+    ``stats.attack_cap`` (A-ACT-19: the charge covers only the budget that does damage); agent
+    death at health <= 0 resolved immediately; plants lose living essence, lethal at <= 0 with
+    residue from the pre-hit essence (A-PLANT-5)."""
     eps = _eps(world)
     if args.target == agent.id:
         return "invalid_argument", None
@@ -1289,7 +1316,8 @@ def _plan_attack(world: WorldState, agent: Agent, args: Any) -> _Plan:
         return "out_of_range", None
 
     def apply() -> _Applied:
-        damage = agent.stats.attack * float(args.compute_budget)
+        damage = attack_damage(agent, args.compute_budget)
+        capped = agent.stats.attack * float(args.compute_budget) > agent.stats.attack_cap + eps
         events: list[EventDraft] = []
         notices: list[Notice] = []
         deaths: list[str] = []
@@ -1337,11 +1365,20 @@ def _plan_attack(world: WorldState, agent: Agent, args: Any) -> _Plan:
             else:
                 plant.essence = remaining
         return _Applied(
-            effects={"damage": damage, "target": target.id, "target_health_after": health_after, "killed": killed},
+            effects={
+                "damage": damage,
+                "target": target.id,
+                "target_health_after": health_after,
+                "killed": killed,
+                "capped": capped,
+                "attack_cap": agent.stats.attack_cap,
+            },
             events=events,
             notices=notices,
             deaths=deaths,
-            detail=f"{_fmt(damage)} damage to {target.id}" + (", killed" if killed else ""),
+            detail=f"{_fmt(damage)} damage to {target.id}"
+            + (f" (capped at attack_cap {_fmt(agent.stats.attack_cap)})" if capped else "")
+            + (", killed" if killed else ""),
         )
 
     return None, apply
@@ -2336,7 +2373,7 @@ def validate_world(world: WorldState) -> list[str]:
                 if entity.alive and terrain == "mountain":
                     errors.append(f"agents.{entity.id}: living agent on a mountain at {_fmt_point(entity.position)}")
                 stats = entity.stats
-                for field_name in ("compute", "essence", "health", "max_health", "essence_capacity", "attack"):
+                for field_name in ("compute", "essence", "health", "max_health", "essence_capacity", "attack", "attack_cap"):
                     if not _finite_nonneg(getattr(stats, field_name)):
                         errors.append(f"agents.{entity.id}: stats.{field_name} must be finite and >= 0")
                 for field_name in ("compute_absorption", "essence_absorption"):

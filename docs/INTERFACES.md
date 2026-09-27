@@ -156,7 +156,9 @@ message_tokens(rules, text) -> int            # ceil(len / chars_per_token)
 quote_action(world, agent, action, via_skill) -> ActionQuote
 upgrade_quotes(world, agent, via_skill) -> dict[str, dict]
 self_query_data(world, agent, via_skill) -> dict
-public_entity_data(world, viewer, entity, round_no) -> dict
+public_entity_data(world, viewer, entity, round_no) -> dict   # agent: id, name, kind, position, health, max_health, attack, attack_cap, speed, alive, round
+effective_attack_budget(agent, compute_budget) -> float       # the budget cut to attack_cap / attack (A-ACT-19)
+attack_damage(agent, compute_budget) -> float                 # min(attack * budget, attack_cap)
 apply_action(world, request: ActionRequest) -> ActionOutcome
 kill_agent(world, agent_id, cause) -> ActionOutcome
 kill_plant(world, plant_id, cause, pre_hit_essence) -> ActionOutcome
@@ -241,7 +243,7 @@ point). `target == actor` and wrong-kind targets → `invalid_argument` (fee) (A
 | absorb | source, resource | 3 | source a visible fruit/residue (`target_gone`); fruit/residue kind (`invalid_argument`); same point (`out_of_range`); available ≥ eps (`empty_source`); essence: free capacity ≥ eps (`at_limit`) | `{}` | `{"processed": raw, "gained": g, "lost": raw−g, "source": id, "resource": r}`; compute: process all, `g = raw × eff`; essence: `raw = min(available, free / eff)`, `g = min(raw × eff, free)`; source remainder < eps → 0 |
 | transfer | recipient, resource, amount | 1 (fee) | recipient ≠ self (`invalid_argument`); a visible living agent (`target_gone`) at the same point (`out_of_range`); essence recipient capacity ≥ amount (`at_limit`) | `{}` | `{"transferred": amount, "resource": r, "to": id}`; Notice(kind=system, `content.amount/resource/from`) to recipient "received X compute from <id or unknown>" (sender id only if the recipient can see the sender) |
 | recover | compute_budget | useful = min(budget, missing health / health_per_compute); 0 at full health (ok no-op) | — | `{}` | `{"healed": h, "health": new}` |
-| attack | target, compute_budget | budget (charged ×0.8 in skill; damage uses nominal) | target ≠ self (`invalid_argument`); a visible living agent or plant (`target_gone`); agent/plant kind (`invalid_argument`); same point (`out_of_range`) | `{}` | `{"damage": d, "target": id, "target_health_after": v, "killed": bool}`; agent target: Notice(kind=damage) with attacker id if visible else unknown; lethal → `kill_agent`/`kill_plant` |
+| attack | target, compute_budget | `effective_attack_budget` = budget cut to `attack_cap / attack` when `attack × budget > attack_cap` (A-ACT-19; charged ×0.8 in skill; damage uses the nominal budget, capped) | target ≠ self (`invalid_argument`); a visible living agent or plant (`target_gone`); agent/plant kind (`invalid_argument`); same point when `ranges.attack_requires_same_point`, else within vision (`out_of_range`) | `{}` | `{"damage": d, "target": id, "target_health_after": v, "killed": bool, "capped": bool, "attack_cap": c}`; agent target: Notice(kind=damage) with attacker id if visible else unknown; lethal → `kill_agent`/`kill_plant` |
 | upgrade | attribute | quote (compute + essence) | see step 3 | `{"attribute", "new_value", "purchase_count"}` | `{"purchased": attribute, "new_value": v, "compute": c, "essence": e}` |
 | wait | rounds | 0 | rounds ≥ 1 | `{}` | `{"waiting_turns": rounds}`; sets `wait_turns_remaining = rounds − 1` (this turn is the first) |
 
@@ -252,12 +254,16 @@ Every successful/failed action updates `agent.last_action` (`{"name","args"}`) a
 details={"action":..., "result":..., "via_skill":..., "skill_name":...}, costs=charge)`.
 
 `upgrade_quotes`: `{base_compute, skill_compute, compute, essence, next_value, allowed}` per
-attribute; at a cap the formula price is shown, `next_value` = current value, `allowed=false`.
+attribute (price `standard_base × standard_growth^n`; `attack` uses `attack_base_* × attack_growth^n`,
+`attack_cap` uses `attack_cap_base_* × attack_cap_growth^n`; defaults 100 × 4ⁿ compute + 10 × 4ⁿ
+essence for both); at a cap the formula price is shown, `next_value` = current value, `allowed=false`.
 A purchase sets `min(cap, value + increment)` (`int` for `INTEGER_STATS`; absorption rounded
 to 9 decimals). `self_query_data` adds `quote_mode` so a stored quote is never mistaken for
 the other mode's price.
 
-Damage rule: `damage = attacker.stats.attack × compute_budget`. Agent death when health ≤ 0
+Damage rule: `damage = min(attacker.stats.attack × compute_budget, attacker.stats.attack_cap)`
+(`world.attack_damage`; A-ACT-19). Only `effective_attack_budget` is charged, so committing more than
+`attack_cap / attack` costs nothing extra; `capped` says the cut happened. Agent death when health ≤ 0
 (A-DEATH-6): health clamped to 0, residue essence = essence × `death.essence_residue_fraction`,
 residue compute = compute × `death.compute_residue_fraction` (residue created only when
 either > eps; `death.residue_id` null otherwise), balances → 0, `alive=False`, skill stopped
@@ -1044,7 +1050,7 @@ limit is filled from the effective settings):
 {"name":"transfer","args":{"recipient":"<agent id>","resource":"compute"|"essence","amount":10}}
 {"name":"recover","args":{"compute_budget":10}}
 {"name":"attack","args":{"target":"<agent or plant id>","compute_budget":5}}
-{"name":"upgrade","args":{"attribute":"vision_range"}}     (one of the ten attribute names)
+{"name":"upgrade","args":{"attribute":"vision_range"}}     (one of the eleven attribute names)
 {"name":"wait","args":{"rounds":1}}
 {"name":"run_skill","args":{"skill":"feed","arguments":[]}}
 ```
@@ -1585,3 +1591,21 @@ Applied for the run archive (Resume page archive and delete):
   `DELETE_CLOSING_WAIT_SECONDS` for a closed worker still finishing its turn).
 * `types.ts`: `RunSummary.archived` / `archived_at`, `RunArchiveFilter`, `ApiErrorCode` +=
   `run_in_use`. `client.ts`: `listRuns(archived = "0")`, `archiveRun`, `unarchiveRun`, `deleteRun`.
+
+Applied for the attack damage cap (A-ACT-19):
+
+* `schemas.py`: `AgentStats.attack_cap: float = 50` (most damage one attack deals; runs stored
+  before it load with the default); `UpgradeAttribute` / `UPGRADE_ATTRIBUTES` += `attack_cap`;
+  `UpgradeSchedule.attack_cap_base_compute = 100`, `attack_cap_base_essence = 10`,
+  `attack_cap_growth = 4`, `increments["attack_cap"] = 25`; `BelievedSelf.attack_cap`.
+* `config.py`: `DEFAULT_AGENT_STATS.attack_cap = 50`, the `DEFAULT_UPGRADES` fields above, A-ACT-5
+  public fields += `attack_cap`, new assumption A-ACT-19.
+* `world.py`: `effective_attack_budget`, `attack_damage`; `quote_action` charges the cut budget;
+  `_plan_attack` caps the damage and adds `capped` / `attack_cap` to the effects; `upgrade_quotes`
+  prices `attack_cap`; `self_query_data` and `public_entity_data` include it; `validate_world`
+  requires it finite and ≥ 0.
+* `context.py`: the stable rules (COSTS: the cap, what is charged, the cap's price; WORLD: attack
+  and query reach when a run turns `attack_requires_same_point` / `query_uses_vision_range` off),
+  the run-start record, the believed-self line and the query(self) description name `attack_cap`.
+* `types.ts`: `AgentStats.attack_cap`, `BelievedSelf.attack_cap`, `UpgradeSchedule.attack_cap_*`,
+  `UpgradeAttribute` / `UPGRADE_ATTRIBUTES` += `attack_cap`.

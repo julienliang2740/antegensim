@@ -83,6 +83,9 @@ function pageNumbers(d: RunCreateRequest | null) {
   const aBase = up?.attack_base_compute ?? 100;
   const aEss = up?.attack_base_essence ?? 10;
   const aGrowth = up?.attack_growth ?? 4;
+  const cBase = up?.attack_cap_base_compute ?? 100;
+  const cEss = up?.attack_cap_base_essence ?? 10;
+  const cGrowth = up?.attack_cap_growth ?? 4;
   const inputRate = r?.cognition.input_rate ?? 0.0002;
   const genRate = r?.cognition.generation_rate ?? 0.001;
   const absorbPrice = price("absorb", 3);
@@ -108,6 +111,8 @@ function pageNumbers(d: RunCreateRequest | null) {
     essence: `${num(st?.essence, "20")} / ${num(st?.essence_capacity, "100")}`,
     health: `${num(st?.health, "100")} / ${num(st?.max_health, "100")}`,
     attack: num(st?.attack, "1"),
+    attackCap: num(st?.attack_cap, "50"),
+    attackCapBudget: num((st?.attack_cap ?? 50) / (st?.attack && st.attack > 0 ? st.attack : 1), "50"),
     speed: num(st?.speed, "1"),
     ranges: `${num(st?.vision_range, "0")} / ${num(st?.communication_range, "0")}`,
     absorption: `${pct(st?.compute_absorption, "20%")} / ${pct(st?.essence_absorption, "10%")}`,
@@ -186,6 +191,7 @@ function pageNumbers(d: RunCreateRequest | null) {
     att: `${num(aBase, "100")} × ${num(aGrowth, "4")}ⁿ compute + ${num(aEss, "10")} × ${num(aGrowth, "4")}ⁿ essence`,
     stdSteps: [0, 1, 2].map((n) => `${num(sBase * sGrowth ** n, "")} + ${num(sEss * sGrowth ** n, "")}`),
     attSteps: [0, 1, 2].map((n) => `${num(aBase * aGrowth ** n, "")} + ${num(aEss * aGrowth ** n, "")}`),
+    capSteps: [0, 1, 2].map((n) => `${num(cBase * cGrowth ** n, "")} + ${num(cEss * cGrowth ** n, "")}`),
     firstUpgradeMoves: move > 0 ? num(sBase / move, "five") : "five",
     increments: (name: string, fallback: string) => num(up?.increments?.[name], fallback),
     incrementPct: (name: string, fallback: string) => pct(up?.increments?.[name], fallback),
@@ -349,7 +355,7 @@ export function InstructionsPage(props: { section?: string | null }) {
           </li>
           <li>
             <strong>Private state stays private.</strong> Sharing a point does not reveal another agent's notebook, memories, skills or balances. Querying
-            another agent shows only its id, name, position, health, max health, attack, speed and whether it is alive.
+            another agent shows only its id, name, position, health, max health, attack, attack cap, speed and whether it is alive.
           </li>
           <li>
             Messages are limited to {N.messageTokens} tokens (about {N.messageChars} characters). A longer message fails.
@@ -384,6 +390,11 @@ export function InstructionsPage(props: { section?: string | null }) {
               <td>Attack</td>
               <td>{N.attack}</td>
               <td>Damage per unit of compute committed to an attack.</td>
+            </tr>
+            <tr>
+              <td>Attack cap</td>
+              <td>{N.attackCap}</td>
+              <td>The most damage one attack can deal. A stronger target needs several hits.</td>
             </tr>
             <tr>
               <td>Speed</td>
@@ -592,8 +603,8 @@ export function InstructionsPage(props: { section?: string | null }) {
               <td>
                 <code>attack(target, budget)</code>
               </td>
-              <td>Deals attack × budget damage to an agent or plant at the same point.</td>
-              <td>the budget</td>
+              <td>Deals attack × budget damage, at most the attack cap, to an agent or plant at the same point.</td>
+              <td>the budget, cut to attack cap ÷ attack</td>
               <td>{N.skillPct} of it</td>
             </tr>
             <tr>
@@ -769,6 +780,15 @@ RETURN "completed"`}
               <td>{N.attSteps[1] || "400 + 40"}</td>
               <td>{N.attSteps[2] || "1,600 + 160"}</td>
             </tr>
+            <tr>
+              <td>
+                <code>attack_cap</code>
+              </td>
+              <td>+{N.increments("attack_cap", "25")} damage per attack</td>
+              <td>{N.capSteps[0] || "100 + 10"}</td>
+              <td>{N.capSteps[1] || "400 + 40"}</td>
+              <td>{N.capSteps[2] || "1,600 + 160"}</td>
+            </tr>
           </tbody>
         </table>
         <p className="hint">Prices are compute + essence. A first upgrade costs as much compute as {N.firstUpgradeMoves} moves.</p>
@@ -781,9 +801,11 @@ RETURN "completed"`}
       <Section id="conflict">
         <h3>Attack</h3>
         <p>
-          <code>attack(target, budget)</code> deals <strong>attacker's attack × budget</strong> damage. With attack 1, a budget of 10 deals 10 damage and costs
-          10 compute ({N.attackExampleSkill} in a skill). There is no armor, defense or counterattack. The target must be visible and at the same point. Because higher speed acts
-          first, a compute-rich, fast agent can kill in one blow.
+          <code>attack(target, budget)</code> deals <strong>attacker's attack × budget</strong> damage, <strong>at most the attacker's attack cap</strong> (
+          {N.attackCap} damage per hit to start). With attack 1, a budget of 10 deals 10 damage and costs 10 compute ({N.attackExampleSkill} in a skill). A budget
+          above attack cap ÷ attack ({N.attackCapBudget} to start) is cut to it, and only the cut budget is charged. A target with more health than the cap needs
+          several hits, so it gets turns in between to flee, recover or strike back. There is no armor or automatic counterattack. The target must be visible and at
+          the same point. The attack cap can be upgraded like attack, and just as steeply.
         </p>
         <h3>Death and residue</h3>
         <p>

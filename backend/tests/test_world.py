@@ -359,11 +359,56 @@ def test_attack_budget_10_charges_10_or_8_and_deals_10_damage():
     assert direct.result.cost_compute == 10 and skill.result.cost_compute == 8
     assert direct.result.effects["damage"] == 10 and skill.result.effects["damage"] == 10
     assert world.agents["a03"].stats.health == 80
-    assert direct.result.effects == {"damage": 10, "target": "a03", "target_health_after": 90, "killed": False}
+    assert direct.result.effects == {
+        "damage": 10, "target": "a03", "target_health_after": 90, "killed": False, "capped": False, "attack_cap": 50
+    }
     assert len(events_of(direct, "damage")) == 1
     notice = direct.notices[0]
     assert notice.agent_id == "a03" and notice.kind == "damage"
     assert notice.content == {"amount": 10, "attacker": "a01", "health_after": 90, "cause": "attack"}
+
+
+def test_attack_damage_is_capped_per_attack_and_only_the_useful_budget_is_charged():
+    """A-ACT-19: damage = min(attack x budget, attack_cap); a budget above attack_cap / attack is cut
+    and only the cut part is charged (x0.8 in a skill), so a fresh 100-health agent takes two hits."""
+    world = make_world([card(1, attack=2.0), card(2, attack=2.0), card(3)])
+    big = act(world, "a01", "attack", target="a03", compute_budget=60)
+    assert big.result.ok and big.result.effects["damage"] == 50 and big.result.effects["capped"] is True
+    assert big.result.effects["attack_cap"] == 50 and big.result.cost_compute == 25
+    assert world.agents["a03"].alive and world.agents["a03"].stats.health == 50
+    in_skill = act(world, "a02", "attack", via_skill=True, target="a03", compute_budget=60)
+    assert in_skill.result.cost_compute == 20 and in_skill.result.effects["damage"] == 50
+    assert in_skill.result.effects["killed"] is True
+    # a budget at or under the cap is charged and applied in full
+    world2 = make_world([card(1, attack=2.0), card(2)])
+    exact = act(world2, "a01", "attack", target="a02", compute_budget=25)
+    assert exact.result.effects["damage"] == 50 and exact.result.effects["capped"] is False and exact.result.cost_compute == 25
+    # the quote a skill or the model sees uses the cut budget too
+    quote = W.quote_action(world2, world2.agents["a01"], ACTION.validate_python({"name": "attack", "args": {"target": "a02", "compute_budget": 100}}), via_skill=False)
+    assert quote.base_compute == 25 and quote.compute == 25
+
+
+def test_attack_cap_upgrade_is_priced_like_attack_and_grows_exponentially():
+    world = make_world([card(1, compute=5000, essence=100, essence_capacity=1000), card(2)])
+    a01 = world.agents["a01"]
+    quote = W.upgrade_quotes(world, a01, via_skill=False)["attack_cap"]
+    assert (quote["compute"], quote["essence"], quote["next_value"], quote["allowed"]) == (100, 10, 75, True)
+    first = act(world, "a01", "upgrade", attribute="attack_cap")
+    assert first.result.ok and a01.stats.attack_cap == 75 and first.result.cost_compute == 100 and first.result.cost_essence == 10
+    second = W.upgrade_quotes(world, a01, via_skill=False)["attack_cap"]
+    assert (second["compute"], second["essence"], second["next_value"]) == (400, 40, 100)
+    assert W.upgrade_quotes(world, a01, via_skill=True)["attack_cap"]["compute"] == 320
+    # the raised cap applies to the next hit
+    hit = act(world, "a01", "attack", target="a02", compute_budget=90)
+    assert hit.result.effects["damage"] == 75 and hit.result.cost_compute == 75
+
+
+def test_attack_cap_is_public_in_query_and_exact_in_query_self():
+    world = make_world([card(1, vision_range=2, attack_cap=80), card(2, attack_cap=65)])
+    other = act(world, "a01", "query", entity="a02")
+    assert other.result.ok and other.result.data["attack_cap"] == 65
+    own = act(world, "a01", "query", entity="self")
+    assert own.result.data["attack_cap"] == 80 and "attack_cap" in own.result.data["upgrade_quotes"]
 
 
 def test_recover_10_missing_health_charges_10_or_8_and_heals_10():
@@ -782,7 +827,9 @@ def test_lethal_attack_resolves_death_once_with_residue():
     world = make_world([card(1, attack=2.0), card(2, health=20, compute=50, essence=20)])
     out = act(world, "a01", "attack", target="a02", compute_budget=10)
     assert out.result.ok and out.result.cost_compute == 10
-    assert out.result.effects == {"damage": 20, "target": "a02", "target_health_after": 0, "killed": True}
+    assert out.result.effects == {
+        "damage": 20, "target": "a02", "target_health_after": 0, "killed": True, "capped": False, "attack_cap": 50
+    }
     victim = world.agents["a02"]
     assert victim.alive is False and victim.stats.health == 0 and victim.stats.compute == 0 and victim.stats.essence == 0
     assert victim.died_round == 1 and victim.death_cause == "attack"
@@ -831,7 +878,9 @@ def test_plant_lethal_hit_leaves_residue_from_pre_hit_essence():
     plant = add_plant(world, essence=5.0, energy=30.0)
     hit = act(world, "a01", "attack", target=plant.id, compute_budget=2)
     assert hit.result.ok and plant.essence == 3 and plant.alive
-    assert hit.result.effects == {"damage": 2, "target": plant.id, "target_health_after": 3, "killed": False}
+    assert hit.result.effects == {
+        "damage": 2, "target": plant.id, "target_health_after": 3, "killed": False, "capped": False, "attack_cap": 50
+    }
     assert world.residues == {} and hit.notices == []
     kill = act(world, "a01", "attack", target=plant.id, compute_budget=10)
     assert kill.result.effects["killed"] is True and kill.result.effects["target_health_after"] == 0

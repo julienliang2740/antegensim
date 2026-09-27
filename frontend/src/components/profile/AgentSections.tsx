@@ -81,6 +81,7 @@ export function AgentOverview(props: {
     statRow("compute", fmtNum(s.compute)),
     statRow("essence / capacity", `${fmtNum(s.essence)} / ${fmtNum(s.essence_capacity)}`, "essence_capacity"),
     statRow("attack", fmtNum(s.attack), "attack"),
+    statRow("attack_cap (most damage per hit)", fmtNum(s.attack_cap), "attack_cap"),
     statRow("speed", fmtNum(s.speed), "speed"),
     statRow("vision_range", fmtNum(s.vision_range), "vision_range"),
   ];

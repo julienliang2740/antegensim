@@ -114,7 +114,8 @@ def estimate_tokens(text: str) -> int:
 
 DEFAULT_PRICES = Prices(move=5, observe=1, query=1, send=3, broadcast=7, absorb=3, transfer=1, wait=0)
 
-# "Upgradeable attributes and prices": 25*2^n compute + 2*2^n essence; attack 100*4^n + 10*4^n
+# "Upgradeable attributes and prices": 25*2^n compute + 2*2^n essence; attack 100*4^n + 10*4^n;
+# the damage cap per attack (A-ACT-19) is priced like attack: 100*4^n + 10*4^n, +25 per purchase.
 DEFAULT_UPGRADES = UpgradeSchedule(
     standard_base_compute=25,
     standard_base_essence=2,
@@ -122,6 +123,9 @@ DEFAULT_UPGRADES = UpgradeSchedule(
     attack_base_compute=100,
     attack_base_essence=10,
     attack_growth=4,
+    attack_cap_base_compute=100,
+    attack_cap_base_essence=10,
+    attack_cap_growth=4,
 )
 
 # "Saved skill compute discount" 0.8; "Turns speed and skill execution" interpreter
@@ -171,6 +175,7 @@ DEFAULT_AGENT_STATS = AgentStats(
     health=100,
     max_health=100,
     attack=1.0,
+    attack_cap=50.0,  # A-ACT-19: at most 50 damage per attack, so a fresh 100-health agent takes 2 hits
     speed=1,
     vision_range=0,
     communication_range=0,
@@ -614,7 +619,7 @@ ASSUMPTIONS: dict[str, Assumption] = {
     ),
     "A-ACT-5": Assumption(
         key="query(other agent) public fields",
-        default=["id", "name", "position", "health", "max_health", "attack", "speed", "alive"],
+        default=["id", "name", "position", "health", "max_health", "attack", "attack_cap", "speed", "alive"],
         citation="Design: 'Observe query and action feedback' query table ('Visibility choice')",
         rationale="Private balances (compute/essence) are not public.",
     ),
@@ -695,6 +700,21 @@ ASSUMPTIONS: dict[str, Assumption] = {
         default="quote shows the formula price, next_value = current, allowed = false; upgrade returns at_limit and charges only the attempt fee when affordable, else insufficient_compute with no debit",
         citation="Design: 'Upgradeable attributes and prices' (at_limit changes nothing and does not charge the full price)",
         rationale="Deterministic behaviour a skill can branch on.",
+    ),
+    "A-ACT-19": Assumption(
+        key="stats.attack_cap (damage cap per attack)",
+        default=(
+            "50 damage per attack (starting stat); damage = min(attack x compute_budget, attack_cap); a budget above "
+            "attack_cap / attack is cut to it and only the cut budget is charged (x skill discount); upgradable by +25 "
+            "for upgrades.attack_cap_base_compute x attack_cap_growth^n compute + attack_cap_base_essence x "
+            "attack_cap_growth^n essence (100 x 4^n + 10 x 4^n)"
+        ),
+        citation="Operator request (2026-09-27): fights of several exchanges instead of one decisive blow",
+        rationale=(
+            "Without a cap damage grows linearly with the compute committed, so any agent holding enough compute "
+            "kills in one blow and the victim never acts; a cap forces several hits, giving the victim turns to flee, "
+            "recover or strike back.  Priced like attack so a higher cap is a real, exponentially costly investment."
+        ),
     ),
     # -- skills and interpreter ------------------------------------------------
     "A-SKILL-1": Assumption(

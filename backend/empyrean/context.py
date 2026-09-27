@@ -413,6 +413,7 @@ def _describe_self_data(data: dict[str, Any]) -> str:
         f"compute {_num(data.get('compute'))}",
         f"essence {_num(data.get('essence'))}/{_num(data.get('essence_capacity'))}",
         f"attack {_num(data.get('attack'))}",
+        f"attack_cap {_num(data.get('attack_cap'))}",
         f"speed {_num(data.get('speed'))}",
         f"vision_range {_num(data.get('vision_range'))}",
         f"communication_range {_num(data.get('communication_range'))}",
@@ -575,7 +576,7 @@ def add_record(
 def record_run_start(knowledge: AgentKnowledge, agent: Agent, round_no: int, turn_id: str) -> KnowledgeRecord:
     """The birth disclosure (kind "system", provenance "world", unread): position and the
     card's starting stats (compute, essence, essence_capacity, health, max_health, attack,
-    speed, ranges, absorption, skill limits) as ``content["self"]``.  This is the base of
+    attack_cap, speed, ranges, absorption, skill limits) as ``content["self"]``.  This is the base of
     ``believed_self`` (A-KNOW-6).  Also used for agents placed by god mode."""
     _check_owner(agent, knowledge)
     stats = agent.stats
@@ -585,7 +586,8 @@ def record_run_start(knowledge: AgentKnowledge, agent: Agent, round_no: int, tur
         f"You are {agent.name} (id {agent.id}); in round {round_no} you are at {_fmt_point(agent.position)}. "
         f"Starting state: compute {_num(stats.compute)}, essence {_num(stats.essence)} of capacity "
         f"{_num(stats.essence_capacity)}, health {_num(stats.health)} of {_num(stats.max_health)}, attack "
-        f"{_num(stats.attack)}, speed {stats.speed}, vision_range {stats.vision_range}, communication_range "
+        f"{_num(stats.attack)}, attack_cap {_num(stats.attack_cap)} (most damage per attack), speed {stats.speed}, "
+        f"vision_range {stats.vision_range}, communication_range "
         f"{stats.communication_range}, compute_absorption {_num(stats.compute_absorption)}, essence_absorption "
         f"{_num(stats.essence_absorption)}, skill limits {stats.skill_count_limit} skills x "
         f"{stats.skill_block_limit} blocks."
@@ -1319,7 +1321,8 @@ def _self_state_line(state: BelievedSelf) -> str:
     return (
         f"Your state {label}: compute {_num(state.compute)}, essence {_num(state.essence)} of capacity "
         f"{_num(state.essence_capacity)}, health {_num(state.health)} of {_num(state.max_health)}, attack "
-        f"{_num(state.attack)}, speed {_num(state.speed)}, vision_range {_num(state.vision_range)}, "
+        f"{_num(state.attack)}, attack_cap {_num(state.attack_cap)}, speed {_num(state.speed)}, "
+        f"vision_range {_num(state.vision_range)}, "
         f"communication_range {_num(state.communication_range)}, compute_absorption "
         f"{_num(state.compute_absorption)}, essence_absorption {_num(state.essence_absorption)}, skill limits "
         f"{_num(state.skill_count_limit)} skills x {_num(state.skill_block_limit)} blocks. Upkeep and skill "
@@ -1393,7 +1396,7 @@ _ACTION_SHAPES = """{"name":"move","args":{"direction":"up"|"down"|"left"|"right
 {"name":"transfer","args":{"recipient":"<agent id>","resource":"compute"|"essence","amount":10}}
 {"name":"recover","args":{"compute_budget":10}}
 {"name":"attack","args":{"target":"<agent or plant id>","compute_budget":5}}
-{"name":"upgrade","args":{"attribute":"vision_range"}}     (one of the ten attribute names)
+{"name":"upgrade","args":{"attribute":"vision_range"}}     (one of the eleven attribute names)
 {"name":"wait","args":{"rounds":1}}
 {"name":"run_skill","args":{"skill":"feed","arguments":[]}}"""
 
@@ -1426,6 +1429,10 @@ def _world_block(rules: RulesConfig) -> str:
     if ranges.query_uses_vision_range:
         sensing.append("query")
     sense = f"{' and '.join(sensing)} reach points within your vision_range; " if sensing else ""
+    if not ranges.attack_requires_same_point:
+        sense += "attack reaches any target you can see (within your vision_range); "
+    if not ranges.query_uses_vision_range:
+        sense += "query(id) reaches an entity anywhere on the map if you know its id; "
     death = rules.death
     messages = rules.messages
     return "\n".join([
@@ -1477,13 +1484,17 @@ def _costs_block(rules: RulesConfig, mind_multiplier: float) -> str:
             price("transfer", "transfer fee") + " plus the amount sent", price("wait"),
         ]) + ".",
         f"recover(budget): charge = the useful part of the budget (skill x{_num(discount)}); heals "
-        f"{_num(rules.recovery.health_per_compute)} health per compute. attack(target, budget): charge = the budget "
-        f"(skill x{_num(discount)}); damage = your attack x the full budget.",
+        f"{_num(rules.recovery.health_per_compute)} health per compute. attack(target, budget): damage = your attack "
+        f"x the full budget, at most your attack_cap per attack; charge = the budget, cut to attack_cap / attack when "
+        f"it would deal more (skill x{_num(discount)}). A target with more health than your attack_cap needs several "
+        "hits.",
         f"upgrade(attribute): {_num(upgrades.standard_base_compute)} x {_num(upgrades.standard_growth)}^n compute + "
         f"{_num(upgrades.standard_base_essence)} x {_num(upgrades.standard_growth)}^n essence, n = your earlier "
         f"purchases of that attribute; attack costs {_num(upgrades.attack_base_compute)} x "
         f"{_num(upgrades.attack_growth)}^n compute + {_num(upgrades.attack_base_essence)} x "
-        f"{_num(upgrades.attack_growth)}^n essence. Essence prices and amounts are never discounted. Increments: "
+        f"{_num(upgrades.attack_growth)}^n essence; attack_cap costs {_num(upgrades.attack_cap_base_compute)} x "
+        f"{_num(upgrades.attack_cap_growth)}^n compute + {_num(upgrades.attack_cap_base_essence)} x "
+        f"{_num(upgrades.attack_cap_growth)}^n essence. Essence prices and amounts are never discounted. Increments: "
         f"{increments}." + (f" Caps: {caps}." if caps else ""),
         "Failures: if you cannot afford the full charge nothing is charged; an affordable action that fails a "
         f"legality check costs only the attempt fee min({_num(fee_cap)}, normal price) (x{_num(discount)} in a skill). "

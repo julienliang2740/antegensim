@@ -146,17 +146,17 @@ The design's "Open decisions and next experiments" are not settled. The defaults
 | --- | --- | --- |
 | Are cognition and action costs comparable? (1) | Live, one Haiku decision cost 1.4–2.0 compute, about the price of one cheap action (observe 1, absorb 3, move 5) | Record cognition vs action spend over longer live runs and tune `rules.cognition.*` |
 | Do low absorption yields support survival? (1) | Live reading: a stationary agent on its own plant spends about 2.7 compute per round (cognition + upkeep) plus fees, and gains about 9 net per 5 rounds from one fruit at 0.2 absorption. The default economy is slightly negative even without exploring | Run 20+ round live sessions and adjust `fruit_energy`, `fruit_interval_rounds` or `compute_absorption` |
-| How much residue survives death? (1) | Defaults 0.4 of essence and 0.5 of compute (A-DEATH-1/2); no live death has happened | Observe deaths in long runs, log residue, then fix the fractions |
+| How much residue survives death? (1) | Defaults 0.4 of essence and 0.5 of compute (A-DEATH-1/2). Live deaths so far used a run that set both to 1.0 (the Haiku "Blood arena" run of 2026-09-27: 12 deaths, 11 by attack, bodies looted by skills) | Observe deaths under the default fractions in long runs, then fix them |
 | Is the provisional plant-damage rule acceptable? (1) | Attacks reduce plant essence (A-PLANT-5); only fake-tested | Scripted attack scenarios, then a live run with conflict |
-| How severe is first-strike dominance? (1) | No agent attacked in any live run | Measure deaths by attack budget and speed over long runs |
+| How severe is first-strike dominance? (1) | Before the damage cap it was total: in the live "Blood arena" run (12 Haiku agents, no food, attack 2, health 120) all 13 landed attacks killed with one blow and no victim ever acted between hits. The attack cap (A-ACT-19, 50 damage per attack by default) now forces at least two hits on a fresh 100-health agent; it has only been tested with fake models | A live run with the cap: measure hits per kill and how often victims flee, recover or strike back |
 | What are the minimal seed and germination actions? (1) | Seeds drop and germinate automatically; agents have no planting action | Specify the actions before claiming cultivation |
 | Are upgrades affordable and diverse enough? (2) | Live agents bought only `vision_range` (25 compute + 2 essence) | Review the price schedule after longer runs |
 | How much data about other agents is public? (2) | Public fields are fixed in A-ACT-5 | Review with the query schema |
 | How should the world be generated? (later) | Seeded clusters; first plants on agent start cells, each with one ripe fruit (A-WORLD-7, A-PLANT-13) | Decide map seeding and placement |
 
-Behaviour not exercised by a live model: skills (`save_skills` / `run_skill`), `send` / `broadcast`, `recover`, `attack`, `transfer`, `wait` and deaths. No Haiku agent chose them in 3 rounds. Their rules are covered by fake-model tests only, and long-run ecology (fruit cycles, deaths, residue) is not covered end to end at all.
+Behaviour exercised by live Haiku runs since (2026-09-26/27, 100-round runs): `save_skills` / `run_skill` (every agent in the "Scarce frontier" run saved at least one skill; in the "Blood arena" run 309 of 439 turns ran inside skills), `move`, `attack` and deaths (11 kills), `absorb` of residue, `upgrade` and starvation. Still not exercised live: `send` / `broadcast` (no agent messaged in either run), `transfer`, `recover` and `wait`, and the attack damage cap (added after those runs). Long-run plant ecology has run live only in the food runs.
 
-- *Next step:* a longer live run (10+ rounds) and scripted live scenarios that prompt for skills and messages.
+- *Next step:* live scenarios that make messaging pay (squads, a communication range wider than the spawn spacing) and a live run with the attack cap.
 
 ## Deliberately not implemented
 

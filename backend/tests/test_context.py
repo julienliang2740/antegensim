@@ -750,6 +750,23 @@ def test_stable_rules_identity_prices_and_no_prescribed_goals():
     )
 
 
+def test_stable_rules_explain_the_attack_cap_its_price_and_ranged_rules():
+    """A-ACT-19 reaches the agent: the damage cap per attack, what is charged, the cap's upgrade
+    price, and (when a run turns the range flags off) that attack and query reach further."""
+    agent = make_agent()
+    text = context.stable_rules_text(RulesConfig(), agent, ContextSettings(), 1.0)
+    assert "at most your attack_cap per attack" in text and "cut to attack_cap / attack" in text
+    assert "attack_cap costs 100 x 4^n compute + 10 x 4^n essence" in text and "attack_cap +25" in text
+    assert "one of the eleven attribute names" in text
+    assert "attack reaches any target you can see" not in text and "query(id) reaches an entity anywhere" not in text
+    ranged = RulesConfig()
+    ranged.ranges.attack_requires_same_point = False
+    ranged.ranges.query_uses_vision_range = False
+    wide = context.stable_rules_text(ranged, agent, ContextSettings(), 1.0)
+    assert "attack reaches any target you can see (within your vision_range)" in wide
+    assert "query(id) reaches an entity anywhere on the map if you know its id" in wide
+
+
 def test_skills_section_shows_source_only_for_the_failed_skill(monkeypatch):
     calls = []
 

@@ -105,6 +105,7 @@ ends in `error`.
 | queries respect visibility; prices are visible to the caller | Unit: `test_world.py::test_query_respects_visibility_and_returns_public_data_only`, `::test_query_self_exposes_prices_quotes_and_post_payment_balances`. `test_design_example_3…` (skill-mode quotes) |
 | raising caps does not fill them | `test_design_example_3…` (vision +1, essence −2, nothing else changes) |
 | attack charges the nominal budget adjusted in a skill; absorption losses are not recoverable | Unit: `test_world.py::test_attack_budget_10_charges_10_or_8_and_deals_10_damage`, `::test_absorb_100_compute_at_20_percent_gains_20_destroys_80_costs_3` |
+| attack damage cap (A-ACT-19): damage at most `attack_cap`, only the cut budget charged, the cap upgradable at the attack price, public in query and in the agents' rules text | Unit: `test_world.py::test_attack_damage_is_capped_per_attack_and_only_the_useful_budget_is_charged`, `::test_attack_cap_upgrade_is_priced_like_attack_and_grows_exponentially`, `::test_attack_cap_is_public_in_query_and_exact_in_query_self`, `test_context.py::test_stable_rules_explain_the_attack_cap_its_price_and_ranged_rules` |
 | no skill gets multiple world actions in one turn | `test_design_example_1…` (exactly one `action` event per skill turn) |
 | unaffordable minimum packet → explicit resource result; starvation at round end | `test_e2e_rules.py::test_unaffordable_agent_is_skipped_and_starves_at_round_end` |
 

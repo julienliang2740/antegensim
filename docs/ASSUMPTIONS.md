@@ -50,7 +50,7 @@ defaults; a run's own values are on its Rules tab.
 | A-ACT-2 | Moving outside the generated region is always refused (entities stay inside the region); the flag only picks the reason: true → `blocked` (like a mountain), false → `out_of_range` | `rules.ranges.outside_region_is_blocked` | true | D "Spawned terrain and passage" (generation deferred) |
 | A-ACT-3 | Message size limit measured as ceil(len/chars_per_token); longer or empty messages fail with `invalid_argument` and the attempt fee | `rules.messages.max_message_tokens` / `chars_per_token` | 256 / 4 | D "Action blocks" suggested message limit |
 | A-ACT-4 | observe page size; a page past the end is ok with an empty list; `generate_world` copies the value to `WorldState.observation_page_size`, which the run keeps (editable in god mode) | `world.max_entities_per_observation_page` | 40 | D "Observe query and action feedback" (pagination allowed) |
-| A-ACT-5 | Public fields when querying another agent | `world.public_entity_data` | id, name, position, health, max_health, attack, speed, alive | D query table "Visibility choice" |
+| A-ACT-5 | Public fields when querying another agent | `world.public_entity_data` | id, name, position, health, max_health, attack, attack_cap, speed, alive | D query table "Visibility choice" |
 | A-ACT-6 | Transfer recipients | engine rule | living, visible agents at the same point only | D "Action blocks" (plants excluded) |
 | A-ACT-7 | `wait(n)` consumes this turn and the next n−1 turns; no model call while waiting; events still accumulate | engine rule | as stated | D "Turns speed and skill execution" |
 | A-ACT-8 | Attack on a dead/absent/unseen target → `target_gone`, attempt fee min(1, budget) | engine rule | as stated | D "Conflict injury" |
@@ -63,6 +63,7 @@ defaults; a run's own values are on its Rules tab.
 | A-ACT-15 | `send` requires the recipient visible AND within communication range (else `target_gone`); `broadcast` reaches everyone in range but reports only `delivered_to_visible`, no total count | engine rule | as stated | D "Coordinates vision and communication" |
 | A-ACT-16 | Self-target or wrong entity kind → `invalid_argument` with the attempt fee; absorb checks `empty_source` before `at_limit` | engine rule | as stated | D "Action blocks"; "Absorption efficiency" |
 | A-ACT-17 | Accounting epsilon: amounts < eps are empty; absorption stats rounded to 9 decimals and clamped; essence gained = min(raw × eff, free capacity) | `rules.accounting.eps` | 1e-9 | D "Absorption efficiency" ("precise resource accounting") |
+| A-ACT-19 | Damage cap per attack: damage = min(attack × budget, attack_cap); a budget above attack_cap ÷ attack is cut and only the cut part is charged (× skill discount); upgradable +25 for `attack_cap_base_compute` × `attack_cap_growth`ⁿ compute + `attack_cap_base_essence` × `attack_cap_growth`ⁿ essence | `stats.attack_cap`, `rules.upgrades.attack_cap_*` | 50 damage; 100 × 4ⁿ + 10 × 4ⁿ; +25 | Operator request 2026-09-27: several exchanges per fight instead of one decisive blow |
 | A-ACT-18 | Upgrade at a hard cap: quote shows the formula price, `next_value` = current, `allowed=false`; `at_limit` charges only the attempt fee when affordable, else `insufficient_compute` with no debit | engine rule | as stated | D "Upgradeable attributes and prices" |
 
 ## Skills and interpreter

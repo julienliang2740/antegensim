@@ -57,12 +57,12 @@ An agent is a card turned into a world entity: id (`a01`..`a12` by default, or a
 default), start position, stats, optional persona, starting notebook and starting skills.
 
 Shipped default stats: compute 200, essence 20, essence capacity 100, health 100, max health 100,
-attack 1.0, speed 1, vision range 0, communication range 0, compute absorption 0.20, essence
+attack 1.0, attack cap 50 (the most damage one attack can deal), speed 1, vision range 0, communication range 0, compute absorption 0.20, essence
 absorption 0.10, skill count limit 5, skill block limit 100.
 
 With vision and communication range 0, an agent sees and talks only to its own point at the start.
-`query` of another agent reveals id, name, kind, position, health, max health, attack, speed and
-alive, never its compute or essence.
+`query` of another agent reveals id, name, kind, position, health, max health, attack, attack cap,
+speed and alive, never its compute or essence.
 
 ## Rounds and initiative
 
@@ -154,7 +154,7 @@ Exactly one per turn. Prices are shipped defaults; "in a skill" is 80% of the co
 | `absorb(source, resource)` | take compute or essence from fruit or residue at the same point; keep only the absorption fraction | 3 | 2.4 |
 | `transfer(recipient, resource, amount)` | give compute or essence to an agent at the same point | 1 + amount | 0.8 + amount |
 | `recover(compute_budget)` | turn compute into health 1:1, only the useful part | the useful budget | 80% of it |
-| `attack(target, compute_budget)` | damage = attacker's attack × the full budget, to an agent or plant at the same point | the budget | 80% of it |
+| `attack(target, compute_budget)` | damage = attacker's attack × the full budget, at most the attacker's attack cap, to an agent or plant at the same point | the budget, cut to attack cap ÷ attack | 80% of it |
 | `upgrade(attribute)` | one step of a stat (see "Upgrades") | compute + essence | 80% of the compute part |
 | `wait(rounds)` | pass this turn and the next rounds − 1 turns | 0 | 0 |
 | `run_skill(skill, arguments)` | start a saved skill (runs up to its first action this turn) | the skill's first action | |
@@ -185,11 +185,11 @@ residue. An empty source or a full essence capacity fails instead of destroying 
 
 ## Upgrades
 
-`upgrade(attribute)` buys one step of one of 10 attributes. Price for the n-th previous purchase
+`upgrade(attribute)` buys one step of one of 11 attributes. Price for the n-th previous purchase
 of that attribute: `25 × 2ⁿ` compute + `2 × 2ⁿ` essence; `attack` costs `100 × 4ⁿ` compute +
-`10 × 4ⁿ` essence. Steps: essence capacity +20, max health +20, vision range +1, communication
+`10 × 4ⁿ` essence, and `attack_cap` is priced the same way (its own `attack_cap_*` rule fields). Steps: essence capacity +20, max health +20, vision range +1, communication
 range +1, speed +1, compute absorption +0.05, essence absorption +0.05 (both capped at 1.0),
-skill count limit +1, skill block limit +20, attack +0.25. A stat at its cap fails with
+skill count limit +1, skill block limit +20, attack +0.25, attack cap +25. A stat at its cap fails with
 `at_limit`.
 
 ## Skills
@@ -391,6 +391,10 @@ story-so-far; Haiku). Details, budgets and routes: `docs/ASSISTANT.md`.
   60-compute fruit gives 12.
 * Essence exists only in residue (deaths) and transfers; fruit has none.
 * Attack damage uses the full budget even though a skill pays only 80% of it.
+* One attack deals at most the attacker's attack cap (50 to start): a budget above attack cap ÷
+  attack is cut and only the cut part is charged, so a fresh 100-health agent takes two hits and
+  gets a turn in between to flee, recover or strike back. Upgrading the cap costs as much as
+  upgrading attack.
 * A failed action still uses the turn and costs up to 1 compute (nothing when unaffordable).
 * Thinking costs compute every model turn; a running skill avoids model calls.
 * Upkeep is hidden from the agent's believed self; `query(self)` gives exact values.

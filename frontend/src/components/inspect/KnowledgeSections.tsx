@@ -44,6 +44,7 @@ const BELIEVED_FIELDS: (keyof BelievedSelf & keyof AgentStats)[] = [
   "health",
   "max_health",
   "attack",
+  "attack_cap",
   "speed",
   "vision_range",
   "communication_range",

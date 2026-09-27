@@ -31,6 +31,9 @@ assistant (part of its always-loaded knowledge). Numbers are shipped defaults; s
 * **Essence**: spent on upgrades only; held up to **essence capacity**.
 * **Health / max health**: 0 is death.
 * **Attack**: damage per unit of attack budget.
+* **Attack cap** (`attack_cap`): the most damage one attack can deal (50 to start, +25 per
+  upgrade, priced like attack). A larger budget is cut to attack cap ÷ attack and only that is
+  charged; a target with more health needs several hits (A-ACT-19).
 * **Speed**: initiative order only.
 * **Vision range / communication range**: Manhattan distance for observe/query and send/broadcast
   (0 at the start: own point only).

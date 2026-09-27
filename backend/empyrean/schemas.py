@@ -80,6 +80,7 @@ UpgradeAttribute = Literal[
     "skill_count_limit",
     "skill_block_limit",
     "attack",
+    "attack_cap",
 ]
 
 UPGRADE_ATTRIBUTES: tuple[str, ...] = (
@@ -93,6 +94,7 @@ UPGRADE_ATTRIBUTES: tuple[str, ...] = (
     "skill_count_limit",
     "skill_block_limit",
     "attack",
+    "attack_cap",
 )
 
 DIRECTION_VECTORS: dict[str, tuple[int, int]] = {
@@ -208,7 +210,8 @@ class Prices(StrictModel):
 
 
 class UpgradeSchedule(StrictModel):
-    """Price ``base * growth**n`` (n = prior purchases of that attribute).  At a hard cap the
+    """Price ``base * growth**n`` (n = prior purchases of that attribute); ``attack`` and
+    ``attack_cap`` have their own, steeper schedules.  At a hard cap the
     quote still shows the formula price for display, ``next_value = current value`` and
     ``allowed = False``; the new value after a purchase is always ``min(cap, value + increment)``.
     Integer stats (``INTEGER_STATS``) need integer increments and are stored as ``int``."""
@@ -219,6 +222,10 @@ class UpgradeSchedule(StrictModel):
     attack_base_compute: float = 100
     attack_base_essence: float = 10
     attack_growth: float = 4
+    # The damage cap per attack (AgentStats.attack_cap) is priced like attack: exponential.
+    attack_cap_base_compute: float = 100
+    attack_cap_base_essence: float = 10
+    attack_cap_growth: float = 4
     increments: dict[str, float] = Field(
         default_factory=lambda: {
             "essence_capacity": 20,
@@ -231,6 +238,7 @@ class UpgradeSchedule(StrictModel):
             "skill_count_limit": 1,
             "skill_block_limit": 20,
             "attack": 0.25,
+            "attack_cap": 25,
         }
     )
     hard_caps: dict[str, float] = Field(
@@ -1186,6 +1194,9 @@ class AgentStats(StrictModel):
     health: float = 100
     max_health: float = 100
     attack: float = 1.0
+    # Most damage one attack can deal.  A budget above attack_cap / attack is cut to it and only
+    # the cut budget is charged.  Runs stored before this stat existed load with the default.
+    attack_cap: float = 50.0
     speed: int = 1
     vision_range: int = 0
     communication_range: int = 0
@@ -1419,6 +1430,7 @@ class BelievedSelf(StrictModel):
     health: Optional[float] = None
     max_health: Optional[float] = None
     attack: Optional[float] = None
+    attack_cap: Optional[float] = None
     speed: Optional[int] = None
     vision_range: Optional[int] = None
     communication_range: Optional[int] = None
