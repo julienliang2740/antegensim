@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,18 @@ def create_closed_run(client: Any, request: Any, name: str) -> dict[str, Any]:
     summary = created.json()
     assert client.post(f"/api/runs/{summary['run_id']}/close").status_code == 200
     return summary
+
+
+def wait_for_writer_lock(run_id: str, timeout: float = 10.0) -> Any:
+    """Take the run's writer lock once the closed worker has let go of it.  POST /close returns
+    at once while the worker finishes and exits (RunWorker.close), so the lock can still be held
+    for a moment after the response; ``RunManager.delete_run`` waits for that worker itself."""
+    deadline = time.monotonic() + timeout
+    while True:
+        lock = storage.acquire_writer_lock(run_id)
+        if lock is not None or time.monotonic() >= deadline:
+            return lock
+        time.sleep(0.02)
 
 
 def ids(response: Any) -> list[str]:
@@ -106,7 +119,7 @@ def test_delete_refuses_an_open_run_and_one_locked_by_another_writer(client, def
     assert Path(storage.find_run_dir(open_id)).is_dir()
 
     closed = create_closed_run(client, default_request, "locked elsewhere")
-    lock = storage.acquire_writer_lock(closed["run_id"])  # stands in for another backend process
+    lock = wait_for_writer_lock(closed["run_id"])  # stands in for another backend process
     assert lock is not None
     try:
         held = client.delete(f"/api/runs/{closed['run_id']}")
