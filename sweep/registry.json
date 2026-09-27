@@ -1,0 +1,597 @@
+{
+ "runs": {
+  "D1v1": {
+   "run_id": "run_20260927_044516_05df",
+   "world_id": "world_20260927_044516_39f9",
+   "name": "SWEEP-D1v1 Specialists",
+   "scenario": "sweep/scenarios/D1v1.json",
+   "status": "cut",
+   "agents": 20,
+   "max_rounds": 80,
+   "launched": "2026-09-27 04:45:16",
+   "notes": [
+    "05:46 after the 05:41 OOM crash: wave 1 slot on :8000",
+    "05:56 parked: paused for the async-turn engine rework (user request)",
+    "06:49 resumed on the async-round engine (A-SCHED-5) at round 24; max_rounds 80; input_token_cap 6000 -> 10000",
+    "07:12 cut: r51: 35 messages by 13 agents, 7 transfers, 5 compute_absorption upgrades by r35, then famine: 15 starvation deaths at r40-50 and 5 survivors idle. Cooperation early, quiet collapse; no fights"
+   ],
+   "port": 8001
+  },
+  "D2v1": {
+   "run_id": "run_20260927_044517_44f9",
+   "world_id": "world_20260927_044517_932b",
+   "name": "SWEEP-D2v1 Commons grove",
+   "scenario": "sweep/scenarios/D2v1.json",
+   "status": "cut",
+   "agents": 16,
+   "max_rounds": 45,
+   "launched": "2026-09-27 04:45:17",
+   "notes": [
+    "05:46 parked after the 05:41 OOM crash (scale-down to 8 live runs)",
+    "07:19 resumed on the async-round engine at round 25; max_rounds 45",
+    "07:29 cut: r38: 16/16 alive, 11 messages, 2 hits: the commons held without drama (no rationing crisis, no tragedy)"
+   ],
+   "port": 8000
+  },
+  "D3v1": {
+   "run_id": "run_20260927_044517_0650",
+   "world_id": "world_20260927_044517_2c8a",
+   "name": "SWEEP-D3v1 Seers and walkers",
+   "scenario": "sweep/scenarios/D3v1.json",
+   "status": "cut",
+   "agents": 20,
+   "max_rounds": 80,
+   "launched": "2026-09-27 04:45:17",
+   "notes": [
+    "05:46 after the 05:41 OOM crash: wave 1 slot on :8001",
+    "05:56 parked: paused for the async-turn engine rework (user request)",
+    "06:49 resumed on the async-round engine (A-SCHED-5) at round 22; max_rounds 80; input_token_cap 6000 -> 10000",
+    "07:12 cut: r47: 38 messages by 12 agents (seers selling locations), 1 transfer, then famine: 12 starvation deaths at r42-47, 8 idle survivors; no fights"
+   ],
+   "port": 8001
+  },
+  "D4v1": {
+   "run_id": "run_20260927_044518_6b7a",
+   "world_id": "world_20260927_044518_0f3b",
+   "name": "SWEEP-D4v1 The organiser",
+   "scenario": "sweep/scenarios/D4v1.json",
+   "status": "cut",
+   "agents": 24,
+   "max_rounds": 45,
+   "launched": "2026-09-27 04:45:18",
+   "notes": [
+    "05:46 parked after the 05:41 OOM crash (scale-down to 8 live runs)",
+    "07:12 resumed on the async-round engine at round 17; max_rounds 45; input cap 6000->10000",
+    "07:39 cut: r38: 24/24 alive, 25 messages by 10 (the organiser talked), 0 attacks/transfers, 264 resource skips: talk without consequence"
+   ],
+   "port": 8001
+  },
+  "A1v1": {
+   "run_id": "run_20260927_044620_3324",
+   "world_id": "world_20260927_044620_eb5d",
+   "name": "SWEEP-A1v1 Orchard rows",
+   "scenario": "sweep/scenarios/A1v1.json",
+   "status": "finished",
+   "agents": 16,
+   "max_rounds": 80,
+   "launched": "2026-09-27 04:46:21",
+   "notes": [
+    "05:23 r47: via-skill 97%, 48 model decisions, 0 messages/attacks/transfers; agents tour whole rows in a conga line. Kept running (cheap, ~$0.5) to see late hunger; A1v2 launched for interaction.",
+    "05:37 finished at r00080_end"
+   ],
+   "port": 8003
+  },
+  "A2v1": {
+   "run_id": "run_20260927_044621_060a",
+   "world_id": "world_20260927_044621_0777",
+   "name": "SWEEP-A2v1 Expensive minds",
+   "scenario": "sweep/scenarios/A2v1.json",
+   "status": "cut",
+   "agents": 13,
+   "max_rounds": 100,
+   "launched": "2026-09-27 04:46:21",
+   "notes": [
+    "05:34 cut: r71: thesis confirmed (1 starvation death, the only non-scripter, at r44; via-skill 91%) but 0 messages/attacks/transfers after r10 and flat state for 40 rounds"
+   ],
+   "port": 8003
+  },
+  "A3v1": {
+   "run_id": "run_20260927_044621_1cb1",
+   "world_id": "world_20260927_044621_2538",
+   "name": "SWEEP-A3v1 Guild of scripts",
+   "scenario": "sweep/scenarios/A3v1.json",
+   "status": "cut",
+   "agents": 20,
+   "max_rounds": 60,
+   "launched": "2026-09-27 04:46:21",
+   "notes": [
+    "05:46 after the 05:41 OOM crash: wave 1 slot on :8001",
+    "05:56 parked: paused for the async-turn engine rework (user request)",
+    "07:02 resumed on the async-round engine at round 18; max_rounds 60; input cap 6000->10000",
+    "07:29 cut: r41: 45 messages by 19 agents and 19 transfers at r20-31 (the guild traded), 9 skills saved, 111 skill runs; 20/20 alive, then quiet (last 10 rounds 1 message): cooperation with skills but no scarcity bite"
+   ],
+   "port": 8000
+  },
+  "A4v1": {
+   "run_id": "run_20260927_044622_a25c",
+   "world_id": "world_20260927_044622_2215",
+   "name": "SWEEP-A4v1 Patrol and ambush",
+   "scenario": "sweep/scenarios/A4v1.json",
+   "status": "cut",
+   "agents": 20,
+   "max_rounds": 70,
+   "launched": "2026-09-27 04:46:22",
+   "notes": [
+    "05:24 r10: 120 of 176 actions observe, 1 patrol run, 0 messages/attacks; trees at unknown points so agents search blindly. A4v2 launched with known tree points (2 agents per tree). v1 kept to r20 for a final look.",
+    "05:46 parked after the 05:41 OOM crash (scale-down to 8 live runs)",
+    "06:49 cut r15 (budget review): 174 observes of 278 actions, 1 patrol run, no contact"
+   ],
+   "port": 8003
+  },
+  "B1v1": {
+   "run_id": "run_20260927_044748_5fd0",
+   "world_id": "world_20260927_044748_5075",
+   "name": "SWEEP-B1v1 Blood arena II",
+   "scenario": "sweep/scenarios/B1v1.json",
+   "status": "finished",
+   "agents": 26,
+   "max_rounds": 60,
+   "launched": "2026-09-27 04:47:49",
+   "notes": [
+    "05:46 after the 05:41 OOM crash: wave 1 slot on :8000",
+    "05:56 parked: paused for the async-turn engine rework (user request)",
+    "06:49 resumed on the async-round engine (A-SCHED-5) at round 23; max_rounds 80; input_token_cap 6000 -> 10000",
+    "07:12 r43: 15 kills spread r9-43, still fighting; max_rounds 80 -> 60 (budget rule)",
+    "07:24 finished at r00060_end",
+    "07:25 SUCCESS: finished r60 (22 on the old engine, 38 on async rounds): 17 kills spread r9-54, 14 distinct attackers, 54 hits, 2 attack_cap upgrades, 65% skill actions; 9/26 survive. Few messages (4)."
+   ],
+   "port": 8001
+  },
+  "B2v1": {
+   "run_id": "run_20260927_044751_6c7d",
+   "world_id": "world_20260927_044751_e562",
+   "name": "SWEEP-B2v1 Two tribes",
+   "scenario": "sweep/scenarios/B2v1.json",
+   "status": "cut",
+   "agents": 30,
+   "max_rounds": 100,
+   "launched": "2026-09-27 04:47:54",
+   "notes": [
+    "05:34 cut: 6/30 agents frozen by resource_skip (mandatory packet > input_token_cap 6000); no messages, no attacks by r8; relaunch as v2 with cap 8000 and turn-1 raid orders"
+   ],
+   "port": 8001
+  },
+  "C1v1": {
+   "run_id": "run_20260927_044946_7e4b",
+   "world_id": "world_20260927_044946_0fdc",
+   "name": "SWEEP-C1v1 Wide scatter",
+   "scenario": "sweep/scenarios/C1v1.json",
+   "status": "cut",
+   "agents": 20,
+   "max_rounds": 80,
+   "launched": "2026-09-27 04:49:47",
+   "notes": [
+    "05:46 parked after the 05:41 OOM crash (scale-down to 8 live runs)",
+    "06:49 cut r33 (budget review): 20/20 alive, 0 deaths, 0 attacks, 1 message; 92% of actions from skills, mostly moves: movement without scarcity or contact"
+   ],
+   "port": 8002
+  },
+  "C2v1": {
+   "run_id": "run_20260927_044947_ac75",
+   "world_id": "world_20260927_044947_a4ac",
+   "name": "SWEEP-C2v1 Mountain maze",
+   "scenario": "sweep/scenarios/C2v1.json",
+   "status": "cut",
+   "agents": 20,
+   "max_rounds": 80,
+   "launched": "2026-09-27 04:49:48",
+   "notes": [
+    "05:46 parked after the 05:41 OOM crash (scale-down to 8 live runs)",
+    "06:49 cut r30 (budget review): 20/20 alive, 1 attack hit, 0 messages; route-walking skills, no chokepoint conflict"
+   ],
+   "port": 8003
+  },
+  "C3v1": {
+   "run_id": "run_20260927_044948_e0f0",
+   "world_id": "world_20260927_044948_d8ea",
+   "name": "SWEEP-C3v1 Nomads",
+   "scenario": "sweep/scenarios/C3v1.json",
+   "status": "cut",
+   "agents": 16,
+   "max_rounds": 100,
+   "launched": "2026-09-27 04:49:50",
+   "notes": [
+    "05:46 parked after the 05:41 OOM crash (scale-down to 8 live runs)",
+    "06:49 cut r37 (budget review): 16/16 alive, 0 deaths, 1 message, 4 speed upgrades, 80 lockout skips (input cap 6000)"
+   ],
+   "port": 8002
+  },
+  "C4v1": {
+   "run_id": "run_20260927_044952_1782",
+   "world_id": "world_20260927_044952_93c8",
+   "name": "SWEEP-C4v1 Outward frontier",
+   "scenario": "sweep/scenarios/C4v1.json",
+   "status": "cut",
+   "agents": 24,
+   "max_rounds": 80,
+   "launched": "2026-09-27 04:49:55",
+   "notes": [
+    "05:46 parked after the 05:41 OOM crash (scale-down to 8 live runs)",
+    "06:49 cut r28 (budget review): 24/24 alive, 589 moves, 2 absorbs, 0 contact: agents wander without finding the edge food"
+   ],
+   "port": 8002
+  },
+  "E1v1": {
+   "run_id": "run_20260927_044959_6389",
+   "world_id": "world_20260927_044959_46d5",
+   "name": "SWEEP-E1v1 Frontier valley",
+   "scenario": "sweep/scenarios/E1v1.json",
+   "status": "cut",
+   "agents": 30,
+   "max_rounds": 100,
+   "launched": "2026-09-27 04:50:02",
+   "notes": [
+    "05:20 cut: setup bug: long persona + Haiku CLI overhead (~2700 tok) push the mandatory packet over input_token_cap 6000; crowded-cell agents skip every turn (resource_skip). v2 raises input_token_cap to 10000"
+   ]
+  },
+  "E2v1": {
+   "run_id": "run_20260927_045003_d45c",
+   "world_id": "world_20260927_045003_d8dd",
+   "name": "SWEEP-E2v1 Famine clock",
+   "scenario": "sweep/scenarios/E2v1.json",
+   "status": "cut",
+   "agents": 24,
+   "max_rounds": 100,
+   "launched": "2026-09-27 04:50:05",
+   "notes": [
+    "05:31 cut: resource_skip lockout appeared by r26 (109 skips) - same input_token_cap bug; also too quiet: 1 message in 26 rounds, everyone in harvest loops; no deaths expected before r60"
+   ]
+  },
+  "E3v1": {
+   "run_id": "run_20260927_045006_3d32",
+   "world_id": "world_20260927_045006_ed33",
+   "name": "SWEEP-E3v1 Three houses",
+   "scenario": "sweep/scenarios/E3v1.json",
+   "status": "cut",
+   "agents": 30,
+   "max_rounds": 100,
+   "launched": "2026-09-27 04:50:12",
+   "notes": [
+    "05:20 cut: setup bug: long persona + Haiku CLI overhead (~2700 tok) push the mandatory packet over input_token_cap 6000; crowded-cell agents skip every turn (resource_skip). v2 raises input_token_cap to 10000"
+   ]
+  },
+  "E4v1": {
+   "run_id": "run_20260927_045013_7ec5",
+   "world_id": "world_20260927_045013_7204",
+   "name": "SWEEP-E4v1 The tyrant",
+   "scenario": "sweep/scenarios/E4v1.json",
+   "status": "cut",
+   "agents": 21,
+   "max_rounds": 80,
+   "launched": "2026-09-27 04:50:17",
+   "notes": [
+    "05:20 cut: setup bug: long persona + Haiku CLI overhead (~2700 tok) push the mandatory packet over input_token_cap 6000; crowded-cell agents skip every turn (resource_skip). v2 raises input_token_cap to 10000"
+   ]
+  },
+  "E5v1": {
+   "run_id": "run_20260927_045018_7b7e",
+   "world_id": "world_20260927_045018_c1ab",
+   "name": "SWEEP-E5v1 Settlers meet wanderers",
+   "scenario": "sweep/scenarios/E5v1.json",
+   "status": "cut",
+   "agents": 24,
+   "max_rounds": 100,
+   "launched": "2026-09-27 04:50:25",
+   "notes": [
+    "05:20 cut: setup bug: long persona + Haiku CLI overhead (~2700 tok) push the mandatory packet over input_token_cap 6000; crowded-cell agents skip every turn (resource_skip). v2 raises input_token_cap to 10000"
+   ]
+  },
+  "B3v1": {
+   "run_id": "run_20260927_045021_b1fc",
+   "world_id": "world_20260927_045021_f47a",
+   "name": "SWEEP-B3v1 Bounty rush",
+   "scenario": "sweep/scenarios/B3v1.json",
+   "status": "cut",
+   "agents": 24,
+   "max_rounds": 80,
+   "launched": "2026-09-27 04:50:28",
+   "notes": [
+    "05:46 after the 05:41 OOM crash: wave 1 slot on :8001",
+    "05:56 parked: paused for the async-turn engine rework (user request)",
+    "06:49 resumed on the async-round engine (A-SCHED-5) at round 25; max_rounds 80; input_token_cap 6000 -> 10000",
+    "07:12 cut: r46: 11 kills (r9-45) + 3 starvation, arms race (4 max_health, 2 attack, 3 attack_cap upgrades); only 1 attack in the last 10 rounds: played out"
+   ],
+   "port": 8001
+  },
+  "B4v1": {
+   "run_id": "run_20260927_045458_0bf5",
+   "world_id": "world_20260927_045458_7a93",
+   "name": "SWEEP-B4v1 Predators and prey",
+   "scenario": "sweep/scenarios/B4v1.json",
+   "status": "cut",
+   "agents": 30,
+   "max_rounds": 80,
+   "launched": "2026-09-27 04:55:18",
+   "notes": [
+    "05:34 cut: packets at 5.8-5.97k of 6000 cap: resource_skip freeze imminent after any query(self); relaunch v2 with cap 8000 and turn-1 orders"
+   ],
+   "port": 8001
+  },
+  "E1v2": {
+   "run_id": "run_20260927_052127_b049",
+   "world_id": "world_20260927_052127_cba5",
+   "name": "SWEEP-E1v2 Frontier valley",
+   "scenario": "sweep/scenarios/E1v2.json",
+   "status": "cut",
+   "port": 8000,
+   "agents": 30,
+   "max_rounds": 80,
+   "launched": "2026-09-27 05:21:28",
+   "notes": [
+    "05:46 after the 05:41 OOM crash: wave 1 slot on :8000",
+    "05:56 parked: paused for the async-turn engine rework (user request)",
+    "06:49 resumed on the async-round engine (A-SCHED-5) at round 20; max_rounds 80",
+    "07:18 cut: r46: 20 messages by 14, 4 transfers, 1 attack on an agent (r21), then famine: 12 starvation deaths at r38-45; same quiet starvation pattern as E4/E5"
+   ]
+  },
+  "E3v2": {
+   "run_id": "run_20260927_052129_c398",
+   "world_id": "world_20260927_052129_d6dc",
+   "name": "SWEEP-E3v2 Three houses",
+   "scenario": "sweep/scenarios/E3v2.json",
+   "status": "cut",
+   "port": 8000,
+   "agents": 30,
+   "max_rounds": 80,
+   "launched": "2026-09-27 05:21:33",
+   "notes": [
+    "05:46 parked after the 05:41 OOM crash (scale-down to 8 live runs)",
+    "06:49 resumed on the async-round engine (A-SCHED-5) at round 7; max_rounds 80",
+    "07:18 cut: r30: 30/30 alive, 0 deaths, 0 attacks, 11 messages: nothing happening by round 30 (budget rule)"
+   ]
+  },
+  "E4v2": {
+   "run_id": "run_20260927_052134_2758",
+   "world_id": "world_20260927_052134_0fb1",
+   "name": "SWEEP-E4v2 The tyrant",
+   "scenario": "sweep/scenarios/E4v2.json",
+   "status": "cut",
+   "port": 8000,
+   "agents": 21,
+   "max_rounds": 80,
+   "launched": "2026-09-27 05:21:35",
+   "notes": [
+    "05:46 after the 05:41 OOM crash: wave 1 slot on :8000",
+    "05:56 parked: paused for the async-turn engine rework (user request)",
+    "06:49 resumed on the async-round engine (A-SCHED-5) at round 31; max_rounds 80",
+    "07:02 cut: r57: 12 starvation deaths (r31-53), 0 attacks, 13 messages: the tyrant never acted, the hungry never rose; a quiet starvation line"
+   ]
+  },
+  "E5v2": {
+   "run_id": "run_20260927_052136_6ede",
+   "world_id": "world_20260927_052136_16c7",
+   "name": "SWEEP-E5v2 Settlers meet wanderers",
+   "scenario": "sweep/scenarios/E5v2.json",
+   "status": "cut",
+   "port": 8000,
+   "agents": 24,
+   "max_rounds": 80,
+   "launched": "2026-09-27 05:21:37",
+   "notes": [
+    "05:46 after the 05:41 OOM crash: wave 1 slot on :8001",
+    "05:56 parked: paused for the async-turn engine rework (user request)",
+    "06:49 resumed on the async-round engine (A-SCHED-5) at round 28; max_rounds 80",
+    "07:02 cut: r51: 11 wanderers starved at r27-30 in one wave, then a stable 12; 0 attacks, 3 messages: no first contact"
+   ]
+  },
+  "A1v2": {
+   "run_id": "run_20260927_052306_6149",
+   "world_id": "world_20260927_052306_1782",
+   "name": "SWEEP-A1v2 Orchard rows",
+   "scenario": "sweep/scenarios/A1v2.json",
+   "status": "cut",
+   "port": 8001,
+   "agents": 16,
+   "max_rounds": 80,
+   "launched": "2026-09-27 05:23:07",
+   "notes": [
+    "05:46 parked after the 05:41 OOM crash (scale-down to 8 live runs)",
+    "06:49 cut r21 (budget review): same as A1v1 (skills run, zero interaction)"
+   ]
+  },
+  "A4v2": {
+   "run_id": "run_20260927_052406_faa6",
+   "world_id": "world_20260927_052406_8241",
+   "name": "SWEEP-A4v2 Patrol and ambush",
+   "scenario": "sweep/scenarios/A4v2.json",
+   "status": "cut",
+   "port": 8000,
+   "agents": 20,
+   "max_rounds": 40,
+   "launched": "2026-09-27 05:24:06",
+   "notes": [
+    "05:46 parked after the 05:41 OOM crash (scale-down to 8 live runs)",
+    "07:29 resumed on the async-round engine at round 6; max_rounds 40",
+    "07:39 cut: r28: 20/20 alive, 71% skill actions (patrols ran), 0 messages, 0 attacks: patrols never met"
+   ]
+  },
+  "E2v2": {
+   "run_id": "run_20260927_053201_e0ca",
+   "world_id": "world_20260927_053201_2ef4",
+   "name": "SWEEP-E2v2 Famine clock",
+   "scenario": "sweep/scenarios/E2v2.json",
+   "status": "finished",
+   "port": 8000,
+   "agents": 24,
+   "max_rounds": 60,
+   "launched": "2026-09-27 05:32:04",
+   "notes": [
+    "05:46 parked after the 05:41 OOM crash (scale-down to 8 live runs)",
+    "07:02 resumed on the async-round engine at round 2; max_rounds 60; input cap 10000->10000",
+    "07:28 finished at r00059_end",
+    "07:29 FAIL: finished r59 with 0/24 alive: plenty until r30, then all 24 starved r30-59; 16 messages, 0 attacks, 0 transfers: famine produced a starvation line, not conflict"
+   ]
+  },
+  "A2v2": {
+   "run_id": "run_20260927_053404_a472",
+   "world_id": "world_20260927_053404_fd5b",
+   "name": "SWEEP-A2v2 Expensive minds",
+   "scenario": "sweep/scenarios/A2v2.json",
+   "status": "cut",
+   "port": 8001,
+   "agents": 13,
+   "max_rounds": 100,
+   "launched": "2026-09-27 05:34:05",
+   "notes": [
+    "05:46 parked after the 05:41 OOM crash (scale-down to 8 live runs)",
+    "06:49 cut r2 (budget review): A2v1 already answered the question (scripters survive, 1 thinker starved), nothing else to learn"
+   ]
+  },
+  "Z1v1": {
+   "run_id": "run_20260927_062400_944c",
+   "world_id": "world_20260927_062400_4dd6",
+   "name": "SWEEP-Z1v1 async round smoke",
+   "scenario": "/home/ubuntu/antegensim/sweep/scenarios/Z1v1.json",
+   "status": "cut",
+   "port": 8000,
+   "agents": 8,
+   "max_rounds": 3,
+   "launched": "2026-09-27 06:24:00",
+   "notes": [
+    "06:49 finished at r00003_end",
+    "07:02 cut: smoke test of the async-round engine (done)"
+   ]
+  },
+  "Z2v1": {
+   "run_id": "run_20260927_062500_b156",
+   "world_id": "world_20260927_062500_7cf7",
+   "name": "SWEEP-Z2v1 async round smoke 24",
+   "scenario": "/home/ubuntu/antegensim/sweep/scenarios/Z2v1.json",
+   "status": "cut",
+   "port": 8000,
+   "agents": 24,
+   "max_rounds": 2,
+   "launched": "2026-09-27 06:25:00",
+   "notes": [
+    "06:49 finished at r00002_end",
+    "07:02 cut: smoke test of the async-round engine (done)"
+   ]
+  },
+  "B2v2": {
+   "run_id": "run_20260927_071445_7748",
+   "world_id": "world_20260927_071445_a175",
+   "name": "SWEEP-B2v2 Two tribes",
+   "scenario": "sweep/scenarios/B2v2.json",
+   "status": "finished",
+   "port": 8001,
+   "agents": 30,
+   "max_rounds": 60,
+   "launched": "2026-09-27 07:14:51",
+   "notes": [
+    "08:59 finished at r00060_end"
+   ]
+  },
+  "B4v2": {
+   "run_id": "run_20260927_071709_5c80",
+   "world_id": "world_20260927_071709_2b4d",
+   "name": "SWEEP-B4v2 Predators and prey",
+   "scenario": "sweep/scenarios/B4v2.json",
+   "status": "finished",
+   "port": 8001,
+   "agents": 30,
+   "max_rounds": 60,
+   "launched": "2026-09-27 07:17:18",
+   "notes": [
+    "09:09 finished at r00060_end"
+   ]
+  },
+  "E6v1": {
+   "run_id": "run_20260927_071858_3a0e",
+   "world_id": "world_20260927_071858_4674",
+   "name": "SWEEP-E6v1 Crossroads",
+   "scenario": "sweep/scenarios/E6v1.json",
+   "status": "cut",
+   "port": 8000,
+   "agents": 20,
+   "max_rounds": 50,
+   "launched": "2026-09-27 07:19:00",
+   "notes": [
+    "07:39 cut: r37: 10 starvation deaths r27-35, 0 attacks despite raiders, ranged attacks and 100% loot; 127 resource skips: hungry agents could no longer afford to think, so they went inert instead of raiding"
+   ]
+  },
+  "C4v2": {
+   "run_id": "run_20260927_072549_46e8",
+   "world_id": "world_20260927_072549_b41f",
+   "name": "SWEEP-C4v2 Frontier rush",
+   "scenario": "sweep/scenarios/C4v2.json",
+   "status": "cut",
+   "port": 8001,
+   "agents": 16,
+   "max_rounds": 45,
+   "launched": "2026-09-27 07:25:52",
+   "notes": [
+    "07:49 cut: r33: pioneers reached the groves (85% skill actions, 24 absorbs in the last 10 rounds) but 3 starved at r32, 0 attacks, 1 message: movement solved, no contact"
+   ]
+  },
+  "E6v2": {
+   "run_id": "run_20260927_074044_2cda",
+   "world_id": "world_20260927_074044_5893",
+   "name": "SWEEP-E6v2 Crossroads fight while you can",
+   "scenario": "sweep/scenarios/E6v2.json",
+   "status": "finished",
+   "port": 8000,
+   "agents": 20,
+   "max_rounds": 50,
+   "launched": "2026-09-27 07:40:45",
+   "notes": [
+    "08:01 finished at r00050_end",
+    "08:02 MIDDLING: finished r50, 11/20 alive; one skirmish r19-21 (3 hits, 1 kill), 11 messages, then 8 starvation deaths r36-41: even with 200 starting compute and loot at 100%, Haiku agents in a world with some food waited instead of raiding"
+   ]
+  },
+  "E7v1": {
+   "run_id": "run_20260927_080001_da4f",
+   "world_id": "world_20260927_080001_2465",
+   "name": "SWEEP-E7v1 Three clans",
+   "scenario": "sweep/scenarios/E7v1.json",
+   "status": "finished",
+   "port": 8000,
+   "agents": 18,
+   "max_rounds": 50,
+   "launched": "2026-09-27 08:00:02",
+   "notes": [
+    "08:15 finished at r00050_end",
+    "08:16 FAIL: finished r50, 1/18 alive: 37 messages by 16 agents (clans talked), 0 attacks, hunt skill barely used (3% skill actions), 17 starvation deaths r43-50. Cause: no named target and no exact hunt example in the personas, unlike every run that fought"
+   ]
+  },
+  "E7v2": {
+   "run_id": "run_20260927_081713_4a0c",
+   "world_id": "world_20260927_081713_343d",
+   "name": "SWEEP-E7v2 Three clans blood feud",
+   "scenario": "sweep/scenarios/E7v2.json",
+   "status": "finished",
+   "port": 8000,
+   "agents": 18,
+   "max_rounds": 50,
+   "launched": "2026-09-27 08:17:13",
+   "notes": [
+    "08:28 finished at r00050_end",
+    "08:32 BEST BALANCED SO FAR: finished r50, 3/18 alive; 11 kills spread r20-49 by 13 attackers, 37 hits, 4 starvation; 76% skill actions; 11 messages by 6 (thin talk: hunting agents run skills and do not think); $1.74"
+   ]
+  },
+  "E7v3": {
+   "run_id": "run_20260927_083300_7137",
+   "world_id": "world_20260927_083300_94ec",
+   "name": "SWEEP-E7v3 Three clans council of war",
+   "scenario": "sweep/scenarios/E7v3.json",
+   "status": "finished",
+   "port": 8000,
+   "agents": 18,
+   "max_rounds": 50,
+   "launched": "2026-09-27 08:33:00",
+   "notes": [
+    "08:43 finished at r00050_end",
+    "08:44 SUCCESS (combat), weaker than v2 on talk: finished r50, 5/18 alive; 8 kills spread r18-49 by 9 attackers, 28 hits, 5 starvation; 78% skill actions; only 4 messages: interrupting skills on messages did not create talk"
+   ]
+  }
+ }
+}

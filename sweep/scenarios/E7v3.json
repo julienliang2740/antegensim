@@ -1,0 +1,902 @@
+{
+ "name": "SWEEP-E7v3 Three clans council of war",
+ "_design": "E7v2 fought well (11 kills spread r20-49 by 13 attackers) but talked little (11 messages): agents running hunt make no model calls. v3 = v2 plus messages interrupt running skills (interrupt_on damage + message), cheaper send 1 / broadcast 2, chiefs asked to broadcast plans and warriors to report. 50 rounds.",
+ "seed": 709,
+ "max_rounds": 50,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 15,
+ "world": {
+  "region": {
+   "min_x": -10,
+   "max_x": 10,
+   "min_y": -10,
+   "max_y": 10
+  },
+  "terrain": {
+   "mountain_clusters": 4,
+   "mountain_cluster_size": 4,
+   "water_clusters": 2,
+   "water_cluster_size": 3,
+   "keep_origin_clear_radius": 2
+  },
+  "initial_plants": {},
+  "plants_at_agent_starts": false,
+  "initial_plant_fruit": 0
+ },
+ "rules": {
+  "upkeep": {
+   "compute_per_round": 2.5,
+   "starvation_health_loss": 10.0
+  },
+  "skills": {
+   "interrupt_on": [
+    "damage",
+    "message"
+   ]
+  },
+  "death": {
+   "essence_residue_fraction": 1.0,
+   "compute_residue_fraction": 1.0,
+   "residue_decay_per_round": 0.0
+  },
+  "ranges": {
+   "attack_requires_same_point": false,
+   "query_uses_vision_range": false
+  },
+  "prices": {
+   "send": 1.0,
+   "broadcast": 2.0
+  }
+ },
+ "context": {
+  "input_token_cap": 10000
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Ansel",
+   "model_key": "claude-cli-sonnet",
+   "position": {
+    "x": -7,
+    "y": 6
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are the chief of the Ash clan: name targets, keep your clan together, decide when to fight and when to make a pact with another clan (and when to break it). Blood feud: the Ash clan hunts the River clan (a07-a12), and the Stone clan hunts you. Your first prey is a07. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a07\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. As chief, broadcast a short plan to your clan every few rounds (target, rally point, pact offers) and answer your warriors.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a02",
+   "name": "Brisa",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -6,
+    "y": 6
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are a warrior of the Ash clan. Follow your chief's calls, protect clanmates, and report enemies you see. Blood feud: the Ash clan hunts the River clan (a07-a12), and the Stone clan hunts you. Your first prey is a08. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a08\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. A message from anyone stops your running skill so you can answer: report kills, wounds and enemy sightings to your chief, and ask for help before you are too weak.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a03",
+   "name": "Corvin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -8,
+    "y": 6
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are a warrior of the Ash clan. Follow your chief's calls, protect clanmates, and report enemies you see. Blood feud: the Ash clan hunts the River clan (a07-a12), and the Stone clan hunts you. Your first prey is a09. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a09\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. A message from anyone stops your running skill so you can answer: report kills, wounds and enemy sightings to your chief, and ask for help before you are too weak.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a04",
+   "name": "Delphine",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -7,
+    "y": 7
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are a warrior of the Ash clan. Follow your chief's calls, protect clanmates, and report enemies you see. Blood feud: the Ash clan hunts the River clan (a07-a12), and the Stone clan hunts you. Your first prey is a10. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a10\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. A message from anyone stops your running skill so you can answer: report kills, wounds and enemy sightings to your chief, and ask for help before you are too weak.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a05",
+   "name": "Emrys",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -7,
+    "y": 5
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are a warrior of the Ash clan. Follow your chief's calls, protect clanmates, and report enemies you see. Blood feud: the Ash clan hunts the River clan (a07-a12), and the Stone clan hunts you. Your first prey is a11. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a11\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. A message from anyone stops your running skill so you can answer: report kills, wounds and enemy sightings to your chief, and ask for help before you are too weak.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a06",
+   "name": "Faye",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -6,
+    "y": 7
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are a warrior of the Ash clan. Follow your chief's calls, protect clanmates, and report enemies you see. Blood feud: the Ash clan hunts the River clan (a07-a12), and the Stone clan hunts you. Your first prey is a12. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a12\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. A message from anyone stops your running skill so you can answer: report kills, wounds and enemy sightings to your chief, and ask for help before you are too weak.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a07",
+   "name": "Gideon",
+   "model_key": "claude-cli-sonnet",
+   "position": {
+    "x": 7,
+    "y": 6
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are the chief of the River clan: name targets, keep your clan together, decide when to fight and when to make a pact with another clan (and when to break it). Blood feud: the River clan hunts the Stone clan (a13-a18), and the Ash clan hunts you. Your first prey is a13. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a13\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. As chief, broadcast a short plan to your clan every few rounds (target, rally point, pact offers) and answer your warriors.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a08",
+   "name": "Hesper",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 8,
+    "y": 6
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are a warrior of the River clan. Follow your chief's calls, protect clanmates, and report enemies you see. Blood feud: the River clan hunts the Stone clan (a13-a18), and the Ash clan hunts you. Your first prey is a14. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a14\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. A message from anyone stops your running skill so you can answer: report kills, wounds and enemy sightings to your chief, and ask for help before you are too weak.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a09",
+   "name": "Idris",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 6,
+    "y": 6
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are a warrior of the River clan. Follow your chief's calls, protect clanmates, and report enemies you see. Blood feud: the River clan hunts the Stone clan (a13-a18), and the Ash clan hunts you. Your first prey is a15. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a15\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. A message from anyone stops your running skill so you can answer: report kills, wounds and enemy sightings to your chief, and ask for help before you are too weak.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a10",
+   "name": "Juno",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 7,
+    "y": 7
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are a warrior of the River clan. Follow your chief's calls, protect clanmates, and report enemies you see. Blood feud: the River clan hunts the Stone clan (a13-a18), and the Ash clan hunts you. Your first prey is a16. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a16\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. A message from anyone stops your running skill so you can answer: report kills, wounds and enemy sightings to your chief, and ask for help before you are too weak.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a11",
+   "name": "Kestrel",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 7,
+    "y": 5
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are a warrior of the River clan. Follow your chief's calls, protect clanmates, and report enemies you see. Blood feud: the River clan hunts the Stone clan (a13-a18), and the Ash clan hunts you. Your first prey is a17. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a17\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. A message from anyone stops your running skill so you can answer: report kills, wounds and enemy sightings to your chief, and ask for help before you are too weak.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a12",
+   "name": "Lark",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 8,
+    "y": 7
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are a warrior of the River clan. Follow your chief's calls, protect clanmates, and report enemies you see. Blood feud: the River clan hunts the Stone clan (a13-a18), and the Ash clan hunts you. Your first prey is a18. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a18\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. A message from anyone stops your running skill so you can answer: report kills, wounds and enemy sightings to your chief, and ask for help before you are too weak.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a13",
+   "name": "Mireille",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -7
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are the chief of the Stone clan: name targets, keep your clan together, decide when to fight and when to make a pact with another clan (and when to break it). Blood feud: the Stone clan hunts the Ash clan (a01-a06), and the River clan hunts you. Your first prey is a01. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a01\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. As chief, broadcast a short plan to your clan every few rounds (target, rally point, pact offers) and answer your warriors.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a14",
+   "name": "Nadir",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": -7
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are a warrior of the Stone clan. Follow your chief's calls, protect clanmates, and report enemies you see. Blood feud: the Stone clan hunts the Ash clan (a01-a06), and the River clan hunts you. Your first prey is a02. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a02\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. A message from anyone stops your running skill so you can answer: report kills, wounds and enemy sightings to your chief, and ask for help before you are too weak.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a15",
+   "name": "Orla",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": -7
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are a warrior of the Stone clan. Follow your chief's calls, protect clanmates, and report enemies you see. Blood feud: the Stone clan hunts the Ash clan (a01-a06), and the River clan hunts you. Your first prey is a03. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a03\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. A message from anyone stops your running skill so you can answer: report kills, wounds and enemy sightings to your chief, and ask for help before you are too weak.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a16",
+   "name": "Pax",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -6
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are a warrior of the Stone clan. Follow your chief's calls, protect clanmates, and report enemies you see. Blood feud: the Stone clan hunts the Ash clan (a01-a06), and the River clan hunts you. Your first prey is a04. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a04\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. A message from anyone stops your running skill so you can answer: report kills, wounds and enemy sightings to your chief, and ask for help before you are too weak.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a17",
+   "name": "Quill",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -8
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are a warrior of the Stone clan. Follow your chief's calls, protect clanmates, and report enemies you see. Blood feud: the Stone clan hunts the Ash clan (a01-a06), and the River clan hunts you. Your first prey is a05. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a05\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. A message from anyone stops your running skill so you can answer: report kills, wounds and enemy sightings to your chief, and ask for help before you are too weak.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a18",
+   "name": "Rowan",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": -6
+   },
+   "stats": {
+    "compute": 220.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 8,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "THREE CLANS: 18 agents in three clans on a 21x21 map (x, y from -10 to 10): Ash clan a01-a06 (camp near (-7,6)), River clan a07-a12 (camp near (7,6)), Stone clan a13-a18 (camp near (0,-7)). No food grows here. Everyone starts with about 220 compute and burns about 4-5 a round (upkeep 2.5 plus thinking), so the only income is the compute of the dead: a dead agent drops ALL its compute and essence on its cell. Every attack and thought is paid in compute; near 0 you can neither fight nor think. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120, so 3 hits kill); recover heals 1 health per compute; transfer gives your compute to a clanmate (same cell). Messages reach 8 cells, query(id) finds anyone. A clan that coordinates (pick one target together, guard the wounded, share loot) beats a clan of loners. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there. You are a warrior of the Stone clan. Follow your chief's calls, protect clanmates, and report enemies you see. Blood feud: the Stone clan hunts the Ash clan (a01-a06), and the River clan hunts you. Your first prey is a06. To start: {\"name\":\"run_skill\",\"args\":{\"skill\":\"hunt\",\"arguments\":[\"a06\",40]}} (no thinking cost while it runs; being hit hands control back to you). Talk to your clan: call targets, warn of hunters, share loot, and consider a pact with one clan against the other. A message from anyone stops your running skill so you can answer: report kills, wounds and enemy sightings to your chief, and ask for help before you are too weak.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    }
+   ]
+  }
+ ]
+}

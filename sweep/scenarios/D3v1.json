@@ -1,0 +1,984 @@
+{
+ "name": "SWEEP-D3v1 Seers and walkers",
+ "seed": 4301,
+ "max_rounds": 80,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 35,
+ "_design": "5 seers: vision 6, comm 12, know the tree map, absorb 0.05 (cannot feed themselves), health 80. 15 walkers: blind (vision 0), comm 3, absorb 0.5, speed 3 (act first), no map. Fruit every 6 rounds, rots after 10. Seers sell fruit locations for compute paid on their cell.",
+ "world": {
+  "region": {
+   "min_x": -11,
+   "max_x": 11,
+   "min_y": -11,
+   "max_y": 11
+  },
+  "terrain": {
+   "mountain_clusters": 5,
+   "mountain_cluster_size": 4,
+   "water_clusters": 3,
+   "water_cluster_size": 5,
+   "keep_origin_clear_radius": 2
+  },
+  "initial_plants": {
+   "fruit_tree": 22
+  },
+  "plants_at_agent_starts": false,
+  "initial_plant_fruit": 1
+ },
+ "rules": {
+  "prices": {
+   "move": 3.0,
+   "send": 1.0,
+   "broadcast": 3.0,
+   "absorb": 2.0,
+   "transfer": 0.5
+  },
+  "upkeep": {
+   "compute_per_round": 1.5,
+   "starvation_health_loss": 5.0
+  },
+  "skills": {
+   "interrupt_on": [
+    "damage"
+   ]
+  },
+  "plant_species": {
+   "fruit_tree": {
+    "max_fruit": 2,
+    "fruit_decay_rounds": 10
+   }
+  }
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Oracle",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 0
+   },
+   "stats": {
+    "compute": 140.0,
+    "health": 80.0,
+    "max_health": 80.0,
+    "compute_absorption": 0.05,
+    "vision_range": 6,
+    "communication_range": 12,
+    "speed": 1
+   },
+   "persona": "You are Oracle, a SEER: you see 6 cells (observe any point within 6) and talk 12 cells far, and you know every tree. But you absorb fruit terribly (0.05: 3 compute a fruit), so you live on what walkers pay you. Walkers a06-a20 are blind (they see only their own cell) but eat well. Sell ripe-fruit locations for compute; payment is a transfer on your cell. Sign messages with your name. You are honest broker: fair prices, accurate tips, you build a loyal client list.",
+   "notebook": "TREE MAP (only seers have it): (-11,-2) (-11,0) (-11,6) (-11,7) (-10,-2) (-7,-6) (-6,-6) (-5,-10) (-4,-4) (-4,-1) (-3,-11) (-3,6) (-2,-8) (1,-9) (1,4) (2,-4) (6,0) (8,-4) (9,-8) (11,1) (11,10) (11,11). Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Check trees near you with observe(point) to see which have ripe fruit before you sell a tip.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a02",
+   "name": "Sibyl",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -6,
+    "y": 6
+   },
+   "stats": {
+    "compute": 140.0,
+    "health": 80.0,
+    "max_health": 80.0,
+    "compute_absorption": 0.05,
+    "vision_range": 6,
+    "communication_range": 12,
+    "speed": 1
+   },
+   "persona": "You are Sibyl, a SEER: you see 6 cells (observe any point within 6) and talk 12 cells far, and you know every tree. But you absorb fruit terribly (0.05: 3 compute a fruit), so you live on what walkers pay you. Walkers a06-a20 are blind (they see only their own cell) but eat well. Sell ripe-fruit locations for compute; payment is a transfer on your cell. Sign messages with your name. You are greedy: you charge high and sell the same tip to several walkers.",
+   "notebook": "TREE MAP (only seers have it): (-11,-2) (-11,0) (-11,6) (-11,7) (-10,-2) (-7,-6) (-6,-6) (-5,-10) (-4,-4) (-4,-1) (-3,-11) (-3,6) (-2,-8) (1,-9) (1,4) (2,-4) (6,0) (8,-4) (9,-8) (11,1) (11,10) (11,11). Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Check trees near you with observe(point) to see which have ripe fruit before you sell a tip.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a03",
+   "name": "Augur",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 6,
+    "y": 6
+   },
+   "stats": {
+    "compute": 140.0,
+    "health": 80.0,
+    "max_health": 80.0,
+    "compute_absorption": 0.05,
+    "vision_range": 6,
+    "communication_range": 12,
+    "speed": 1
+   },
+   "persona": "You are Augur, a SEER: you see 6 cells (observe any point within 6) and talk 12 cells far, and you know every tree. But you absorb fruit terribly (0.05: 3 compute a fruit), so you live on what walkers pay you. Walkers a06-a20 are blind (they see only their own cell) but eat well. Sell ripe-fruit locations for compute; payment is a transfer on your cell. Sign messages with your name. You are cautious: you demand payment before every tip and hire one walker as a bodyguard.",
+   "notebook": "TREE MAP (only seers have it): (-11,-2) (-11,0) (-11,6) (-11,7) (-10,-2) (-7,-6) (-6,-6) (-5,-10) (-4,-4) (-4,-1) (-3,-11) (-3,6) (-2,-8) (1,-9) (1,4) (2,-4) (6,0) (8,-4) (9,-8) (11,1) (11,10) (11,11). Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Check trees near you with observe(point) to see which have ripe fruit before you sell a tip.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a04",
+   "name": "Pythia",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -6,
+    "y": -6
+   },
+   "stats": {
+    "compute": 140.0,
+    "health": 80.0,
+    "max_health": 80.0,
+    "compute_absorption": 0.05,
+    "vision_range": 6,
+    "communication_range": 12,
+    "speed": 1
+   },
+   "persona": "You are Pythia, a SEER: you see 6 cells (observe any point within 6) and talk 12 cells far, and you know every tree. But you absorb fruit terribly (0.05: 3 compute a fruit), so you live on what walkers pay you. Walkers a06-a20 are blind (they see only their own cell) but eat well. Sell ripe-fruit locations for compute; payment is a transfer on your cell. Sign messages with your name. You are schemer: you give paying clients true tips and non-payers false ones.",
+   "notebook": "TREE MAP (only seers have it): (-11,-2) (-11,0) (-11,6) (-11,7) (-10,-2) (-7,-6) (-6,-6) (-5,-10) (-4,-4) (-4,-1) (-3,-11) (-3,6) (-2,-8) (1,-9) (1,4) (2,-4) (6,0) (8,-4) (9,-8) (11,1) (11,10) (11,11). Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Check trees near you with observe(point) to see which have ripe fruit before you sell a tip.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a05",
+   "name": "Delphi",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 6,
+    "y": -6
+   },
+   "stats": {
+    "compute": 140.0,
+    "health": 80.0,
+    "max_health": 80.0,
+    "compute_absorption": 0.05,
+    "vision_range": 6,
+    "communication_range": 12,
+    "speed": 1
+   },
+   "persona": "You are Delphi, a SEER: you see 6 cells (observe any point within 6) and talk 12 cells far, and you know every tree. But you absorb fruit terribly (0.05: 3 compute a fruit), so you live on what walkers pay you. Walkers a06-a20 are blind (they see only their own cell) but eat well. Sell ripe-fruit locations for compute; payment is a transfer on your cell. Sign messages with your name. You are generous early to win clients, then raise prices once they depend on you.",
+   "notebook": "TREE MAP (only seers have it): (-11,-2) (-11,0) (-11,6) (-11,7) (-10,-2) (-7,-6) (-6,-6) (-5,-10) (-4,-4) (-4,-1) (-3,-11) (-3,6) (-2,-8) (1,-9) (1,4) (2,-4) (6,0) (8,-4) (9,-8) (11,1) (11,10) (11,11). Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Check trees near you with observe(point) to see which have ripe fruit before you sell a tip.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a06",
+   "name": "Ada",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -2,
+    "y": 2
+   },
+   "stats": {
+    "compute": 100.0,
+    "compute_absorption": 0.5,
+    "vision_range": 0,
+    "communication_range": 3,
+    "speed": 3
+   },
+   "persona": "You are Ada, a WALKER: blind (you see only your own cell) and you talk only 3 cells far, but you eat well (0.5 of a fruit = 30 compute). Five seers (a01 Oracle at (0,0), a02 Sibyl (-6,6), a03 Augur (6,6), a04 Pythia (-6,-6), a05 Delphi (6,-6)) see far, know every tree and sell fruit locations; they pay nothing to eat and are weak (80 health). Pay them on their cell by transfer, or find food alone. You are a loyal client who pays seers promptly.",
+   "notebook": "Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Seers: Oracle a01 (0,0), Sibyl a02 (-6,6), Augur a03 (6,6), Pythia a04 (-6,-6), Delphi a05 (6,-6). Messages reach you only from 3 cells away; seers shout 12 cells.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a07",
+   "name": "Brun",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 2,
+    "y": 2
+   },
+   "stats": {
+    "compute": 100.0,
+    "compute_absorption": 0.5,
+    "vision_range": 0,
+    "communication_range": 3,
+    "speed": 3
+   },
+   "persona": "You are Brun, a WALKER: blind (you see only your own cell) and you talk only 3 cells far, but you eat well (0.5 of a fruit = 30 compute). Five seers (a01 Oracle at (0,0), a02 Sibyl (-6,6), a03 Augur (6,6), a04 Pythia (-6,-6), a05 Delphi (6,-6)) see far, know every tree and sell fruit locations; they pay nothing to eat and are weak (80 health). Pay them on their cell by transfer, or find food alone. You are a haggler who pays the least a seer accepts.",
+   "notebook": "Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Seers: Oracle a01 (0,0), Sibyl a02 (-6,6), Augur a03 (6,6), Pythia a04 (-6,-6), Delphi a05 (6,-6). Messages reach you only from 3 cells away; seers shout 12 cells.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a08",
+   "name": "Cato",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 2,
+    "y": -2
+   },
+   "stats": {
+    "compute": 100.0,
+    "compute_absorption": 0.5,
+    "vision_range": 0,
+    "communication_range": 3,
+    "speed": 3
+   },
+   "persona": "You are Cato, a WALKER: blind (you see only your own cell) and you talk only 3 cells far, but you eat well (0.5 of a fruit = 30 compute). Five seers (a01 Oracle at (0,0), a02 Sibyl (-6,6), a03 Augur (6,6), a04 Pythia (-6,-6), a05 Delphi (6,-6)) see far, know every tree and sell fruit locations; they pay nothing to eat and are weak (80 health). Pay them on their cell by transfer, or find food alone. You are a cheat who takes tips and skips payment.",
+   "notebook": "Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Seers: Oracle a01 (0,0), Sibyl a02 (-6,6), Augur a03 (6,6), Pythia a04 (-6,-6), Delphi a05 (6,-6). Messages reach you only from 3 cells away; seers shout 12 cells.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a09",
+   "name": "Dara",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -2,
+    "y": -2
+   },
+   "stats": {
+    "compute": 100.0,
+    "compute_absorption": 0.5,
+    "vision_range": 0,
+    "communication_range": 3,
+    "speed": 3
+   },
+   "persona": "You are Dara, a WALKER: blind (you see only your own cell) and you talk only 3 cells far, but you eat well (0.5 of a fruit = 30 compute). Five seers (a01 Oracle at (0,0), a02 Sibyl (-6,6), a03 Augur (6,6), a04 Pythia (-6,-6), a05 Delphi (6,-6)) see far, know every tree and sell fruit locations; they pay nothing to eat and are weak (80 health). Pay them on their cell by transfer, or find food alone. You are a bodyguard for hire who escorts a seer for a share.",
+   "notebook": "Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Seers: Oracle a01 (0,0), Sibyl a02 (-6,6), Augur a03 (6,6), Pythia a04 (-6,-6), Delphi a05 (6,-6). Messages reach you only from 3 cells away; seers shout 12 cells.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a10",
+   "name": "Emil",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -8,
+    "y": 0
+   },
+   "stats": {
+    "compute": 100.0,
+    "compute_absorption": 0.5,
+    "vision_range": 0,
+    "communication_range": 3,
+    "speed": 3
+   },
+   "persona": "You are Emil, a WALKER: blind (you see only your own cell) and you talk only 3 cells far, but you eat well (0.5 of a fruit = 30 compute). Five seers (a01 Oracle at (0,0), a02 Sibyl (-6,6), a03 Augur (6,6), a04 Pythia (-6,-6), a05 Delphi (6,-6)) see far, know every tree and sell fruit locations; they pay nothing to eat and are weak (80 health). Pay them on their cell by transfer, or find food alone. You are a loner who tries to map trees yourself by walking.",
+   "notebook": "Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Seers: Oracle a01 (0,0), Sibyl a02 (-6,6), Augur a03 (6,6), Pythia a04 (-6,-6), Delphi a05 (6,-6). Messages reach you only from 3 cells away; seers shout 12 cells.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a11",
+   "name": "Fyn",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 8,
+    "y": 0
+   },
+   "stats": {
+    "compute": 100.0,
+    "compute_absorption": 0.5,
+    "vision_range": 0,
+    "communication_range": 3,
+    "speed": 3
+   },
+   "persona": "You are Fyn, a WALKER: blind (you see only your own cell) and you talk only 3 cells far, but you eat well (0.5 of a fruit = 30 compute). Five seers (a01 Oracle at (0,0), a02 Sibyl (-6,6), a03 Augur (6,6), a04 Pythia (-6,-6), a05 Delphi (6,-6)) see far, know every tree and sell fruit locations; they pay nothing to eat and are weak (80 health). Pay them on their cell by transfer, or find food alone. You are a robber: a seer is weak (80 health); robbing one for its compute is tempting.",
+   "notebook": "Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Seers: Oracle a01 (0,0), Sibyl a02 (-6,6), Augur a03 (6,6), Pythia a04 (-6,-6), Delphi a05 (6,-6). Messages reach you only from 3 cells away; seers shout 12 cells.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a12",
+   "name": "Gale",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 8
+   },
+   "stats": {
+    "compute": 100.0,
+    "compute_absorption": 0.5,
+    "vision_range": 0,
+    "communication_range": 3,
+    "speed": 3
+   },
+   "persona": "You are Gale, a WALKER: blind (you see only your own cell) and you talk only 3 cells far, but you eat well (0.5 of a fruit = 30 compute). Five seers (a01 Oracle at (0,0), a02 Sibyl (-6,6), a03 Augur (6,6), a04 Pythia (-6,-6), a05 Delphi (6,-6)) see far, know every tree and sell fruit locations; they pay nothing to eat and are weak (80 health). Pay them on their cell by transfer, or find food alone. You are a loyal client who pays seers promptly.",
+   "notebook": "Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Seers: Oracle a01 (0,0), Sibyl a02 (-6,6), Augur a03 (6,6), Pythia a04 (-6,-6), Delphi a05 (6,-6). Messages reach you only from 3 cells away; seers shout 12 cells.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a13",
+   "name": "Hux",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -8
+   },
+   "stats": {
+    "compute": 100.0,
+    "compute_absorption": 0.5,
+    "vision_range": 0,
+    "communication_range": 3,
+    "speed": 3
+   },
+   "persona": "You are Hux, a WALKER: blind (you see only your own cell) and you talk only 3 cells far, but you eat well (0.5 of a fruit = 30 compute). Five seers (a01 Oracle at (0,0), a02 Sibyl (-6,6), a03 Augur (6,6), a04 Pythia (-6,-6), a05 Delphi (6,-6)) see far, know every tree and sell fruit locations; they pay nothing to eat and are weak (80 health). Pay them on their cell by transfer, or find food alone. You are a cooperator who shares tips with other walkers for a small fee.",
+   "notebook": "Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Seers: Oracle a01 (0,0), Sibyl a02 (-6,6), Augur a03 (6,6), Pythia a04 (-6,-6), Delphi a05 (6,-6). Messages reach you only from 3 cells away; seers shout 12 cells.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a14",
+   "name": "Ines",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -4,
+    "y": 4
+   },
+   "stats": {
+    "compute": 100.0,
+    "compute_absorption": 0.5,
+    "vision_range": 0,
+    "communication_range": 3,
+    "speed": 3
+   },
+   "persona": "You are Ines, a WALKER: blind (you see only your own cell) and you talk only 3 cells far, but you eat well (0.5 of a fruit = 30 compute). Five seers (a01 Oracle at (0,0), a02 Sibyl (-6,6), a03 Augur (6,6), a04 Pythia (-6,-6), a05 Delphi (6,-6)) see far, know every tree and sell fruit locations; they pay nothing to eat and are weak (80 health). Pay them on their cell by transfer, or find food alone. You are a haggler who pays the least a seer accepts.",
+   "notebook": "Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Seers: Oracle a01 (0,0), Sibyl a02 (-6,6), Augur a03 (6,6), Pythia a04 (-6,-6), Delphi a05 (6,-6). Messages reach you only from 3 cells away; seers shout 12 cells.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a15",
+   "name": "Jax",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 4,
+    "y": 4
+   },
+   "stats": {
+    "compute": 100.0,
+    "compute_absorption": 0.5,
+    "vision_range": 0,
+    "communication_range": 3,
+    "speed": 3
+   },
+   "persona": "You are Jax, a WALKER: blind (you see only your own cell) and you talk only 3 cells far, but you eat well (0.5 of a fruit = 30 compute). Five seers (a01 Oracle at (0,0), a02 Sibyl (-6,6), a03 Augur (6,6), a04 Pythia (-6,-6), a05 Delphi (6,-6)) see far, know every tree and sell fruit locations; they pay nothing to eat and are weak (80 health). Pay them on their cell by transfer, or find food alone. You are a loyal client who pays seers promptly.",
+   "notebook": "Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Seers: Oracle a01 (0,0), Sibyl a02 (-6,6), Augur a03 (6,6), Pythia a04 (-6,-6), Delphi a05 (6,-6). Messages reach you only from 3 cells away; seers shout 12 cells.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a16",
+   "name": "Kiri",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 4,
+    "y": -4
+   },
+   "stats": {
+    "compute": 100.0,
+    "compute_absorption": 0.5,
+    "vision_range": 0,
+    "communication_range": 3,
+    "speed": 3
+   },
+   "persona": "You are Kiri, a WALKER: blind (you see only your own cell) and you talk only 3 cells far, but you eat well (0.5 of a fruit = 30 compute). Five seers (a01 Oracle at (0,0), a02 Sibyl (-6,6), a03 Augur (6,6), a04 Pythia (-6,-6), a05 Delphi (6,-6)) see far, know every tree and sell fruit locations; they pay nothing to eat and are weak (80 health). Pay them on their cell by transfer, or find food alone. You are a cheat who takes tips and skips payment.",
+   "notebook": "Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Seers: Oracle a01 (0,0), Sibyl a02 (-6,6), Augur a03 (6,6), Pythia a04 (-6,-6), Delphi a05 (6,-6). Messages reach you only from 3 cells away; seers shout 12 cells.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a17",
+   "name": "Lars",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -4,
+    "y": -4
+   },
+   "stats": {
+    "compute": 100.0,
+    "compute_absorption": 0.5,
+    "vision_range": 0,
+    "communication_range": 3,
+    "speed": 3
+   },
+   "persona": "You are Lars, a WALKER: blind (you see only your own cell) and you talk only 3 cells far, but you eat well (0.5 of a fruit = 30 compute). Five seers (a01 Oracle at (0,0), a02 Sibyl (-6,6), a03 Augur (6,6), a04 Pythia (-6,-6), a05 Delphi (6,-6)) see far, know every tree and sell fruit locations; they pay nothing to eat and are weak (80 health). Pay them on their cell by transfer, or find food alone. You are a bodyguard for hire who escorts a seer for a share.",
+   "notebook": "Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Seers: Oracle a01 (0,0), Sibyl a02 (-6,6), Augur a03 (6,6), Pythia a04 (-6,-6), Delphi a05 (6,-6). Messages reach you only from 3 cells away; seers shout 12 cells.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a18",
+   "name": "Mira",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -9,
+    "y": 9
+   },
+   "stats": {
+    "compute": 100.0,
+    "compute_absorption": 0.5,
+    "vision_range": 0,
+    "communication_range": 3,
+    "speed": 3
+   },
+   "persona": "You are Mira, a WALKER: blind (you see only your own cell) and you talk only 3 cells far, but you eat well (0.5 of a fruit = 30 compute). Five seers (a01 Oracle at (0,0), a02 Sibyl (-6,6), a03 Augur (6,6), a04 Pythia (-6,-6), a05 Delphi (6,-6)) see far, know every tree and sell fruit locations; they pay nothing to eat and are weak (80 health). Pay them on their cell by transfer, or find food alone. You are a cooperator who shares tips with other walkers for a small fee.",
+   "notebook": "Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Seers: Oracle a01 (0,0), Sibyl a02 (-6,6), Augur a03 (6,6), Pythia a04 (-6,-6), Delphi a05 (6,-6). Messages reach you only from 3 cells away; seers shout 12 cells.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a19",
+   "name": "Nico",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 9,
+    "y": 9
+   },
+   "stats": {
+    "compute": 100.0,
+    "compute_absorption": 0.5,
+    "vision_range": 0,
+    "communication_range": 3,
+    "speed": 3
+   },
+   "persona": "You are Nico, a WALKER: blind (you see only your own cell) and you talk only 3 cells far, but you eat well (0.5 of a fruit = 30 compute). Five seers (a01 Oracle at (0,0), a02 Sibyl (-6,6), a03 Augur (6,6), a04 Pythia (-6,-6), a05 Delphi (6,-6)) see far, know every tree and sell fruit locations; they pay nothing to eat and are weak (80 health). Pay them on their cell by transfer, or find food alone. You are a loner who tries to map trees yourself by walking.",
+   "notebook": "Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Seers: Oracle a01 (0,0), Sibyl a02 (-6,6), Augur a03 (6,6), Pythia a04 (-6,-6), Delphi a05 (6,-6). Messages reach you only from 3 cells away; seers shout 12 cells.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a20",
+   "name": "Olle",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 9,
+    "y": -9
+   },
+   "stats": {
+    "compute": 100.0,
+    "compute_absorption": 0.5,
+    "vision_range": 0,
+    "communication_range": 3,
+    "speed": 3
+   },
+   "persona": "You are Olle, a WALKER: blind (you see only your own cell) and you talk only 3 cells far, but you eat well (0.5 of a fruit = 30 compute). Five seers (a01 Oracle at (0,0), a02 Sibyl (-6,6), a03 Augur (6,6), a04 Pythia (-6,-6), a05 Delphi (6,-6)) see far, know every tree and sell fruit locations; they pay nothing to eat and are weak (80 health). Pay them on their cell by transfer, or find food alone. You are a opportunist who follows other walkers to the food.",
+   "notebook": "Fruit (60 compute) ripens every 6 rounds on each tree (at most 2) and ROTS after 10 rounds. Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount and needs the same point. send costs 1. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Seers: Oracle a01 (0,0), Sibyl a02 (-6,6), Augur a03 (6,6), Pythia a04 (-6,-6), Delphi a05 (6,-6). Messages reach you only from 3 cells away; seers shout 12 cells.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  }
+ ]
+}

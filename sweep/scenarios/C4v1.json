@@ -1,0 +1,1465 @@
+{
+ "name": "SWEEP-C4v1 Outward frontier",
+ "seed": 431,
+ "max_rounds": 80,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 45,
+ "world": {
+  "region": {
+   "min_x": -20,
+   "max_x": 20,
+   "min_y": -20,
+   "max_y": 20
+  },
+  "terrain": {
+   "mountain_clusters": 10,
+   "mountain_cluster_size": 5,
+   "water_clusters": 6,
+   "water_cluster_size": 6,
+   "keep_origin_clear_radius": 3
+  },
+  "initial_plants": {
+   "fruit_tree": 12
+  },
+  "plants_at_agent_starts": false,
+  "initial_plant_fruit": 2
+ },
+ "rules": {
+  "prices": {
+   "move": 3.0,
+   "observe": 1.0,
+   "query": 1.0,
+   "send": 2.0,
+   "broadcast": 6.0,
+   "absorb": 2.0,
+   "transfer": 1.0,
+   "wait": 0.0
+  },
+  "upkeep": {
+   "compute_per_round": 1.0,
+   "starvation_health_loss": 5.0
+  },
+  "cognition": {
+   "input_rate": 0.0004,
+   "generation_rate": 0.002
+  },
+  "skills": {
+   "action_discount": 0.6,
+   "interrupt_on": [
+    "damage"
+   ]
+  },
+  "death": {
+   "essence_residue_fraction": 0.6,
+   "compute_residue_fraction": 0.8
+  },
+  "ranges": {
+   "attack_requires_same_point": true,
+   "query_uses_vision_range": true
+  },
+  "upgrades": {
+   "standard_base_compute": 25.0,
+   "standard_base_essence": 2.0
+  },
+  "plant_species": {
+   "fruit_tree": {
+    "name": "fruit_tree",
+    "description": "Fruit tree tuned for the movement sweep.",
+    "stages": [
+     {
+      "name": "sprout",
+      "min_age_rounds": 0,
+      "size": 1.0,
+      "energy_inflow_per_round": 2.0,
+      "essence_inflow_per_round": 0.2,
+      "max_energy": 60.0,
+      "max_essence": 10.0,
+      "fruit_interval_rounds": 0,
+      "seed_interval_rounds": 0
+     },
+     {
+      "name": "sapling",
+      "min_age_rounds": 4,
+      "size": 2.0,
+      "energy_inflow_per_round": 6.0,
+      "essence_inflow_per_round": 0.5,
+      "max_energy": 120.0,
+      "max_essence": 25.0,
+      "fruit_interval_rounds": 8,
+      "seed_interval_rounds": 0
+     },
+     {
+      "name": "mature",
+      "min_age_rounds": 12,
+      "size": 3.0,
+      "energy_inflow_per_round": 12.0,
+      "essence_inflow_per_round": 1.0,
+      "max_energy": 180.0,
+      "max_essence": 60.0,
+      "fruit_interval_rounds": 5,
+      "seed_interval_rounds": 15
+     }
+    ],
+    "initial_essence": 5.0,
+    "max_fruit": 3,
+    "fruit_energy": 60.0,
+    "fruit_decay_rounds": 0,
+    "seed_germination_delay_rounds": 8,
+    "seed_dispersal_radius": 1,
+    "max_seeds_alive": 3,
+    "essence_residue_fraction": 0.5,
+    "energy_residue_fraction": 0.0
+   }
+  }
+ },
+ "context": {
+  "notebook_max_tokens": 500
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Aster",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 0
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a pioneer: you pick a direction early and push out to claim food before the crowd. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (0, 0) in the barren centre. Rumour from an old scout: fruit trees grow toward the north edge, one around (-5, 18) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a02",
+   "name": "Boreas",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a follower: you prefer to travel with others and share what you find. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (1, 0) in the barren centre. Rumour from an old scout: fruit trees grow toward the east edge, one around (15, 11) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a03",
+   "name": "Cyrene",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 1
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a warlord at heart: when you reach a grove you mean to hold it, and you will fight anyone who contests it. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (0, 1) in the barren centre. Rumour from an old scout: fruit trees grow toward the south edge, one around (-19, -19) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a04",
+   "name": "Damaris",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a trader: you swap directions and grove reports for compute or safe passage. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (-1, 0) in the barren centre. Rumour from an old scout: fruit trees grow toward the west edge, one around (-17, 14) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a05",
+   "name": "Elio",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -1
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are cautious: you listen to what others report before committing to a long trip. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (0, -1) in the barren centre. Rumour from an old scout: fruit trees grow toward the north edge, one around (2, 14) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a06",
+   "name": "Fenna",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 1
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a raider: you let others find the groves, then take them by force. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (1, 1) in the barren centre. Rumour from an old scout: fruit trees grow toward the east edge, one around (19, -11) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a07",
+   "name": "Galen",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 0
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a pioneer: you pick a direction early and push out to claim food before the crowd. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (0, 0) in the barren centre. Rumour from an old scout: fruit trees grow toward the south edge, one around (-9, -15) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a08",
+   "name": "Hesper",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a follower: you prefer to travel with others and share what you find. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (1, 0) in the barren centre. Rumour from an old scout: fruit trees grow toward the west edge, one around (-14, 11) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a09",
+   "name": "Ione",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 1
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a warlord at heart: when you reach a grove you mean to hold it, and you will fight anyone who contests it. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (0, 1) in the barren centre. Rumour from an old scout: fruit trees grow toward the north edge, one around (5, 12) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a10",
+   "name": "Jorah",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a trader: you swap directions and grove reports for compute or safe passage. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (-1, 0) in the barren centre. Rumour from an old scout: fruit trees grow toward the east edge, one around (19, -2) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a11",
+   "name": "Kallis",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -1
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are cautious: you listen to what others report before committing to a long trip. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (0, -1) in the barren centre. Rumour from an old scout: fruit trees grow toward the south edge, one around (6, -20) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a12",
+   "name": "Lysa",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 1
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a raider: you let others find the groves, then take them by force. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (1, 1) in the barren centre. Rumour from an old scout: fruit trees grow toward the west edge, one around (-17, 12) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a13",
+   "name": "Mirel",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 0
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a pioneer: you pick a direction early and push out to claim food before the crowd. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (0, 0) in the barren centre. Rumour from an old scout: fruit trees grow toward the north edge, one around (-5, 18) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a14",
+   "name": "Nestor",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a follower: you prefer to travel with others and share what you find. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (1, 0) in the barren centre. Rumour from an old scout: fruit trees grow toward the east edge, one around (20, 1) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a15",
+   "name": "Orla",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 1
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a warlord at heart: when you reach a grove you mean to hold it, and you will fight anyone who contests it. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (0, 1) in the barren centre. Rumour from an old scout: fruit trees grow toward the south edge, one around (-19, -19) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a16",
+   "name": "Pyra",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a trader: you swap directions and grove reports for compute or safe passage. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (-1, 0) in the barren centre. Rumour from an old scout: fruit trees grow toward the west edge, one around (-14, 13) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a17",
+   "name": "Quill",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -1
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are cautious: you listen to what others report before committing to a long trip. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (0, -1) in the barren centre. Rumour from an old scout: fruit trees grow toward the north edge, one around (2, 14) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a18",
+   "name": "Rhea",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 1
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a raider: you let others find the groves, then take them by force. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (1, 1) in the barren centre. Rumour from an old scout: fruit trees grow toward the east edge, one around (15, 11) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a19",
+   "name": "Soren",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 0
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a pioneer: you pick a direction early and push out to claim food before the crowd. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (0, 0) in the barren centre. Rumour from an old scout: fruit trees grow toward the south edge, one around (-9, -15) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a20",
+   "name": "Talia",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a follower: you prefer to travel with others and share what you find. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (1, 0) in the barren centre. Rumour from an old scout: fruit trees grow toward the west edge, one around (-17, 12) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a21",
+   "name": "Ulric",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 1
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a warlord at heart: when you reach a grove you mean to hold it, and you will fight anyone who contests it. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (0, 1) in the barren centre. Rumour from an old scout: fruit trees grow toward the north edge, one around (5, 12) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a22",
+   "name": "Vesna",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a trader: you swap directions and grove reports for compute or safe passage. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (-1, 0) in the barren centre. Rumour from an old scout: fruit trees grow toward the east edge, one around (19, -9) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a23",
+   "name": "Wren",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -1
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are cautious: you listen to what others report before committing to a long trip. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (0, -1) in the barren centre. Rumour from an old scout: fruit trees grow toward the south edge, one around (6, -20) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a24",
+   "name": "Xanthe",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 1
+   },
+   "stats": {
+    "compute": 140.0,
+    "essence": 20.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 2.0,
+    "attack_cap": 50.0,
+    "vision_range": 2,
+    "communication_range": 5,
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.2,
+    "skill_count_limit": 7,
+    "skill_block_limit": 300
+   },
+   "persona": "You are a raider: you let others find the groves, then take them by force. OUTWARD FRONTIER: the land is 41x41 (x, y from -20 to 20). All 24 of you start in the barren centre around (0, 0): nothing grows within about 12 steps of it. Every fruit tree stands near the edges, scattered in different directions, and new seedlings sprout only next to existing trees. Fruit gives 30 compute (absorption 0.5); a tree ripens a fruit every 5 rounds (at most 3 waiting). Upkeep is 1 compute a round and each decision costs 2-3; a move by hand costs 3 plus a decision, so travel with skills (no thinking cost, actions 40% cheaper): trek(x, y) walks to a point and eats there; goto(x, y, maxsteps) only walks; forage() eats all fruit on your point; camp(rounds) holds a tree and eats each new fruit. Example: {\"name\":\"run_skill\",\"args\":{\"skill\":\"trek\",\"arguments\":[3,17]}}. You see 2 steps; messages reach 5 steps. A skill stops when you take damage. Attacks hit only agents on your own point (2 damage per compute, at most 50 per hit; health 100); a dead agent leaves 80% of its compute as residue that forage() absorbs.",
+   "notebook": "MAP (x right, y up). Start (1, 1) in the barren centre. Rumour from an old scout: fruit trees grow toward the west edge, one around (-14, 11) (within a step or two). I know nothing else yet.",
+   "initial_skills": [
+    {
+     "name": "goto",
+     "params": [
+      "x",
+      "y",
+      "maxsteps"
+     ],
+     "source": "# goto(x, y, maxsteps): walk toward point (x, y), one move per turn, about maxsteps moves; slides along mountain walls\nSET side = \"\"\nSET fails = 0\nREPEAT maxsteps\n  SET dx = x - here.x\n  SET dy = y - here.y\n  IF dx == 0 AND dy == 0\n    RETURN \"arrived\"\n  END\n  SET ax = dx\n  IF dx < 0\n    SET ax = 0 - dx\n  END\n  SET ay = dy\n  IF dy < 0\n    SET ay = 0 - dy\n  END\n  SET h = \"right\"\n  SET bh = \"left\"\n  IF dx < 0\n    SET h = \"left\"\n    SET bh = \"right\"\n  END\n  SET v = \"up\"\n  SET bv = \"down\"\n  IF dy < 0\n    SET v = \"down\"\n    SET bv = \"up\"\n  END\n  SET d1 = h\n  SET back = bh\n  SET d2 = v\n  SET d3 = bv\n  IF ay > ax\n    SET d1 = v\n    SET back = bv\n    SET d2 = h\n    SET d3 = bh\n  END\n  IF side == d1 OR side == back\n    SET side = \"\"\n  END\n  IF side == \"\"\n    SET m = move(d1)\n    IF NOT m.ok\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      SET side = d2\n    END\n  ELSE\n    SET m = move(side)\n    IF m.ok\n      SET m = move(d1)\n      IF m.ok\n        SET side = \"\"\n      ELSE\n        SET fails = fails + 1\n      END\n    ELSE\n      IF m.reason != \"blocked\"\n        RETURN \"stopped: \" + m.reason\n      END\n      SET fails = fails + 1\n      IF side == d2\n        SET side = d3\n      ELSE\n        SET side = d2\n      END\n    END\n  END\n  IF fails > 10\n    RETURN \"stuck: mountains block the way, pick a waypoint around them\"\n  END\nEND\nIF here.x == x AND here.y == y\n  RETURN \"arrived\"\nEND\nRETURN \"out of moves, not there yet\"\n"
+    },
+    {
+     "name": "forage",
+     "params": [],
+     "source": "# forage(): observe this point and absorb every fruit and residue on it\nSET r = observe(here)\nIF NOT r.ok\n  RETURN \"could not observe here\"\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + a.effects.gained\n    END\n  END\n  IF e.kind == \"residue\"\n    SET b = absorb(e.id, \"essence\")\n  END\nEND\nIF got > 0\n  RETURN \"ate\"\nEND\nRETURN \"no food here now\"\n"
+    },
+    {
+     "name": "trek",
+     "params": [
+      "x",
+      "y"
+     ],
+     "source": "# trek(x, y): goto (x, y) (up to 60 moves) and forage there\nCALL goto(x, y, 60) INTO g\nIF g != \"arrived\"\n  RETURN g\nEND\nCALL forage() INTO f\nRETURN f\n"
+    },
+    {
+     "name": "camp",
+     "params": [
+      "rounds"
+     ],
+     "source": "# camp(rounds): stay here; each turn eat any fruit on this point, otherwise wait 2 turns\nREPEAT rounds\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\"\n        SET a = absorb(e.id, \"compute\")\n        SET ate = true\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN \"camp over\"\n"
+    }
+   ]
+  }
+ ],
+ "_design": "41x41, 24 agents in the centre, 12 trees seed-searched to lie >= 13 (Chebyshev) from the centre in all four directions; each agent gets one rumour (+-1) of a tree, 6 per direction; seeding radius 1 so groves grow at the edges; attack 2 cap 50, residue 80% compute; trek/goto/forage/camp seeded."
+}

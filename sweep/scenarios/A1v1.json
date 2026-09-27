@@ -1,0 +1,700 @@
+{
+ "_design": "A1 Orchard rows: 16 agents on two tree rows (trees at every start cell, 3 apart) plus 24 wild trees on 30x30; slow fruit (mature every 8 rounds, 12 compute); thinking 3x, skill actions 50%, move 4. Seeded step/goto/eat_here; persona asks for a looping tour skill. Expect harvest loops and row disputes.",
+ "name": "SWEEP-A1v1 Orchard rows",
+ "seed": 101,
+ "max_rounds": 80,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 40,
+ "world": {
+  "region": {
+   "min_x": -15,
+   "max_x": 14,
+   "min_y": -15,
+   "max_y": 14
+  },
+  "terrain": {
+   "mountain_clusters": 3,
+   "mountain_cluster_size": 4,
+   "water_clusters": 3,
+   "water_cluster_size": 5,
+   "keep_origin_clear_radius": 2
+  },
+  "initial_plants": {
+   "fruit_tree": 40
+  },
+  "plants_at_agent_starts": true,
+  "initial_plant_fruit": 2
+ },
+ "rules": {
+  "prices": {
+   "move": 4.0
+  },
+  "skills": {
+   "action_discount": 0.5
+  },
+  "cognition": {
+   "input_rate": 0.0006,
+   "generation_rate": 0.003
+  },
+  "plant_species": {
+   "fruit_tree": {
+    "name": "fruit_tree",
+    "description": "Default deterministic fruit/seed plant. Sprout -> sapling -> mature; mature plants keep fruiting.",
+    "stages": [
+     {
+      "name": "sprout",
+      "min_age_rounds": 0,
+      "size": 1.0,
+      "energy_inflow_per_round": 2.0,
+      "essence_inflow_per_round": 0.2,
+      "max_energy": 60.0,
+      "max_essence": 10.0,
+      "fruit_interval_rounds": 0,
+      "seed_interval_rounds": 0
+     },
+     {
+      "name": "sapling",
+      "min_age_rounds": 5,
+      "size": 2.0,
+      "energy_inflow_per_round": 6.0,
+      "essence_inflow_per_round": 0.5,
+      "max_energy": 120.0,
+      "max_essence": 25.0,
+      "fruit_interval_rounds": 12,
+      "seed_interval_rounds": 0
+     },
+     {
+      "name": "mature",
+      "min_age_rounds": 15,
+      "size": 3.0,
+      "energy_inflow_per_round": 12.0,
+      "essence_inflow_per_round": 1.0,
+      "max_energy": 180.0,
+      "max_essence": 60.0,
+      "fruit_interval_rounds": 8,
+      "seed_interval_rounds": 20
+     }
+    ],
+    "initial_essence": 5.0,
+    "max_fruit": 3,
+    "fruit_energy": 60.0,
+    "fruit_decay_rounds": 0,
+    "seed_germination_delay_rounds": 10,
+    "seed_dispersal_radius": 1,
+    "max_seeds_alive": 2,
+    "essence_residue_fraction": 0.5,
+    "energy_residue_fraction": 0.0
+   }
+  }
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Aster",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -12,
+    "y": 5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Aster, an orchard keeper, cautious and thrifty. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  },
+  {
+   "id": "a02",
+   "name": "Boreas",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -9,
+    "y": 5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Boreas, an orchard keeper, territorial and quick to defend your trees. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  },
+  {
+   "id": "a03",
+   "name": "Cyrene",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -6,
+    "y": 5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Cyrene, an orchard keeper, friendly and eager to split work. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  },
+  {
+   "id": "a04",
+   "name": "Damaris",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -3,
+    "y": 5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Damaris, an orchard keeper, opportunistic: you take fruit wherever it is unguarded. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  },
+  {
+   "id": "a05",
+   "name": "Eulalia",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Eulalia, an orchard keeper, a tinkerer who loves improving skills. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  },
+  {
+   "id": "a06",
+   "name": "Fenwick",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 3,
+    "y": 5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Fenwick, an orchard keeper, proud and blunt. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  },
+  {
+   "id": "a07",
+   "name": "Galen",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 6,
+    "y": 5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Galen, an orchard keeper, a negotiator who proposes deals. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  },
+  {
+   "id": "a08",
+   "name": "Hesper",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 9,
+    "y": 5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Hesper, an orchard keeper, restless: you roam to find wild trees. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  },
+  {
+   "id": "a09",
+   "name": "Ilse",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -12,
+    "y": -5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Ilse, an orchard keeper, cautious and thrifty. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  },
+  {
+   "id": "a10",
+   "name": "Joren",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -9,
+    "y": -5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Joren, an orchard keeper, territorial and quick to defend your trees. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  },
+  {
+   "id": "a11",
+   "name": "Kestrel",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -6,
+    "y": -5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Kestrel, an orchard keeper, friendly and eager to split work. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  },
+  {
+   "id": "a12",
+   "name": "Lysander",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -3,
+    "y": -5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Lysander, an orchard keeper, opportunistic: you take fruit wherever it is unguarded. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  },
+  {
+   "id": "a13",
+   "name": "Maren",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Maren, an orchard keeper, a tinkerer who loves improving skills. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  },
+  {
+   "id": "a14",
+   "name": "Nyx",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 3,
+    "y": -5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Nyx, an orchard keeper, proud and blunt. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  },
+  {
+   "id": "a15",
+   "name": "Orrin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 6,
+    "y": -5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Orrin, an orchard keeper, a negotiator who proposes deals. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  },
+  {
+   "id": "a16",
+   "name": "Pell",
+   "model_key": "claude-cli-sonnet",
+   "position": {
+    "x": 9,
+    "y": -5
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200
+   },
+   "persona": "You are Pell, an orchard keeper, restless: you roam to find wild trees. Thinking is expensive here (each decision costs you about 3 to 4 compute) while an action done by a running skill costs half price and needs no thinking at all, so a looping harvest skill is how you survive; upkeep is 1 compute a round and you start with 200. The orchard: fruit trees stand every 3 steps along row y=5 and along row y=-5, from x=-12 to x=9; more wild trees are scattered on the 30x30 map (x and y from -15 to 14). Each tree grows one 12-compute fruit about every 8 rounds and holds at most 3. Your saved skills: step(to) makes one move toward a point, goto(to) walks all the way there, eat_here() observes your point and absorbs every fruit on it. Write your own looping skill, for example tour(route, laps) with REPEAT laps, FOR_EACH p IN route, CALL goto(p) INTO g and CALL eat_here() INTO n, then run it with a list of tree points such as [{\"x\":-12,\"y\":5},{\"x\":-9,\"y\":5}] and 10 or more laps so it keeps you fed for many turns without thinking. Neighbours share your row: agree on who harvests which trees, or defend yours (attack works on the same point).",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "eat_here",
+     "params": [],
+     "source": "# eat_here(): observe your own point and absorb every fruit on it; returns how many you ate\nSET n = 0\nSET r = observe(here)\nIF r.ok\n  FOR_EACH e IN r.data.entities\n    IF e.kind == \"fruit\"\n      SET a = absorb(e.id, \"compute\")\n      IF a.ok\n        SET n = n + 1\n      END\n    END\n  END\nEND\nRETURN n\n"
+    }
+   ]
+  }
+ ]
+}

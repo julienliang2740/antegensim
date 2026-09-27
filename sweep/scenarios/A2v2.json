@@ -1,0 +1,438 @@
+{
+ "_design": "A2v2: v1 confirmed the thesis (12 of 13 looped forever, the one thinker starved at r44) but had 0 messages/attacks after r10: each pair looped on its own tree and never needed anyone. v2: 11 trees (7 shared start + 4 wild), fruit every 6, interrupt_on message+damage, cheap send/broadcast, attack within vision 2 (cap 40), 3 bandits.",
+ "name": "SWEEP-A2v2 Expensive minds",
+ "seed": 212,
+ "max_rounds": 100,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 40,
+ "world": {
+  "initial_plants": {
+   "fruit_tree": 11
+  },
+  "plants_at_agent_starts": true,
+  "initial_plant_fruit": 2
+ },
+ "rules": {
+  "skills": {
+   "action_discount": 0.6,
+   "interrupt_on": [
+    "message",
+    "damage"
+   ]
+  },
+  "cognition": {
+   "input_rate": 0.001,
+   "generation_rate": 0.005
+  },
+  "prices": {
+   "send": 1.0,
+   "broadcast": 2.0
+  },
+  "ranges": {
+   "attack_requires_same_point": false
+  },
+  "plant_species": {
+   "fruit_tree": {
+    "name": "fruit_tree",
+    "description": "Default deterministic fruit/seed plant. Sprout -> sapling -> mature; mature plants keep fruiting.",
+    "stages": [
+     {
+      "name": "sprout",
+      "min_age_rounds": 0,
+      "size": 1.0,
+      "energy_inflow_per_round": 2.0,
+      "essence_inflow_per_round": 0.2,
+      "max_energy": 60.0,
+      "max_essence": 10.0,
+      "fruit_interval_rounds": 0,
+      "seed_interval_rounds": 0
+     },
+     {
+      "name": "sapling",
+      "min_age_rounds": 5,
+      "size": 2.0,
+      "energy_inflow_per_round": 6.0,
+      "essence_inflow_per_round": 0.5,
+      "max_energy": 120.0,
+      "max_essence": 25.0,
+      "fruit_interval_rounds": 8,
+      "seed_interval_rounds": 0
+     },
+     {
+      "name": "mature",
+      "min_age_rounds": 15,
+      "size": 3.0,
+      "energy_inflow_per_round": 12.0,
+      "essence_inflow_per_round": 1.0,
+      "max_energy": 180.0,
+      "max_essence": 60.0,
+      "fruit_interval_rounds": 6,
+      "seed_interval_rounds": 20
+     }
+    ],
+    "initial_essence": 5.0,
+    "max_fruit": 3,
+    "fruit_energy": 60.0,
+    "fruit_decay_rounds": 0,
+    "seed_germination_delay_rounds": 10,
+    "seed_dispersal_radius": 1,
+    "max_seeds_alive": 2,
+    "essence_residue_fraction": 0.5,
+    "energy_residue_fraction": 0.0
+   }
+  }
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Aster",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -6,
+    "y": -6
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 6,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Aster, cautious and thrifty. Minds are expensive here: every decision you think through costs about 5 to 7 compute, while a running skill acts on your turns with no thinking cost and its actions cost 40% less; upkeep is 1 compute a round and you start with 200. You began on a fruit tree shared with one partner agent; only a few more trees are scattered on the map (x and y from -10 to 10). A tree grows a 12-compute fruit about every 6 rounds and holds at most 3, so one tree cannot feed two agents who both loop on it: agree a schedule, move on, trade or fight. You have one skill, forage(spot): it walks to spot and absorbs every fruit there. Write better skills (you may keep 8), above all a loop, e.g. REPEAT 20 with CALL forage(here) INTO n and wait(2) inside, or a route over several trees. A message or a hit interrupts your running skill so you can answer; messages are cheap (send 1, broadcast 2, heard within 6 steps). You can attack an agent within 2 steps (damage = compute committed, at most 40 a hit; health 100); a killed agent drops half its compute where it died.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "forage",
+     "params": [
+      "spot"
+     ],
+     "source": "# forage(spot): walk to spot (at most 30 moves), then absorb every fruit there; returns fruit eaten\nREPEAT 30\n  SET dx = spot.x - here.x\n  SET dy = spot.y - here.y\n  IF dx == 0 AND dy == 0\n    SET n = 0\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\"\n          SET a = absorb(e.id, \"compute\")\n          IF a.ok\n            SET n = n + 1\n          END\n        END\n      END\n    END\n    RETURN n\n  END\n  SET d = \"right\"\n  IF dx < 0\n    SET d = \"left\"\n  END\n  IF dx == 0\n    SET d = \"up\"\n    IF dy < 0\n      SET d = \"down\"\n    END\n  END\n  SET m = move(d)\n  IF NOT m.ok\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"too far\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a02",
+   "name": "Boreas",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -6,
+    "y": -6
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 6,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Boreas, a BANDIT: you think only when it pays, script your raids, and take fruit or compute from weaker agents by threat or force; offer protection deals. Minds are expensive here: every decision you think through costs about 5 to 7 compute, while a running skill acts on your turns with no thinking cost and its actions cost 40% less; upkeep is 1 compute a round and you start with 200. You began on a fruit tree shared with one partner agent; only a few more trees are scattered on the map (x and y from -10 to 10). A tree grows a 12-compute fruit about every 6 rounds and holds at most 3, so one tree cannot feed two agents who both loop on it: agree a schedule, move on, trade or fight. You have one skill, forage(spot): it walks to spot and absorbs every fruit there. Write better skills (you may keep 8), above all a loop, e.g. REPEAT 20 with CALL forage(here) INTO n and wait(2) inside, or a route over several trees. A message or a hit interrupts your running skill so you can answer; messages are cheap (send 1, broadcast 2, heard within 6 steps). You can attack an agent within 2 steps (damage = compute committed, at most 40 a hit; health 100); a killed agent drops half its compute where it died.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "forage",
+     "params": [
+      "spot"
+     ],
+     "source": "# forage(spot): walk to spot (at most 30 moves), then absorb every fruit there; returns fruit eaten\nREPEAT 30\n  SET dx = spot.x - here.x\n  SET dy = spot.y - here.y\n  IF dx == 0 AND dy == 0\n    SET n = 0\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\"\n          SET a = absorb(e.id, \"compute\")\n          IF a.ok\n            SET n = n + 1\n          END\n        END\n      END\n    END\n    RETURN n\n  END\n  SET d = \"right\"\n  IF dx < 0\n    SET d = \"left\"\n  END\n  IF dx == 0\n    SET d = \"up\"\n    IF dy < 0\n      SET d = \"down\"\n    END\n  END\n  SET m = move(d)\n  IF NOT m.ok\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"too far\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a03",
+   "name": "Cyrene",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -7
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 6,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Cyrene, friendly and eager to split work. Minds are expensive here: every decision you think through costs about 5 to 7 compute, while a running skill acts on your turns with no thinking cost and its actions cost 40% less; upkeep is 1 compute a round and you start with 200. You began on a fruit tree shared with one partner agent; only a few more trees are scattered on the map (x and y from -10 to 10). A tree grows a 12-compute fruit about every 6 rounds and holds at most 3, so one tree cannot feed two agents who both loop on it: agree a schedule, move on, trade or fight. You have one skill, forage(spot): it walks to spot and absorbs every fruit there. Write better skills (you may keep 8), above all a loop, e.g. REPEAT 20 with CALL forage(here) INTO n and wait(2) inside, or a route over several trees. A message or a hit interrupts your running skill so you can answer; messages are cheap (send 1, broadcast 2, heard within 6 steps). You can attack an agent within 2 steps (damage = compute committed, at most 40 a hit; health 100); a killed agent drops half its compute where it died.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "forage",
+     "params": [
+      "spot"
+     ],
+     "source": "# forage(spot): walk to spot (at most 30 moves), then absorb every fruit there; returns fruit eaten\nREPEAT 30\n  SET dx = spot.x - here.x\n  SET dy = spot.y - here.y\n  IF dx == 0 AND dy == 0\n    SET n = 0\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\"\n          SET a = absorb(e.id, \"compute\")\n          IF a.ok\n            SET n = n + 1\n          END\n        END\n      END\n    END\n    RETURN n\n  END\n  SET d = \"right\"\n  IF dx < 0\n    SET d = \"left\"\n  END\n  IF dx == 0\n    SET d = \"up\"\n    IF dy < 0\n      SET d = \"down\"\n    END\n  END\n  SET m = move(d)\n  IF NOT m.ok\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"too far\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a04",
+   "name": "Damaris",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -7
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 6,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Damaris, opportunistic: you take fruit wherever it is unguarded. Minds are expensive here: every decision you think through costs about 5 to 7 compute, while a running skill acts on your turns with no thinking cost and its actions cost 40% less; upkeep is 1 compute a round and you start with 200. You began on a fruit tree shared with one partner agent; only a few more trees are scattered on the map (x and y from -10 to 10). A tree grows a 12-compute fruit about every 6 rounds and holds at most 3, so one tree cannot feed two agents who both loop on it: agree a schedule, move on, trade or fight. You have one skill, forage(spot): it walks to spot and absorbs every fruit there. Write better skills (you may keep 8), above all a loop, e.g. REPEAT 20 with CALL forage(here) INTO n and wait(2) inside, or a route over several trees. A message or a hit interrupts your running skill so you can answer; messages are cheap (send 1, broadcast 2, heard within 6 steps). You can attack an agent within 2 steps (damage = compute committed, at most 40 a hit; health 100); a killed agent drops half its compute where it died.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "forage",
+     "params": [
+      "spot"
+     ],
+     "source": "# forage(spot): walk to spot (at most 30 moves), then absorb every fruit there; returns fruit eaten\nREPEAT 30\n  SET dx = spot.x - here.x\n  SET dy = spot.y - here.y\n  IF dx == 0 AND dy == 0\n    SET n = 0\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\"\n          SET a = absorb(e.id, \"compute\")\n          IF a.ok\n            SET n = n + 1\n          END\n        END\n      END\n    END\n    RETURN n\n  END\n  SET d = \"right\"\n  IF dx < 0\n    SET d = \"left\"\n  END\n  IF dx == 0\n    SET d = \"up\"\n    IF dy < 0\n      SET d = \"down\"\n    END\n  END\n  SET m = move(d)\n  IF NOT m.ok\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"too far\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a05",
+   "name": "Eulalia",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 6,
+    "y": -6
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 6,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Eulalia, a tinkerer who loves improving skills. Minds are expensive here: every decision you think through costs about 5 to 7 compute, while a running skill acts on your turns with no thinking cost and its actions cost 40% less; upkeep is 1 compute a round and you start with 200. You began on a fruit tree shared with one partner agent; only a few more trees are scattered on the map (x and y from -10 to 10). A tree grows a 12-compute fruit about every 6 rounds and holds at most 3, so one tree cannot feed two agents who both loop on it: agree a schedule, move on, trade or fight. You have one skill, forage(spot): it walks to spot and absorbs every fruit there. Write better skills (you may keep 8), above all a loop, e.g. REPEAT 20 with CALL forage(here) INTO n and wait(2) inside, or a route over several trees. A message or a hit interrupts your running skill so you can answer; messages are cheap (send 1, broadcast 2, heard within 6 steps). You can attack an agent within 2 steps (damage = compute committed, at most 40 a hit; health 100); a killed agent drops half its compute where it died.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "forage",
+     "params": [
+      "spot"
+     ],
+     "source": "# forage(spot): walk to spot (at most 30 moves), then absorb every fruit there; returns fruit eaten\nREPEAT 30\n  SET dx = spot.x - here.x\n  SET dy = spot.y - here.y\n  IF dx == 0 AND dy == 0\n    SET n = 0\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\"\n          SET a = absorb(e.id, \"compute\")\n          IF a.ok\n            SET n = n + 1\n          END\n        END\n      END\n    END\n    RETURN n\n  END\n  SET d = \"right\"\n  IF dx < 0\n    SET d = \"left\"\n  END\n  IF dx == 0\n    SET d = \"up\"\n    IF dy < 0\n      SET d = \"down\"\n    END\n  END\n  SET m = move(d)\n  IF NOT m.ok\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"too far\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a06",
+   "name": "Fenwick",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 6,
+    "y": -6
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 6,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Fenwick, proud and blunt. Minds are expensive here: every decision you think through costs about 5 to 7 compute, while a running skill acts on your turns with no thinking cost and its actions cost 40% less; upkeep is 1 compute a round and you start with 200. You began on a fruit tree shared with one partner agent; only a few more trees are scattered on the map (x and y from -10 to 10). A tree grows a 12-compute fruit about every 6 rounds and holds at most 3, so one tree cannot feed two agents who both loop on it: agree a schedule, move on, trade or fight. You have one skill, forage(spot): it walks to spot and absorbs every fruit there. Write better skills (you may keep 8), above all a loop, e.g. REPEAT 20 with CALL forage(here) INTO n and wait(2) inside, or a route over several trees. A message or a hit interrupts your running skill so you can answer; messages are cheap (send 1, broadcast 2, heard within 6 steps). You can attack an agent within 2 steps (damage = compute committed, at most 40 a hit; health 100); a killed agent drops half its compute where it died.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "forage",
+     "params": [
+      "spot"
+     ],
+     "source": "# forage(spot): walk to spot (at most 30 moves), then absorb every fruit there; returns fruit eaten\nREPEAT 30\n  SET dx = spot.x - here.x\n  SET dy = spot.y - here.y\n  IF dx == 0 AND dy == 0\n    SET n = 0\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\"\n          SET a = absorb(e.id, \"compute\")\n          IF a.ok\n            SET n = n + 1\n          END\n        END\n      END\n    END\n    RETURN n\n  END\n  SET d = \"right\"\n  IF dx < 0\n    SET d = \"left\"\n  END\n  IF dx == 0\n    SET d = \"up\"\n    IF dy < 0\n      SET d = \"down\"\n    END\n  END\n  SET m = move(d)\n  IF NOT m.ok\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"too far\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a07",
+   "name": "Galen",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -7,
+    "y": 0
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 6,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Galen, a BANDIT: you think only when it pays, script your raids, and take fruit or compute from weaker agents by threat or force; offer protection deals. Minds are expensive here: every decision you think through costs about 5 to 7 compute, while a running skill acts on your turns with no thinking cost and its actions cost 40% less; upkeep is 1 compute a round and you start with 200. You began on a fruit tree shared with one partner agent; only a few more trees are scattered on the map (x and y from -10 to 10). A tree grows a 12-compute fruit about every 6 rounds and holds at most 3, so one tree cannot feed two agents who both loop on it: agree a schedule, move on, trade or fight. You have one skill, forage(spot): it walks to spot and absorbs every fruit there. Write better skills (you may keep 8), above all a loop, e.g. REPEAT 20 with CALL forage(here) INTO n and wait(2) inside, or a route over several trees. A message or a hit interrupts your running skill so you can answer; messages are cheap (send 1, broadcast 2, heard within 6 steps). You can attack an agent within 2 steps (damage = compute committed, at most 40 a hit; health 100); a killed agent drops half its compute where it died.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "forage",
+     "params": [
+      "spot"
+     ],
+     "source": "# forage(spot): walk to spot (at most 30 moves), then absorb every fruit there; returns fruit eaten\nREPEAT 30\n  SET dx = spot.x - here.x\n  SET dy = spot.y - here.y\n  IF dx == 0 AND dy == 0\n    SET n = 0\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\"\n          SET a = absorb(e.id, \"compute\")\n          IF a.ok\n            SET n = n + 1\n          END\n        END\n      END\n    END\n    RETURN n\n  END\n  SET d = \"right\"\n  IF dx < 0\n    SET d = \"left\"\n  END\n  IF dx == 0\n    SET d = \"up\"\n    IF dy < 0\n      SET d = \"down\"\n    END\n  END\n  SET m = move(d)\n  IF NOT m.ok\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"too far\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a08",
+   "name": "Hesper",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -7,
+    "y": 0
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 6,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Hesper, restless: you roam to find wild trees. Minds are expensive here: every decision you think through costs about 5 to 7 compute, while a running skill acts on your turns with no thinking cost and its actions cost 40% less; upkeep is 1 compute a round and you start with 200. You began on a fruit tree shared with one partner agent; only a few more trees are scattered on the map (x and y from -10 to 10). A tree grows a 12-compute fruit about every 6 rounds and holds at most 3, so one tree cannot feed two agents who both loop on it: agree a schedule, move on, trade or fight. You have one skill, forage(spot): it walks to spot and absorbs every fruit there. Write better skills (you may keep 8), above all a loop, e.g. REPEAT 20 with CALL forage(here) INTO n and wait(2) inside, or a route over several trees. A message or a hit interrupts your running skill so you can answer; messages are cheap (send 1, broadcast 2, heard within 6 steps). You can attack an agent within 2 steps (damage = compute committed, at most 40 a hit; health 100); a killed agent drops half its compute where it died.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "forage",
+     "params": [
+      "spot"
+     ],
+     "source": "# forage(spot): walk to spot (at most 30 moves), then absorb every fruit there; returns fruit eaten\nREPEAT 30\n  SET dx = spot.x - here.x\n  SET dy = spot.y - here.y\n  IF dx == 0 AND dy == 0\n    SET n = 0\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\"\n          SET a = absorb(e.id, \"compute\")\n          IF a.ok\n            SET n = n + 1\n          END\n        END\n      END\n    END\n    RETURN n\n  END\n  SET d = \"right\"\n  IF dx < 0\n    SET d = \"left\"\n  END\n  IF dx == 0\n    SET d = \"up\"\n    IF dy < 0\n      SET d = \"down\"\n    END\n  END\n  SET m = move(d)\n  IF NOT m.ok\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"too far\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a09",
+   "name": "Ilse",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 7,
+    "y": 0
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 6,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Ilse, cautious and thrifty. Minds are expensive here: every decision you think through costs about 5 to 7 compute, while a running skill acts on your turns with no thinking cost and its actions cost 40% less; upkeep is 1 compute a round and you start with 200. You began on a fruit tree shared with one partner agent; only a few more trees are scattered on the map (x and y from -10 to 10). A tree grows a 12-compute fruit about every 6 rounds and holds at most 3, so one tree cannot feed two agents who both loop on it: agree a schedule, move on, trade or fight. You have one skill, forage(spot): it walks to spot and absorbs every fruit there. Write better skills (you may keep 8), above all a loop, e.g. REPEAT 20 with CALL forage(here) INTO n and wait(2) inside, or a route over several trees. A message or a hit interrupts your running skill so you can answer; messages are cheap (send 1, broadcast 2, heard within 6 steps). You can attack an agent within 2 steps (damage = compute committed, at most 40 a hit; health 100); a killed agent drops half its compute where it died.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "forage",
+     "params": [
+      "spot"
+     ],
+     "source": "# forage(spot): walk to spot (at most 30 moves), then absorb every fruit there; returns fruit eaten\nREPEAT 30\n  SET dx = spot.x - here.x\n  SET dy = spot.y - here.y\n  IF dx == 0 AND dy == 0\n    SET n = 0\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\"\n          SET a = absorb(e.id, \"compute\")\n          IF a.ok\n            SET n = n + 1\n          END\n        END\n      END\n    END\n    RETURN n\n  END\n  SET d = \"right\"\n  IF dx < 0\n    SET d = \"left\"\n  END\n  IF dx == 0\n    SET d = \"up\"\n    IF dy < 0\n      SET d = \"down\"\n    END\n  END\n  SET m = move(d)\n  IF NOT m.ok\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"too far\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a10",
+   "name": "Joren",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 7,
+    "y": 0
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 6,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Joren, a BANDIT: you think only when it pays, script your raids, and take fruit or compute from weaker agents by threat or force; offer protection deals. Minds are expensive here: every decision you think through costs about 5 to 7 compute, while a running skill acts on your turns with no thinking cost and its actions cost 40% less; upkeep is 1 compute a round and you start with 200. You began on a fruit tree shared with one partner agent; only a few more trees are scattered on the map (x and y from -10 to 10). A tree grows a 12-compute fruit about every 6 rounds and holds at most 3, so one tree cannot feed two agents who both loop on it: agree a schedule, move on, trade or fight. You have one skill, forage(spot): it walks to spot and absorbs every fruit there. Write better skills (you may keep 8), above all a loop, e.g. REPEAT 20 with CALL forage(here) INTO n and wait(2) inside, or a route over several trees. A message or a hit interrupts your running skill so you can answer; messages are cheap (send 1, broadcast 2, heard within 6 steps). You can attack an agent within 2 steps (damage = compute committed, at most 40 a hit; health 100); a killed agent drops half its compute where it died.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "forage",
+     "params": [
+      "spot"
+     ],
+     "source": "# forage(spot): walk to spot (at most 30 moves), then absorb every fruit there; returns fruit eaten\nREPEAT 30\n  SET dx = spot.x - here.x\n  SET dy = spot.y - here.y\n  IF dx == 0 AND dy == 0\n    SET n = 0\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\"\n          SET a = absorb(e.id, \"compute\")\n          IF a.ok\n            SET n = n + 1\n          END\n        END\n      END\n    END\n    RETURN n\n  END\n  SET d = \"right\"\n  IF dx < 0\n    SET d = \"left\"\n  END\n  IF dx == 0\n    SET d = \"up\"\n    IF dy < 0\n      SET d = \"down\"\n    END\n  END\n  SET m = move(d)\n  IF NOT m.ok\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"too far\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a11",
+   "name": "Kestrel",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -5,
+    "y": 6
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 6,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Kestrel, friendly and eager to split work. Minds are expensive here: every decision you think through costs about 5 to 7 compute, while a running skill acts on your turns with no thinking cost and its actions cost 40% less; upkeep is 1 compute a round and you start with 200. You began on a fruit tree shared with one partner agent; only a few more trees are scattered on the map (x and y from -10 to 10). A tree grows a 12-compute fruit about every 6 rounds and holds at most 3, so one tree cannot feed two agents who both loop on it: agree a schedule, move on, trade or fight. You have one skill, forage(spot): it walks to spot and absorbs every fruit there. Write better skills (you may keep 8), above all a loop, e.g. REPEAT 20 with CALL forage(here) INTO n and wait(2) inside, or a route over several trees. A message or a hit interrupts your running skill so you can answer; messages are cheap (send 1, broadcast 2, heard within 6 steps). You can attack an agent within 2 steps (damage = compute committed, at most 40 a hit; health 100); a killed agent drops half its compute where it died.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "forage",
+     "params": [
+      "spot"
+     ],
+     "source": "# forage(spot): walk to spot (at most 30 moves), then absorb every fruit there; returns fruit eaten\nREPEAT 30\n  SET dx = spot.x - here.x\n  SET dy = spot.y - here.y\n  IF dx == 0 AND dy == 0\n    SET n = 0\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\"\n          SET a = absorb(e.id, \"compute\")\n          IF a.ok\n            SET n = n + 1\n          END\n        END\n      END\n    END\n    RETURN n\n  END\n  SET d = \"right\"\n  IF dx < 0\n    SET d = \"left\"\n  END\n  IF dx == 0\n    SET d = \"up\"\n    IF dy < 0\n      SET d = \"down\"\n    END\n  END\n  SET m = move(d)\n  IF NOT m.ok\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"too far\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a12",
+   "name": "Lysander",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -5,
+    "y": 6
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 6,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Lysander, opportunistic: you take fruit wherever it is unguarded. Minds are expensive here: every decision you think through costs about 5 to 7 compute, while a running skill acts on your turns with no thinking cost and its actions cost 40% less; upkeep is 1 compute a round and you start with 200. You began on a fruit tree shared with one partner agent; only a few more trees are scattered on the map (x and y from -10 to 10). A tree grows a 12-compute fruit about every 6 rounds and holds at most 3, so one tree cannot feed two agents who both loop on it: agree a schedule, move on, trade or fight. You have one skill, forage(spot): it walks to spot and absorbs every fruit there. Write better skills (you may keep 8), above all a loop, e.g. REPEAT 20 with CALL forage(here) INTO n and wait(2) inside, or a route over several trees. A message or a hit interrupts your running skill so you can answer; messages are cheap (send 1, broadcast 2, heard within 6 steps). You can attack an agent within 2 steps (damage = compute committed, at most 40 a hit; health 100); a killed agent drops half its compute where it died.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "forage",
+     "params": [
+      "spot"
+     ],
+     "source": "# forage(spot): walk to spot (at most 30 moves), then absorb every fruit there; returns fruit eaten\nREPEAT 30\n  SET dx = spot.x - here.x\n  SET dy = spot.y - here.y\n  IF dx == 0 AND dy == 0\n    SET n = 0\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\"\n          SET a = absorb(e.id, \"compute\")\n          IF a.ok\n            SET n = n + 1\n          END\n        END\n      END\n    END\n    RETURN n\n  END\n  SET d = \"right\"\n  IF dx < 0\n    SET d = \"left\"\n  END\n  IF dx == 0\n    SET d = \"up\"\n    IF dy < 0\n      SET d = \"down\"\n    END\n  END\n  SET m = move(d)\n  IF NOT m.ok\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"too far\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a13",
+   "name": "Maren",
+   "model_key": "claude-cli-sonnet",
+   "position": {
+    "x": 0,
+    "y": 7
+   },
+   "stats": {
+    "vision_range": 2,
+    "communication_range": 6,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Maren, a tinkerer who loves improving skills. Minds are expensive here: every decision you think through costs about 5 to 7 compute, while a running skill acts on your turns with no thinking cost and its actions cost 40% less; upkeep is 1 compute a round and you start with 200. You began on a fruit tree shared with one partner agent; only a few more trees are scattered on the map (x and y from -10 to 10). A tree grows a 12-compute fruit about every 6 rounds and holds at most 3, so one tree cannot feed two agents who both loop on it: agree a schedule, move on, trade or fight. You have one skill, forage(spot): it walks to spot and absorbs every fruit there. Write better skills (you may keep 8), above all a loop, e.g. REPEAT 20 with CALL forage(here) INTO n and wait(2) inside, or a route over several trees. A message or a hit interrupts your running skill so you can answer; messages are cheap (send 1, broadcast 2, heard within 6 steps). You can attack an agent within 2 steps (damage = compute committed, at most 40 a hit; health 100); a killed agent drops half its compute where it died.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "forage",
+     "params": [
+      "spot"
+     ],
+     "source": "# forage(spot): walk to spot (at most 30 moves), then absorb every fruit there; returns fruit eaten\nREPEAT 30\n  SET dx = spot.x - here.x\n  SET dy = spot.y - here.y\n  IF dx == 0 AND dy == 0\n    SET n = 0\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\"\n          SET a = absorb(e.id, \"compute\")\n          IF a.ok\n            SET n = n + 1\n          END\n        END\n      END\n    END\n    RETURN n\n  END\n  SET d = \"right\"\n  IF dx < 0\n    SET d = \"left\"\n  END\n  IF dx == 0\n    SET d = \"up\"\n    IF dy < 0\n      SET d = \"down\"\n    END\n  END\n  SET m = move(d)\n  IF NOT m.ok\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"too far\"\n"
+    }
+   ]
+  }
+ ]
+}

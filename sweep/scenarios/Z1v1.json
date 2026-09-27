@@ -1,0 +1,260 @@
+{
+ "name": "SWEEP-Z1v1 async round smoke",
+ "seed": 21,
+ "max_rounds": 3,
+ "real_budget_usd": 3,
+ "default_model_key": "claude-cli-haiku",
+ "context": {
+  "input_token_cap": 10000
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Aster",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 0
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "essence_capacity": 100.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 1.0,
+    "attack_cap": 50.0,
+    "speed": 1,
+    "vision_range": 0,
+    "communication_range": 0,
+    "compute_absorption": 0.2,
+    "essence_absorption": 0.1,
+    "skill_count_limit": 5,
+    "skill_block_limit": 100
+   },
+   "persona": "",
+   "notebook": "",
+   "initial_skills": [],
+   "context_overrides": null,
+   "fake_script": null,
+   "fake_options": null
+  },
+  {
+   "id": "a02",
+   "name": "Boreas",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "essence_capacity": 100.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 1.0,
+    "attack_cap": 50.0,
+    "speed": 1,
+    "vision_range": 0,
+    "communication_range": 0,
+    "compute_absorption": 0.2,
+    "essence_absorption": 0.1,
+    "skill_count_limit": 5,
+    "skill_block_limit": 100
+   },
+   "persona": "",
+   "notebook": "",
+   "initial_skills": [],
+   "context_overrides": null,
+   "fake_script": null,
+   "fake_options": null
+  },
+  {
+   "id": "a03",
+   "name": "Cyrene",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 1
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "essence_capacity": 100.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 1.0,
+    "attack_cap": 50.0,
+    "speed": 1,
+    "vision_range": 0,
+    "communication_range": 0,
+    "compute_absorption": 0.2,
+    "essence_absorption": 0.1,
+    "skill_count_limit": 5,
+    "skill_block_limit": 100
+   },
+   "persona": "",
+   "notebook": "",
+   "initial_skills": [],
+   "context_overrides": null,
+   "fake_script": null,
+   "fake_options": null
+  },
+  {
+   "id": "a04",
+   "name": "Damaris",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "essence_capacity": 100.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 1.0,
+    "attack_cap": 50.0,
+    "speed": 1,
+    "vision_range": 0,
+    "communication_range": 0,
+    "compute_absorption": 0.2,
+    "essence_absorption": 0.1,
+    "skill_count_limit": 5,
+    "skill_block_limit": 100
+   },
+   "persona": "",
+   "notebook": "",
+   "initial_skills": [],
+   "context_overrides": null,
+   "fake_script": null,
+   "fake_options": null
+  },
+  {
+   "id": "a05",
+   "name": "Eos",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -1
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "essence_capacity": 100.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 1.0,
+    "attack_cap": 50.0,
+    "speed": 1,
+    "vision_range": 0,
+    "communication_range": 0,
+    "compute_absorption": 0.2,
+    "essence_absorption": 0.1,
+    "skill_count_limit": 5,
+    "skill_block_limit": 100
+   },
+   "persona": "",
+   "notebook": "",
+   "initial_skills": [],
+   "context_overrides": null,
+   "fake_script": null,
+   "fake_options": null
+  },
+  {
+   "id": "a06",
+   "name": "Ferrin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 1
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "essence_capacity": 100.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 1.0,
+    "attack_cap": 50.0,
+    "speed": 1,
+    "vision_range": 0,
+    "communication_range": 0,
+    "compute_absorption": 0.2,
+    "essence_absorption": 0.1,
+    "skill_count_limit": 5,
+    "skill_block_limit": 100
+   },
+   "persona": "",
+   "notebook": "",
+   "initial_skills": [],
+   "context_overrides": null,
+   "fake_script": null,
+   "fake_options": null
+  },
+  {
+   "id": "a07",
+   "name": "Galene",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": -1
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "essence_capacity": 100.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 1.0,
+    "attack_cap": 50.0,
+    "speed": 1,
+    "vision_range": 0,
+    "communication_range": 0,
+    "compute_absorption": 0.2,
+    "essence_absorption": 0.1,
+    "skill_count_limit": 5,
+    "skill_block_limit": 100
+   },
+   "persona": "",
+   "notebook": "",
+   "initial_skills": [],
+   "context_overrides": null,
+   "fake_script": null,
+   "fake_options": null
+  },
+  {
+   "id": "a08",
+   "name": "Halcyon",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 2,
+    "y": 0
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "essence_capacity": 100.0,
+    "health": 100.0,
+    "max_health": 100.0,
+    "attack": 1.0,
+    "attack_cap": 50.0,
+    "speed": 1,
+    "vision_range": 0,
+    "communication_range": 0,
+    "compute_absorption": 0.2,
+    "essence_absorption": 0.1,
+    "skill_count_limit": 5,
+    "skill_block_limit": 100
+   },
+   "persona": "",
+   "notebook": "",
+   "initial_skills": [],
+   "context_overrides": null,
+   "fake_script": null,
+   "fake_options": null
+  }
+ ]
+}

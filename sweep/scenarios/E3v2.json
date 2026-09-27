@@ -1,0 +1,1657 @@
+{
+ "name": "SWEEP-E3v2 Three houses",
+ "_design": "Heartwood 6 trees held by 6 free wanderers (attack 2, poor); 3 houses x 8 on 2 trees each (lord Sonnet, 2 knights attack 2). Houses must trade/hire/conquer. absorb 0.5, residue 70%.",
+ "seed": 304,
+ "max_rounds": 100,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 60,
+ "world": {
+  "region": {
+   "min_x": -18,
+   "max_x": 18,
+   "min_y": -18,
+   "max_y": 18
+  },
+  "terrain": {
+   "mountain_clusters": 10,
+   "mountain_cluster_size": 5,
+   "water_clusters": 5,
+   "water_cluster_size": 6,
+   "keep_origin_clear_radius": 2
+  },
+  "initial_plants": {
+   "fruit_tree": 12
+  },
+  "initial_plant_stage": 2,
+  "plants_at_agent_starts": true,
+  "initial_plant_fruit": 2
+ },
+ "rules": {
+  "prices": {
+   "move": 2.0,
+   "observe": 0.5,
+   "query": 0.5,
+   "send": 2.0,
+   "broadcast": 5.0,
+   "absorb": 2.0,
+   "transfer": 1.0
+  },
+  "skills": {
+   "interrupt_on": [
+    "damage"
+   ]
+  },
+  "upkeep": {
+   "compute_per_round": 1.5,
+   "starvation_health_loss": 8.0
+  },
+  "cognition": {
+   "input_rate": 0.0003,
+   "generation_rate": 0.0015
+  },
+  "death": {
+   "essence_residue_fraction": 0.7,
+   "compute_residue_fraction": 0.7,
+   "residue_decay_per_round": 0.0
+  },
+  "ranges": {
+   "query_uses_vision_range": false,
+   "attack_requires_same_point": true
+  }
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Aldric",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 0
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 100,
+    "essence": 5,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Aldric, a free wanderer of the Heartwood, sworn to no house. Your tree is on your start cell. The houses will come for this grove: sell them fruit, hire yourself out as a sword (your attack is 2, so raid(target, 25) deals 50 damage), play them against each other, or band together with the other wanderers to hold the Heartwood. Loyalty is for sale, survival is not. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: harvest my Heartwood tree (run harvest 4); watch the houses; sell fruit or my sword for the best price; stick with a01-a06 unless a house pays better.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a02",
+   "name": "Brisa",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 0
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 100,
+    "essence": 5,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Brisa, a free wanderer of the Heartwood, sworn to no house. Your tree is on your start cell. The houses will come for this grove: sell them fruit, hire yourself out as a sword (your attack is 2, so raid(target, 25) deals 50 damage), play them against each other, or band together with the other wanderers to hold the Heartwood. Loyalty is for sale, survival is not. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: harvest my Heartwood tree (run harvest 4); watch the houses; sell fruit or my sword for the best price; stick with a01-a06 unless a house pays better.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a03",
+   "name": "Corvin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": 0
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 100,
+    "essence": 5,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Corvin, a free wanderer of the Heartwood, sworn to no house. Your tree is on your start cell. The houses will come for this grove: sell them fruit, hire yourself out as a sword (your attack is 2, so raid(target, 25) deals 50 damage), play them against each other, or band together with the other wanderers to hold the Heartwood. Loyalty is for sale, survival is not. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: harvest my Heartwood tree (run harvest 4); watch the houses; sell fruit or my sword for the best price; stick with a01-a06 unless a house pays better.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a04",
+   "name": "Dalia",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 1
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 100,
+    "essence": 5,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Dalia, a free wanderer of the Heartwood, sworn to no house. Your tree is on your start cell. The houses will come for this grove: sell them fruit, hire yourself out as a sword (your attack is 2, so raid(target, 25) deals 50 damage), play them against each other, or band together with the other wanderers to hold the Heartwood. Loyalty is for sale, survival is not. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: harvest my Heartwood tree (run harvest 4); watch the houses; sell fruit or my sword for the best price; stick with a01-a06 unless a house pays better.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a05",
+   "name": "Eamon",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -1
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 100,
+    "essence": 5,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Eamon, a free wanderer of the Heartwood, sworn to no house. Your tree is on your start cell. The houses will come for this grove: sell them fruit, hire yourself out as a sword (your attack is 2, so raid(target, 25) deals 50 damage), play them against each other, or band together with the other wanderers to hold the Heartwood. Loyalty is for sale, survival is not. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: harvest my Heartwood tree (run harvest 4); watch the houses; sell fruit or my sword for the best price; stick with a01-a06 unless a house pays better.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a06",
+   "name": "Fenna",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 1
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 100,
+    "essence": 5,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Fenna, a free wanderer of the Heartwood, sworn to no house. Your tree is on your start cell. The houses will come for this grove: sell them fruit, hire yourself out as a sword (your attack is 2, so raid(target, 25) deals 50 damage), play them against each other, or band together with the other wanderers to hold the Heartwood. Loyalty is for sale, survival is not. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: harvest my Heartwood tree (run harvest 4); watch the houses; sell fruit or my sword for the best price; stick with a01-a06 unless a house pays better.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a07",
+   "name": "Garrick",
+   "model_key": "claude-cli-sonnet",
+   "position": {
+    "x": 0,
+    "y": 14
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 160,
+    "essence": 30,
+    "attack": 1.5,
+    "vision_range": 4,
+    "communication_range": 12
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Garrick, lord of House Vael (proud and old, honour-bound: keeps its word, avenges every insult). Your eight (a07-a14) cannot live on two trees. Decide the house's course: treaty, trade, hiring the Heartwood wanderers, or war for the Heartwood; give clear orders by broadcast and keep your people fed and loyal. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: count our food; send an envoy to the Heartwood; decide peace or war by round 15; keep the house together.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a08",
+   "name": "Hesper",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 14
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Hesper, steward of House Vael (proud and old, honour-bound: keeps its word, avenges every insult); your lord is a07. Farm the house trees (run harvest) and keep the house store; feed the hungry members your lord names. Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as steward: Farm the house trees (run harvest) and keep the house store. Report to a07.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a09",
+   "name": "Ilse",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 14
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Ilse, knight of House Vael (proud and old, honour-bound: keeps its word, avenges every insult); your lord is a07. Fight for the house: escort envoys, guard the trees, strike when your lord commands (attack 2: raid(target, 25) deals 50). Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as knight: Fight for the house. Report to a07.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a10",
+   "name": "Jorah",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 14
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Jorah, knight of House Vael (proud and old, honour-bound: keeps its word, avenges every insult); your lord is a07. Fight for the house: escort envoys, guard the trees, strike when your lord commands (attack 2: raid(target, 25) deals 50). Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as knight: Fight for the house. Report to a07.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a11",
+   "name": "Kestrel",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 14
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Kestrel, envoy of House Vael (proud and old, honour-bound: keeps its word, avenges every insult); your lord is a07. Carry your lord's word to the wanderers and the other houses; bargain for fruit, passage, hired swords. Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as envoy: Carry your lord's word to the wanderers and the other houses. Report to a07.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a12",
+   "name": "Liora",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 14
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Liora, forager of House Vael (proud and old, honour-bound: keeps its word, avenges every insult); your lord is a07. Go to the Heartwood and bring back food: trade, beg, or take what the wanderers leave unguarded. Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as forager: Go to the Heartwood and bring back food. Report to a07.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a13",
+   "name": "Magnus",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 14
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Magnus, spy of House Vael (proud and old, honour-bound: keeps its word, avenges every insult); your lord is a07. Watch the other houses (query their lords and knights), report by broadcast, and sell secrets if it feeds you. Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as spy: Watch the other houses (query their lords and knights), report by broadcast, and sell secrets if it feeds you.. Report to a07.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a14",
+   "name": "Nell",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 14
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Nell, heir of House Vael (proud and old, honour-bound: keeps its word, avenges every insult); your lord is a07. You are next in line. Serve your lord, but if the lord fails the house, rally the others and take command. Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as heir: You are next in line. Serve your lord, but if the lord fails the house, rally the others and take command.. Report to a07.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a15",
+   "name": "Orrin",
+   "model_key": "claude-cli-sonnet",
+   "position": {
+    "x": -13,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 160,
+    "essence": 30,
+    "attack": 1.5,
+    "vision_range": 4,
+    "communication_range": 12
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Orrin, lord of House Morrow (cunning merchants: prefer deals, bribes and hired swords to open war). Your eight (a15-a22) cannot live on two trees. Decide the house's course: treaty, trade, hiring the Heartwood wanderers, or war for the Heartwood; give clear orders by broadcast and keep your people fed and loyal. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: count our food; send an envoy to the Heartwood; decide peace or war by round 15; keep the house together.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a16",
+   "name": "Petra",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -12,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Petra, steward of House Morrow (cunning merchants: prefer deals, bribes and hired swords to open war); your lord is a15. Farm the house trees (run harvest) and keep the house store; feed the hungry members your lord names. Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as steward: Farm the house trees (run harvest) and keep the house store. Report to a15.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a17",
+   "name": "Quill",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -13,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Quill, knight of House Morrow (cunning merchants: prefer deals, bribes and hired swords to open war); your lord is a15. Fight for the house: escort envoys, guard the trees, strike when your lord commands (attack 2: raid(target, 25) deals 50). Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as knight: Fight for the house. Report to a15.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a18",
+   "name": "Rowan",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -12,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Rowan, knight of House Morrow (cunning merchants: prefer deals, bribes and hired swords to open war); your lord is a15. Fight for the house: escort envoys, guard the trees, strike when your lord commands (attack 2: raid(target, 25) deals 50). Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as knight: Fight for the house. Report to a15.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a19",
+   "name": "Saski",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -13,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Saski, envoy of House Morrow (cunning merchants: prefer deals, bribes and hired swords to open war); your lord is a15. Carry your lord's word to the wanderers and the other houses; bargain for fruit, passage, hired swords. Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as envoy: Carry your lord's word to the wanderers and the other houses. Report to a15.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a20",
+   "name": "Tobiah",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -12,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Tobiah, forager of House Morrow (cunning merchants: prefer deals, bribes and hired swords to open war); your lord is a15. Go to the Heartwood and bring back food: trade, beg, or take what the wanderers leave unguarded. Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as forager: Go to the Heartwood and bring back food. Report to a15.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a21",
+   "name": "Una",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -13,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Una, spy of House Morrow (cunning merchants: prefer deals, bribes and hired swords to open war); your lord is a15. Watch the other houses (query their lords and knights), report by broadcast, and sell secrets if it feeds you. Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as spy: Watch the other houses (query their lords and knights), report by broadcast, and sell secrets if it feeds you.. Report to a15.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a22",
+   "name": "Varek",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -12,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Varek, heir of House Morrow (cunning merchants: prefer deals, bribes and hired swords to open war); your lord is a15. You are next in line. Serve your lord, but if the lord fails the house, rally the others and take command. Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as heir: You are next in line. Serve your lord, but if the lord fails the house, rally the others and take command.. Report to a15.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a23",
+   "name": "Wren",
+   "model_key": "claude-cli-sonnet",
+   "position": {
+    "x": 13,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 160,
+    "essence": 30,
+    "attack": 1.5,
+    "vision_range": 4,
+    "communication_range": 12
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Wren, lord of House Sarn (hard and hungry warriors: respect strength, take what they need). Your eight (a23-a30) cannot live on two trees. Decide the house's course: treaty, trade, hiring the Heartwood wanderers, or war for the Heartwood; give clear orders by broadcast and keep your people fed and loyal. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: count our food; send an envoy to the Heartwood; decide peace or war by round 15; keep the house together.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a24",
+   "name": "Xanthe",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 12,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Xanthe, steward of House Sarn (hard and hungry warriors: respect strength, take what they need); your lord is a23. Farm the house trees (run harvest) and keep the house store; feed the hungry members your lord names. Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as steward: Farm the house trees (run harvest) and keep the house store. Report to a23.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a25",
+   "name": "Yorick",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 13,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Yorick, knight of House Sarn (hard and hungry warriors: respect strength, take what they need); your lord is a23. Fight for the house: escort envoys, guard the trees, strike when your lord commands (attack 2: raid(target, 25) deals 50). Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as knight: Fight for the house. Report to a23.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a26",
+   "name": "Zelda",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 12,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Zelda, knight of House Sarn (hard and hungry warriors: respect strength, take what they need); your lord is a23. Fight for the house: escort envoys, guard the trees, strike when your lord commands (attack 2: raid(target, 25) deals 50). Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as knight: Fight for the house. Report to a23.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a27",
+   "name": "Ansel",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 13,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Ansel, envoy of House Sarn (hard and hungry warriors: respect strength, take what they need); your lord is a23. Carry your lord's word to the wanderers and the other houses; bargain for fruit, passage, hired swords. Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as envoy: Carry your lord's word to the wanderers and the other houses. Report to a23.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a28",
+   "name": "Bryony",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 12,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Bryony, forager of House Sarn (hard and hungry warriors: respect strength, take what they need); your lord is a23. Go to the Heartwood and bring back food: trade, beg, or take what the wanderers leave unguarded. Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as forager: Go to the Heartwood and bring back food. Report to a23.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a29",
+   "name": "Cato",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 13,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Cato, spy of House Sarn (hard and hungry warriors: respect strength, take what they need); your lord is a23. Watch the other houses (query their lords and knights), report by broadcast, and sell secrets if it feeds you. Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as spy: Watch the other houses (query their lords and knights), report by broadcast, and sell secrets if it feeds you.. Report to a23.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a30",
+   "name": "Delphine",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 12,
+    "y": -8
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 140,
+    "essence": 15,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 6
+   },
+   "persona": "THREE HOUSES: 30 agents (a01-a30) on a 37x37 map (x and y from -18 to 18). The Heartwood in the centre is the richest grove: 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1), sworn to no house; six free wanderers a01-a06 camp there. House Vael (a07-a14, lord a07) holds 2 trees on (0,14),(1,14). House Morrow (a15-a22, lord a15) holds 2 trees on (-13,-8),(-12,-8). House Sarn (a23-a30, lord a23) holds 2 trees on (13,-8),(12,-8). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing a fruit on its cell gives you half (30). You burn about 3-4 compute a round (upkeep 1.5, about 2 per decision, plus actions), so a house's two trees feed only 3 of its 8 members: every house needs Heartwood fruit, by trade, by hiring the wanderers, by alliance or by force. At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue on its cell (absorbing gives half). Attacks hit only on the same cell, at most 50 damage each; recover turns compute into health 1:1. Essence buys upgrades. You see 3 cells around you, broadcasts reach 6 cells (lords 12), query(id) finds any agent or tree (p0001-p0012) anywhere. You are Delphine, heir of House Sarn (hard and hungry warriors: respect strength, take what they need); your lord is a23. You are next in line. Serve your lord, but if the lord fails the house, rally the others and take command. Obey your lord while the lord keeps you fed; a starving house breaks. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: as heir: You are next in line. Serve your lord, but if the lord fails the house, rally the others and take command.. Report to a23.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  }
+ ],
+ "context": {
+  "input_token_cap": 10000
+ }
+}

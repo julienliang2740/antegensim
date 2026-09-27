@@ -1,0 +1,4 @@
+dry/
+*.log
+*.out
+__pycache__/

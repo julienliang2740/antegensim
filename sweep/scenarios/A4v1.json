@@ -1,0 +1,879 @@
+{
+ "_design": "A4 Patrol and ambush: 20 Haiku on 25x25, 14 trees placed uniformly (not at starts), attack within vision 3 (attack_cap 40, 3 hits to kill), query anywhere, interrupt_on damage; cognition 2x, discount 0.6. Seeded step/goto/patrol (reports on meeting). Expect ambushes at trees, flee/hunt skills.",
+ "name": "SWEEP-A4v1 Patrol and ambush",
+ "seed": 404,
+ "max_rounds": 70,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 40,
+ "world": {
+  "region": {
+   "min_x": -12,
+   "max_x": 12,
+   "min_y": -12,
+   "max_y": 12
+  },
+  "initial_plants": {
+   "fruit_tree": 14
+  },
+  "plants_at_agent_starts": false,
+  "initial_plant_fruit": 2
+ },
+ "rules": {
+  "skills": {
+   "action_discount": 0.6,
+   "interrupt_on": [
+    "damage"
+   ]
+  },
+  "cognition": {
+   "input_rate": 0.0004,
+   "generation_rate": 0.002
+  },
+  "ranges": {
+   "attack_requires_same_point": false,
+   "query_uses_vision_range": false
+  }
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Aster",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -9,
+    "y": 1
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Aster, cautious and thrifty. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a02",
+   "name": "Boreas",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -11,
+    "y": 5
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Boreas, territorial and quick to defend your trees. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a03",
+   "name": "Cyrene",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -9,
+    "y": 10
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Cyrene, friendly and eager to split work. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a04",
+   "name": "Damaris",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 8,
+    "y": -8
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Damaris, opportunistic: you take fruit wherever it is unguarded. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a05",
+   "name": "Eulalia",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": -7
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Eulalia, a tinkerer who loves improving skills. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a06",
+   "name": "Fenwick",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": -8
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Fenwick, proud and blunt. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a07",
+   "name": "Galen",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -11,
+    "y": 9
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Galen, a negotiator who proposes deals. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a08",
+   "name": "Hesper",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 10,
+    "y": 4
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Hesper, restless: you roam to find wild trees. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a09",
+   "name": "Ilse",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -9,
+    "y": 6
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Ilse, cautious and thrifty. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a10",
+   "name": "Joren",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -11,
+    "y": -6
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Joren, territorial and quick to defend your trees. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a11",
+   "name": "Kestrel",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 10,
+    "y": 7
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Kestrel, friendly and eager to split work. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a12",
+   "name": "Lysander",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 10,
+    "y": -6
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Lysander, opportunistic: you take fruit wherever it is unguarded. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a13",
+   "name": "Maren",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -5,
+    "y": -7
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Maren, a tinkerer who loves improving skills. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a14",
+   "name": "Nyx",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 5,
+    "y": -7
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Nyx, proud and blunt. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a15",
+   "name": "Orrin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -2,
+    "y": 2
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Orrin, a negotiator who proposes deals. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a16",
+   "name": "Pell",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -3,
+    "y": 6
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Pell, restless: you roam to find wild trees. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a17",
+   "name": "Quill",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -10,
+    "y": -3
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Quill, cautious and thrifty. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a18",
+   "name": "Rhea",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": 6
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Rhea, territorial and quick to defend your trees. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a19",
+   "name": "Sable",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 7,
+    "y": -5
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Sable, friendly and eager to split work. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a20",
+   "name": "Tamsin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -9,
+    "y": -10
+   },
+   "stats": {
+    "vision_range": 3,
+    "communication_range": 6,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "attack_cap": 40
+   },
+   "persona": "You are Tamsin, opportunistic: you take fruit wherever it is unguarded. Food is sparse: only about 14 fruit trees on the 25x25 map (x and y from -12 to 12), each growing a 12-compute fruit about every 5 rounds; upkeep is 1 compute a round and thinking costs about 2 to 3 compute per decision, while a running skill needs no thinking and its actions cost 40% less. You can attack any agent within 3 steps (damage = compute committed, at most 40 per hit; health 100), and query(id) finds any agent anywhere. A killed agent drops half its compute on its point for anyone to absorb. Being hit interrupts your running skill and hands control back to you. Your skills: step(to), goto(to), and patrol(route, laps), which walks a list of points, eats fruit and loots residue at each, and stops to report when it meets another agent. Write your own skills too: flee(from) that steps away several times, hunt(target, strike) that queries a target, walks toward it and attacks within 3 steps, or guard(spot). Remember tree points in your notebook and patrol them.",
+   "notebook": "",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40); returns \"arrived\" or \"blocked\"\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked\"\n  END\nEND\nRETURN \"still far\"\n"
+    },
+    {
+     "name": "patrol",
+     "params": [
+      "route",
+      "laps"
+     ],
+     "source": "# patrol(route, laps): walk the route; at each point observe, eat fruit and loot residue there;\n# stop and report as soon as another agent is seen on the same point\nREPEAT laps\n  FOR_EACH p IN route\n    CALL goto(p) INTO g\n    SET r = observe(here)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"fruit\" OR e.kind == \"residue\"\n          SET a = absorb(e.id, \"compute\")\n        END\n        IF e.kind == \"agent\" AND e.id != self\n          RETURN \"met \" + e.id + \" on my patrol\"\n        END\n      END\n    END\n  END\nEND\nRETURN \"patrol done\"\n"
+    }
+   ]
+  }
+ ]
+}

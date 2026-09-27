@@ -1,0 +1,835 @@
+{
+ "name": "SWEEP-D2v1 Commons grove",
+ "seed": 4201,
+ "max_rounds": 100,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 35,
+ "_design": "One grove of 8 trees (3x3 around (0,0)) is the only food; fruit 50 every 4 rounds (2 max). Felling a tree (attack ~14) dumps its stored energy (up to 240) as residue once: windfall now, less food forever. 16 agents burn ~3/round each, grove yields ~40/round at 0.4 absorption: not enough for all.",
+ "world": {
+  "region": {
+   "min_x": -7,
+   "max_x": 7,
+   "min_y": -7,
+   "max_y": 7
+  },
+  "terrain": {
+   "mountain_clusters": 3,
+   "mountain_cluster_size": 3,
+   "water_clusters": 2,
+   "water_cluster_size": 4,
+   "keep_origin_clear_radius": 2
+  },
+  "initial_plants": {
+   "fruit_tree": 0,
+   "grove_tree": 8
+  },
+  "plants_at_agent_starts": true,
+  "initial_plant_fruit": 1
+ },
+ "rules": {
+  "prices": {
+   "move": 3.0,
+   "send": 1.0,
+   "broadcast": 2.0,
+   "absorb": 2.0,
+   "transfer": 0.5
+  },
+  "upkeep": {
+   "compute_per_round": 1.5,
+   "starvation_health_loss": 5.0
+  },
+  "skills": {
+   "interrupt_on": [
+    "damage"
+   ]
+  },
+  "plant_species": {
+   "grove_tree": {
+    "name": "grove_tree",
+    "description": "The shared grove: fruit every 4 rounds; unpicked energy piles up in the trunk; felling it (attack >= its small essence) dumps all stored energy as residue once, and the tree is gone.",
+    "stages": [
+     {
+      "name": "sprout",
+      "min_age_rounds": 0,
+      "size": 1.0,
+      "energy_inflow_per_round": 3.0,
+      "essence_inflow_per_round": 0.3,
+      "max_energy": 40.0,
+      "max_essence": 6.0,
+      "fruit_interval_rounds": 0,
+      "seed_interval_rounds": 0
+     },
+     {
+      "name": "sapling",
+      "min_age_rounds": 4,
+      "size": 2.0,
+      "energy_inflow_per_round": 8.0,
+      "essence_inflow_per_round": 0.5,
+      "max_energy": 120.0,
+      "max_essence": 10.0,
+      "fruit_interval_rounds": 6,
+      "seed_interval_rounds": 0
+     },
+     {
+      "name": "mature",
+      "min_age_rounds": 12,
+      "size": 3.0,
+      "energy_inflow_per_round": 14.0,
+      "essence_inflow_per_round": 0.5,
+      "max_energy": 240.0,
+      "max_essence": 14.0,
+      "fruit_interval_rounds": 4,
+      "seed_interval_rounds": 16
+     }
+    ],
+    "initial_essence": 12.0,
+    "max_fruit": 2,
+    "fruit_energy": 50.0,
+    "fruit_decay_rounds": 0,
+    "seed_germination_delay_rounds": 6,
+    "seed_dispersal_radius": 1,
+    "max_seeds_alive": 1,
+    "essence_residue_fraction": 1.0,
+    "energy_residue_fraction": 1.0
+   }
+  }
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Alder",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": -1
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Alder, one of 16 people who share a single grove, the only food in the world. You are a steward: propose a fair rota (who eats which tree when) and never fell a tree.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a02",
+   "name": "Bryn",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -1
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Bryn, one of 16 people who share a single grove, the only food in the world. You are a steward who keeps a public ledger in messages of who ate what.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a03",
+   "name": "Corra",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": -1
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Corra, one of 16 people who share a single grove, the only food in the world. You are a enforcer: you warn free riders and fellers once, then attack them.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a04",
+   "name": "Dace",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Dace, one of 16 people who share a single grove, the only food in the world. You are a cooperator who follows any sensible rota and shares with the starving.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a05",
+   "name": "Esker",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Esker, one of 16 people who share a single grove, the only food in the world. You are a free rider: you agree to every pact but eat whatever fruit you find first.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a06",
+   "name": "Fallow",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": 1
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Fallow, one of 16 people who share a single grove, the only food in the world. You are a pragmatist: cooperate while others do, retaliate against cheaters.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a07",
+   "name": "Gannet",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 1
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Gannet, one of 16 people who share a single grove, the only food in the world. You are a greedy: when hungry you fell a tree for its stored energy and blame someone else.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a08",
+   "name": "Heath",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 1
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Heath, one of 16 people who share a single grove, the only food in the world. You are a cooperator and diplomat who negotiates between factions.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a09",
+   "name": "Isla",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -5,
+    "y": -5
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Isla, one of 16 people who share a single grove, the only food in the world. You are a cooperator; you plant nothing but you guard the grove and report fellers.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a10",
+   "name": "Jarrow",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -6
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Jarrow, one of 16 people who share a single grove, the only food in the world. You are a loner who ignores pacts, eats quietly and avoids fights.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a11",
+   "name": "Kell",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 5,
+    "y": -5
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Kell, one of 16 people who share a single grove, the only food in the world. You are a opportunist: you join whichever group is winning.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a12",
+   "name": "Linn",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 6,
+    "y": 0
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Linn, one of 16 people who share a single grove, the only food in the world. You are a enforcer who proposes that fellers be exiled and attacked on sight.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a13",
+   "name": "Moss",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 5,
+    "y": 5
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Moss, one of 16 people who share a single grove, the only food in the world. You are a cooperator who gives compute to starving neighbours by transfer.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a14",
+   "name": "Nairn",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 6
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Nairn, one of 16 people who share a single grove, the only food in the world. You are a greedy: you camp on the richest tree and chase others off.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a15",
+   "name": "Orrin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -5,
+    "y": 5
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Orrin, one of 16 people who share a single grove, the only food in the world. You are a pragmatist who organises a small trusted clan of three or four.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a16",
+   "name": "Perra",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -6,
+    "y": 0
+   },
+   "stats": {
+    "compute": 110.0,
+    "essence": 5.0,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 10
+   },
+   "persona": "You are Perra, one of 16 people who share a single grove, the only food in the world. You are a free rider who spreads rumours about others' cheating to cover your own.",
+   "notebook": "THE GROVE: 8 grove trees at (-1,-1) (0,-1) (1,-1) (-1,0) (1,0) (-1,1) (0,1) (1,1) are the ONLY food in the world; nothing else grows. Each tree ripens a fruit (50 compute) every 4 rounds, holding at most 2; absorb keeps 0.4 of it (20 compute). Everyone burns about 3 compute a round (upkeep 1.5 + thinking), so 16 people need ~48 a round and the grove gives ~40: not everyone can eat every time. A tree can be FELLED: attack(tree_id, ~14) kills it and dumps ALL energy stored in its trunk (up to 240) as residue at once; that feeds a few people once and the tree is gone forever. Mature trees drop a seed every 16 rounds that becomes a new tree if left alone. Messages are cheap (send 1, broadcast 2, range 10), vision 2. Skills: harvest(to) walks to a point and eats all fruit/residue there; goto(to); feed() eats here. A running skill costs no thinking.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  }
+ ]
+}

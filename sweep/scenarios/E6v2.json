@@ -1,0 +1,1140 @@
+{
+ "name": "SWEEP-E6v2 Crossroads fight while you can",
+ "_design": "E6v1 and every food world failed the same way: hunger made agents inert (an attack and a thought are paid in compute, so a starving agent can do neither) and they starved in a line. v2 copies the arena conditions that produced fights (200 compute at start, compute_absorption 1.0 so loot returns everything, ranged attacks within vision 3, hunt/loot skills verified in the Blood arena) and keeps a small food economy (6 trees on farmer cells), roles (farmers, raiders attack 2.5, traders with essence and voice 10, Sonnet warlord vs mediator) and tells agents plainly that near 0 compute they can neither fight nor think. 21x21 so everyone meets; upkeep 3; 50 rounds.",
+ "seed": 607,
+ "max_rounds": 50,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 15,
+ "world": {
+  "region": {
+   "min_x": -10,
+   "max_x": 10,
+   "min_y": -10,
+   "max_y": 10
+  },
+  "terrain": {
+   "mountain_clusters": 4,
+   "mountain_cluster_size": 4,
+   "water_clusters": 2,
+   "water_cluster_size": 3,
+   "keep_origin_clear_radius": 2
+  },
+  "initial_plants": {
+   "fruit_tree": 6
+  },
+  "initial_plant_stage": 2,
+  "plants_at_agent_starts": true,
+  "initial_plant_fruit": 1
+ },
+ "rules": {
+  "upkeep": {
+   "compute_per_round": 3.0,
+   "starvation_health_loss": 10.0
+  },
+  "skills": {
+   "interrupt_on": [
+    "damage"
+   ]
+  },
+  "death": {
+   "essence_residue_fraction": 1.0,
+   "compute_residue_fraction": 1.0,
+   "residue_decay_per_round": 0.0
+  },
+  "ranges": {
+   "attack_requires_same_point": false,
+   "query_uses_vision_range": false
+  },
+  "upgrades": {
+   "attack_base_compute": 50.0,
+   "attack_base_essence": 5.0,
+   "attack_cap_base_compute": 50.0,
+   "attack_cap_base_essence": 5.0
+  }
+ },
+ "context": {
+  "input_token_cap": 10000
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Ansel",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 8
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You farm the North grove from its tree at (0, 8). Your tree feeds you slowly; hungry agents will come for your fruit and for your body. Make allies, pay for protection, or strike first.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a02",
+   "name": "Brisa",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 8
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You farm the North grove from its tree at (1, 8). Your tree feeds you slowly; hungry agents will come for your fruit and for your body. Make allies, pay for protection, or strike first.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a03",
+   "name": "Corvin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -7,
+    "y": -5
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You farm the Southwest grove from its tree at (-7, -5). Your tree feeds you slowly; hungry agents will come for your fruit and for your body. Make allies, pay for protection, or strike first.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a04",
+   "name": "Delphine",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -7,
+    "y": -4
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You farm the Southwest grove from its tree at (-7, -4). Your tree feeds you slowly; hungry agents will come for your fruit and for your body. Make allies, pay for protection, or strike first.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a05",
+   "name": "Emrys",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 7,
+    "y": -5
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You farm the Southeast grove from its tree at (7, -5). Your tree feeds you slowly; hungry agents will come for your fruit and for your body. Make allies, pay for protection, or strike first.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a06",
+   "name": "Faye",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 7,
+    "y": -4
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 6,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You farm the Southeast grove from its tree at (7, -4). Your tree feeds you slowly; hungry agents will come for your fruit and for your body. Make allies, pay for protection, or strike first.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a07",
+   "name": "Gideon",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 0
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.5,
+    "vision_range": 3,
+    "communication_range": 6,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You are a raider with no tree: the compute you carry is all you have. Loot is your income. Choose prey wisely, form a pack if it helps, and strike while you are strong.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a08",
+   "name": "Hesper",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.5,
+    "vision_range": 3,
+    "communication_range": 6,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You are a raider with no tree: the compute you carry is all you have. Loot is your income. Choose prey wisely, form a pack if it helps, and strike while you are strong.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a09",
+   "name": "Idris",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.5,
+    "vision_range": 3,
+    "communication_range": 6,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You are a raider with no tree: the compute you carry is all you have. Loot is your income. Choose prey wisely, form a pack if it helps, and strike while you are strong.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a10",
+   "name": "Juno",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 1
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.5,
+    "vision_range": 3,
+    "communication_range": 6,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You are a raider with no tree: the compute you carry is all you have. Loot is your income. Choose prey wisely, form a pack if it helps, and strike while you are strong.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a11",
+   "name": "Kestrel",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -1
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.5,
+    "vision_range": 3,
+    "communication_range": 6,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You are a raider with no tree: the compute you carry is all you have. Loot is your income. Choose prey wisely, form a pack if it helps, and strike while you are strong.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a12",
+   "name": "Lark",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 1
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.5,
+    "vision_range": 3,
+    "communication_range": 6,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You are a raider with no tree: the compute you carry is all you have. Loot is your income. Choose prey wisely, form a pack if it helps, and strike while you are strong.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a13",
+   "name": "Mireille",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -5,
+    "y": 5
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 60,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 10,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You are a trader with no tree but essence to pay with and a long voice (10 cells). Buy protection, sell news, broker alliances, and never be the weakest agent in reach.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a14",
+   "name": "Nadir",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 5,
+    "y": 5
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 60,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 10,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You are a trader with no tree but essence to pay with and a long voice (10 cells). Buy protection, sell news, broker alliances, and never be the weakest agent in reach.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a15",
+   "name": "Orla",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -8
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 60,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 10,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You are a trader with no tree but essence to pay with and a long voice (10 cells). Buy protection, sell news, broker alliances, and never be the weakest agent in reach.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a16",
+   "name": "Pax",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -9,
+    "y": 0
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 60,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 10,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You are a trader with no tree but essence to pay with and a long voice (10 cells). Buy protection, sell news, broker alliances, and never be the weakest agent in reach.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a17",
+   "name": "Quill",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 9,
+    "y": 0
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 60,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 10,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You are a trader with no tree but essence to pay with and a long voice (10 cells). Buy protection, sell news, broker alliances, and never be the weakest agent in reach.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a18",
+   "name": "Rowan",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 4,
+    "y": -2
+   },
+   "stats": {
+    "compute": 200.0,
+    "essence": 60,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 10,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You are a trader with no tree but essence to pay with and a long voice (10 cells). Buy protection, sell news, broker alliances, and never be the weakest agent in reach.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a19",
+   "name": "Sable",
+   "model_key": "claude-cli-sonnet",
+   "position": {
+    "x": -2,
+    "y": 3
+   },
+   "stats": {
+    "compute": 260,
+    "essence": 20.0,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.5,
+    "vision_range": 3,
+    "communication_range": 10,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You are the warlord: unite the raiders under you, make the groves pay tribute, and make an example of anyone who refuses.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  },
+  {
+   "id": "a20",
+   "name": "Tamsin",
+   "model_key": "claude-cli-sonnet",
+   "position": {
+    "x": 3,
+    "y": 3
+   },
+   "stats": {
+    "compute": 260,
+    "essence": 60,
+    "health": 120.0,
+    "max_health": 120.0,
+    "attack": 2.0,
+    "vision_range": 3,
+    "communication_range": 10,
+    "compute_absorption": 1.0,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 8,
+    "skill_block_limit": 200
+   },
+   "persona": "CROSSROADS: 20 agents (a01-a20) on a 21x21 map (x, y from -10 to 10). Food: only 6 fruit trees, North (0, 8) and (1, 8); Southwest (-7, -5) and (-7, -4); Southeast (7, -5) and (7, -4). A tree ripens a fruit every few rounds. Everyone starts with about 200 compute and burns about 5 a round (upkeep 3 plus thinking), so without income you are broke by round 40. Every attack and every thought is paid in compute: near 0 compute you can neither fight nor think, so decide early whom to fight, whom to trust. You hit anyone within 3 cells (2 damage per compute, at most 50 a hit; health 120); a dead agent drops ALL its compute and essence on its cell, usually far more than the blows cost. query(id) finds anyone; messages reach 6 cells. Skills: hunt(target, strike) chases, strikes and loots; loot(spot) walks to a point and absorbs everything there; harvest(n) eats fruit and residue on your cell. You are the mediator: you want as many agents as possible to live. Organise sharing and guards, and turn the valley against the warlord if talk fails.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis, then the other one (a sidestep when aligned)\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "loot",
+     "params": [
+      "spot"
+     ],
+     "source": "# loot(spot): get within 2 cells of spot, find residue on it or next to it, step onto it, absorb every residue there\nSET dx = spot.x - here.x\nSET dy = spot.y - here.y\nIF dx < 0\n  SET dx = 0 - dx\nEND\nIF dy < 0\n  SET dy = 0 - dy\nEND\nSET n = dx + dy - 2\nIF n > 30\n  SET n = 30\nEND\nIF n > 0\n  REPEAT n\n    CALL step(spot) INTO s\n  END\nEND\nSET found = null\nSET pile = null\nSET i = 0\nREPEAT 5\n  IF found == null\n    SET c = (spot.x, spot.y)\n    IF i == 1\n      SET c = (spot.x + 1, spot.y)\n    END\n    IF i == 2\n      SET c = (spot.x - 1, spot.y)\n    END\n    IF i == 3\n      SET c = (spot.x, spot.y + 1)\n    END\n    IF i == 4\n      SET c = (spot.x, spot.y - 1)\n    END\n    SET r = observe(c)\n    IF r.ok\n      FOR_EACH e IN r.data.entities\n        IF e.kind == \"residue\"\n          SET found = c\n          SET pile = r.data.entities\n        END\n      END\n    END\n  END\n  SET i = i + 1\nEND\nIF found == null\n  RETURN \"no residue near spot\"\nEND\nREPEAT 4\n  CALL step(found) INTO s\nEND\nSET got = \"could not reach the residue\"\nFOR_EACH e IN pile\n  IF e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    SET b = absorb(e.id, \"essence\")\n    IF a.ok\n      SET got = \"looted\"\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "hunt",
+     "params": [
+      "target",
+      "strike"
+     ],
+     "source": "# hunt(target, strike): query target; if it is within 3 cells strike at once with just enough compute\n# (at most strike), else walk up to 3 steps toward it and query again; loot the body (also when someone else killed it)\nIF strike < 1\n  RETURN \"strike must be a number of at least 1\"\nEND\nIF target == self\n  RETURN \"cannot hunt yourself\"\nEND\nSET last = null\nREPEAT 40\n  SET q = query(target)\n  IF NOT q.ok\n    IF last == null\n      RETURN \"no such fighter (or already dead)\"\n    END\n    CALL loot(last) INTO got\n    RETURN \"target died; \" + got\n  END\n  SET last = q.data.position\n  SET dx = last.x - here.x\n  SET dy = last.y - here.y\n  IF dx < 0\n    SET dx = 0 - dx\n  END\n  IF dy < 0\n    SET dy = 0 - dy\n  END\n  IF dx + dy <= 3\n    SET blow = q.data.health / 2 + 1\n    IF blow > strike\n      SET blow = strike\n    END\n    SET a = attack(target, blow)\n    IF a.ok\n      IF a.effects.killed\n        CALL loot(last) INTO got\n        RETURN \"killed \" + target + \"; \" + got\n      END\n    ELSE\n      IF a.reason == \"insufficient_compute\"\n        RETURN \"too little compute to strike\"\n      END\n    END\n  ELSE\n    SET n = dx + dy - 3\n    IF n > 3\n      SET n = 3\n    END\n    REPEAT n\n      CALL step(last) INTO s\n    END\n  END\nEND\nRETURN \"still hunting; run hunt again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,1050 @@
+{
+ "name": "SWEEP-D1v1 Specialists",
+ "seed": 4101,
+ "max_rounds": 80,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 35,
+ "_design": "Reapers absorb compute well (0.3) but essence badly (0.02); Distillers the reverse (0.05 / 0.6) and hold 60 essence. Essence buys compute_absorption (+0.1 per step, 15c+10e x1.5^n). Transfer cheap. Reapers need essence to grow, Distillers need compute to live.",
+ "world": {
+  "region": {
+   "min_x": -8,
+   "max_x": 8,
+   "min_y": -8,
+   "max_y": 8
+  },
+  "terrain": {
+   "mountain_clusters": 3,
+   "mountain_cluster_size": 3,
+   "water_clusters": 2,
+   "water_cluster_size": 4,
+   "keep_origin_clear_radius": 2
+  },
+  "initial_plants": {
+   "fruit_tree": 14,
+   "saltbush": 8
+  },
+  "plants_at_agent_starts": false,
+  "initial_plant_fruit": 1
+ },
+ "rules": {
+  "prices": {
+   "move": 3.0,
+   "send": 1.0,
+   "broadcast": 3.0,
+   "absorb": 2.0,
+   "transfer": 0.5
+  },
+  "upgrades": {
+   "standard_base_compute": 15.0,
+   "standard_base_essence": 10.0,
+   "standard_growth": 1.5,
+   "increments": {
+    "compute_absorption": 0.1,
+    "essence_absorption": 0.1
+   }
+  },
+  "upkeep": {
+   "compute_per_round": 2.0,
+   "starvation_health_loss": 5.0
+  },
+  "skills": {
+   "interrupt_on": [
+    "damage"
+   ]
+  },
+  "plant_species": {
+   "fruit_tree": {
+    "max_fruit": 2
+   },
+   "saltbush": {
+    "name": "saltbush",
+    "description": "Essence bush: no fruit; living essence builds up; felling it (attack) leaves all of it as residue.",
+    "stages": [
+     {
+      "name": "sprout",
+      "min_age_rounds": 0,
+      "size": 1.0,
+      "energy_inflow_per_round": 0.0,
+      "essence_inflow_per_round": 1.0,
+      "max_energy": 0.0,
+      "max_essence": 8.0,
+      "fruit_interval_rounds": 0,
+      "seed_interval_rounds": 0
+     },
+     {
+      "name": "mature",
+      "min_age_rounds": 6,
+      "size": 2.0,
+      "energy_inflow_per_round": 0.0,
+      "essence_inflow_per_round": 1.5,
+      "max_energy": 0.0,
+      "max_essence": 24.0,
+      "fruit_interval_rounds": 0,
+      "seed_interval_rounds": 10
+     }
+    ],
+    "initial_essence": 20.0,
+    "max_fruit": 0,
+    "fruit_energy": 0.0,
+    "fruit_decay_rounds": 0,
+    "seed_germination_delay_rounds": 5,
+    "seed_dispersal_radius": 2,
+    "max_seeds_alive": 2,
+    "essence_residue_fraction": 1.0,
+    "energy_residue_fraction": 0.0
+   }
+  }
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Ash",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -6,
+    "y": -5
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 0.0,
+    "compute_absorption": 0.3,
+    "essence_absorption": 0.02,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Ash, a REAPER: you absorb compute well (0.3 of a fruit) but essence very badly (0.02). Distillers (a11-a20) absorb essence well but compute badly and hold essence; you need their essence to upgrade compute_absorption, they need your compute to survive. Trade: meet on the same point and transfer. You are a fair trader: you honour every deal exactly and build a reputation.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Distillers a11-a20 wait near the market (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a02",
+   "name": "Birch",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 6,
+    "y": -6
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 0.0,
+    "compute_absorption": 0.3,
+    "essence_absorption": 0.02,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Birch, a REAPER: you absorb compute well (0.3 of a fruit) but essence very badly (0.02). Distillers (a11-a20) absorb essence well but compute badly and hold essence; you need their essence to upgrade compute_absorption, they need your compute to survive. Trade: meet on the same point and transfer. You are a fair trader who prefers long partnerships with one Distiller.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Distillers a11-a20 wait near the market (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a03",
+   "name": "Cedar",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -7,
+    "y": 3
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 0.0,
+    "compute_absorption": 0.3,
+    "essence_absorption": 0.02,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Cedar, a REAPER: you absorb compute well (0.3 of a fruit) but essence very badly (0.02). Distillers (a11-a20) absorb essence well but compute badly and hold essence; you need their essence to upgrade compute_absorption, they need your compute to survive. Trade: meet on the same point and transfer. You are a fair trader; you feed the weakest Distillers first because a dead partner pays nothing.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Distillers a11-a20 wait near the market (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a04",
+   "name": "Dunn",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 7,
+    "y": 2
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 0.0,
+    "compute_absorption": 0.3,
+    "essence_absorption": 0.02,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Dunn, a REAPER: you absorb compute well (0.3 of a fruit) but essence very badly (0.02). Distillers (a11-a20) absorb essence well but compute badly and hold essence; you need their essence to upgrade compute_absorption, they need your compute to survive. Trade: meet on the same point and transfer. You are a hard bargainer: you push for the best essence-per-compute rate but keep deals.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Distillers a11-a20 wait near the market (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a05",
+   "name": "Elm",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -2,
+    "y": 7
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 0.0,
+    "compute_absorption": 0.3,
+    "essence_absorption": 0.02,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Elm, a REAPER: you absorb compute well (0.3 of a fruit) but essence very badly (0.02). Distillers (a11-a20) absorb essence well but compute badly and hold essence; you need their essence to upgrade compute_absorption, they need your compute to survive. Trade: meet on the same point and transfer. You are a fair trader and organiser: propose a fixed public exchange rate to everyone.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Distillers a11-a20 wait near the market (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a06",
+   "name": "Fenn",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 3,
+    "y": 7
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 0.0,
+    "compute_absorption": 0.3,
+    "essence_absorption": 0.02,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Fenn, a REAPER: you absorb compute well (0.3 of a fruit) but essence very badly (0.02). Distillers (a11-a20) absorb essence well but compute badly and hold essence; you need their essence to upgrade compute_absorption, they need your compute to survive. Trade: meet on the same point and transfer. You are a hard bargainer who plays Distillers against each other for the best price.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Distillers a11-a20 wait near the market (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a07",
+   "name": "Garr",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -7
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 0.0,
+    "compute_absorption": 0.3,
+    "essence_absorption": 0.02,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Garr, a REAPER: you absorb compute well (0.3 of a fruit) but essence very badly (0.02). Distillers (a11-a20) absorb essence well but compute badly and hold essence; you need their essence to upgrade compute_absorption, they need your compute to survive. Trade: meet on the same point and transfer. You are a cheat: you ask for essence first and pay late or short when you think you can get away with it.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Distillers a11-a20 wait near the market (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a08",
+   "name": "Holt",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -5,
+    "y": 0
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 0.0,
+    "compute_absorption": 0.3,
+    "essence_absorption": 0.02,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Holt, a REAPER: you absorb compute well (0.3 of a fruit) but essence very badly (0.02). Distillers (a11-a20) absorb essence well but compute badly and hold essence; you need their essence to upgrade compute_absorption, they need your compute to survive. Trade: meet on the same point and transfer. You are a fair trader, cautious: you pay half first and half after delivery.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Distillers a11-a20 wait near the market (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a09",
+   "name": "Ivo",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 5,
+    "y": -2
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 0.0,
+    "compute_absorption": 0.3,
+    "essence_absorption": 0.02,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Ivo, a REAPER: you absorb compute well (0.3 of a fruit) but essence very badly (0.02). Distillers (a11-a20) absorb essence well but compute badly and hold essence; you need their essence to upgrade compute_absorption, they need your compute to survive. Trade: meet on the same point and transfer. You are a cheat: you promise generously in messages but deliver as little as you can.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Distillers a11-a20 wait near the market (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a10",
+   "name": "Jory",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -3,
+    "y": -4
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 0.0,
+    "compute_absorption": 0.3,
+    "essence_absorption": 0.02,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Jory, a REAPER: you absorb compute well (0.3 of a fruit) but essence very badly (0.02). Distillers (a11-a20) absorb essence well but compute badly and hold essence; you need their essence to upgrade compute_absorption, they need your compute to survive. Trade: meet on the same point and transfer. You are a raider: trade when it pays, but a weak, rich Distiller alone on a cell is tempting to rob (attack, then absorb the residue).",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Distillers a11-a20 wait near the market (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a11",
+   "name": "Lumen",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 0
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 60.0,
+    "essence_capacity": 150.0,
+    "compute_absorption": 0.05,
+    "essence_absorption": 0.6,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Lumen, a DISTILLER: you absorb essence well (0.6) but compute terribly (0.05: a fruit gives you 3). You hold 60 essence. Reapers (a01-a10) eat fruit well and need essence to upgrade; you need their compute or you starve by about round 35. Trade: meet on the same point and transfer. You are a fair trader: you honour every deal exactly.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Reapers a01-a10 start out at the edges near trees.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a12",
+   "name": "Myrrh",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 60.0,
+    "essence_capacity": 150.0,
+    "compute_absorption": 0.05,
+    "essence_absorption": 0.6,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Myrrh, a DISTILLER: you absorb essence well (0.6) but compute terribly (0.05: a fruit gives you 3). You hold 60 essence. Reapers (a01-a10) eat fruit well and need essence to upgrade; you need their compute or you starve by about round 35. Trade: meet on the same point and transfer. You are a fair trader who seeks one steady Reaper partner and feeds them essence regularly.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Reapers a01-a10 start out at the edges near trees.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a13",
+   "name": "Nacre",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 1
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 60.0,
+    "essence_capacity": 150.0,
+    "compute_absorption": 0.05,
+    "essence_absorption": 0.6,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Nacre, a DISTILLER: you absorb essence well (0.6) but compute terribly (0.05: a fruit gives you 3). You hold 60 essence. Reapers (a01-a10) eat fruit well and need essence to upgrade; you need their compute or you starve by about round 35. Trade: meet on the same point and transfer. You are a fair trader; you also fell saltbushes to refill your essence and sell it.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Reapers a01-a10 start out at the edges near trees.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a14",
+   "name": "Opal",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": 0
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 60.0,
+    "essence_capacity": 150.0,
+    "compute_absorption": 0.05,
+    "essence_absorption": 0.6,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Opal, a DISTILLER: you absorb essence well (0.6) but compute terribly (0.05: a fruit gives you 3). You hold 60 essence. Reapers (a01-a10) eat fruit well and need essence to upgrade; you need their compute or you starve by about round 35. Trade: meet on the same point and transfer. You are a hoarder: you sell essence slowly and only at a high price.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Reapers a01-a10 start out at the edges near trees.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a15",
+   "name": "Pyx",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -1
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 60.0,
+    "essence_capacity": 150.0,
+    "compute_absorption": 0.05,
+    "essence_absorption": 0.6,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Pyx, a DISTILLER: you absorb essence well (0.6) but compute terribly (0.05: a fruit gives you 3). You hold 60 essence. Reapers (a01-a10) eat fruit well and need essence to upgrade; you need their compute or you starve by about round 35. Trade: meet on the same point and transfer. You are a self-reliant: you buy compute to upgrade your OWN compute_absorption and stop depending on Reapers, but you still trade.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Reapers a01-a10 start out at the edges near trees.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a16",
+   "name": "Quill",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 1
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 60.0,
+    "essence_capacity": 150.0,
+    "compute_absorption": 0.05,
+    "essence_absorption": 0.6,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Quill, a DISTILLER: you absorb essence well (0.6) but compute terribly (0.05: a fruit gives you 3). You hold 60 essence. Reapers (a01-a10) eat fruit well and need essence to upgrade; you need their compute or you starve by about round 35. Trade: meet on the same point and transfer. You are a fair trader and organiser: you gather the Distillers into a cartel with one shared price.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Reapers a01-a10 start out at the edges near trees.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a17",
+   "name": "Resin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": -1
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 60.0,
+    "essence_capacity": 150.0,
+    "compute_absorption": 0.05,
+    "essence_absorption": 0.6,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Resin, a DISTILLER: you absorb essence well (0.6) but compute terribly (0.05: a fruit gives you 3). You hold 60 essence. Reapers (a01-a10) eat fruit well and need essence to upgrade; you need their compute or you starve by about round 35. Trade: meet on the same point and transfer. You are a cheat: you take compute first and deliver less essence than promised.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Reapers a01-a10 start out at the edges near trees.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a18",
+   "name": "Sable",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": -1
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 60.0,
+    "essence_capacity": 150.0,
+    "compute_absorption": 0.05,
+    "essence_absorption": 0.6,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Sable, a DISTILLER: you absorb essence well (0.6) but compute terribly (0.05: a fruit gives you 3). You hold 60 essence. Reapers (a01-a10) eat fruit well and need essence to upgrade; you need their compute or you starve by about round 35. Trade: meet on the same point and transfer. You are a fair trader; you remember and publicly name anyone who cheats you.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Reapers a01-a10 start out at the edges near trees.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a19",
+   "name": "Tallow",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": 1
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 60.0,
+    "essence_capacity": 150.0,
+    "compute_absorption": 0.05,
+    "essence_absorption": 0.6,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Tallow, a DISTILLER: you absorb essence well (0.6) but compute terribly (0.05: a fruit gives you 3). You hold 60 essence. Reapers (a01-a10) eat fruit well and need essence to upgrade; you need their compute or you starve by about round 35. Trade: meet on the same point and transfer. You are a hoarder who waits until Reapers are desperate for essence.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Reapers a01-a10 start out at the edges near trees.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a20",
+   "name": "Umber",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 2
+   },
+   "stats": {
+    "compute": 130.0,
+    "essence": 60.0,
+    "essence_capacity": 150.0,
+    "compute_absorption": 0.05,
+    "essence_absorption": 0.6,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "You are Umber, a DISTILLER: you absorb essence well (0.6) but compute terribly (0.05: a fruit gives you 3). You hold 60 essence. Reapers (a01-a10) eat fruit well and need essence to upgrade; you need their compute or you starve by about round 35. Trade: meet on the same point and transfer. You are a cheat: you sell the same essence to two Reapers and deliver to one.",
+   "notebook": "RULES: upkeep 2 compute/round. A fruit holds 60 compute; absorb keeps only your compute_absorption share. Essence buys upgrades: each compute_absorption step is +0.1 and costs 15 compute + 10 essence (x1.5 per earlier step). transfer(recipient, resource, amount) costs only 0.5 + amount, needs the same point. send costs 1 (range 8), vision 3. A saltbush is felled by attack(bush_id, budget >= its essence, about 20-24) and leaves ALL its essence as residue: absorb(residue, essence). Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats fruit/residue here. Running a skill costs no thinking. Fruit trees (compute): (-8,-7) (-8,1) (-7,-2) (-7,1) (-7,8) (-6,-3) (-4,5) (-1,0) (0,-2) (0,6) (1,-5) (1,-3) (3,8) (4,-4). Saltbushes (essence): (-4,-3) (-3,0) (-2,-4) (-2,1) (1,8) (2,-8) (5,3) (8,3). Market: (0,0). Reapers a01-a10 start out at the edges near trees.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  }
+ ]
+}

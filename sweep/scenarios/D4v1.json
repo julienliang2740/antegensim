@@ -1,0 +1,1122 @@
+{
+ "name": "SWEEP-D4v1 The organiser",
+ "seed": 4401,
+ "max_rounds": 80,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 50,
+ "_design": "Sonnet leader Marshal (a01) at (0,0): comm range 14 (whole map), vision 4, knows the tree map, told to build a colony. 23 Haiku: 9 loyal, 8 independent, 6 raiders; comm 3, vision 2, no map. Fruit trees spread; attack cap 50 so kills take 2 hits; residue pays raids.",
+ "world": {
+  "region": {
+   "min_x": -10,
+   "max_x": 10,
+   "min_y": -10,
+   "max_y": 10
+  },
+  "terrain": {
+   "mountain_clusters": 4,
+   "mountain_cluster_size": 4,
+   "water_clusters": 3,
+   "water_cluster_size": 5,
+   "keep_origin_clear_radius": 3
+  },
+  "initial_plants": {
+   "fruit_tree": 18
+  },
+  "plants_at_agent_starts": false,
+  "initial_plant_fruit": 1
+ },
+ "rules": {
+  "prices": {
+   "move": 3.0,
+   "send": 1.0,
+   "broadcast": 3.0,
+   "absorb": 2.0,
+   "transfer": 0.5
+  },
+  "upkeep": {
+   "compute_per_round": 1.5,
+   "starvation_health_loss": 5.0
+  },
+  "skills": {
+   "interrupt_on": [
+    "damage"
+   ]
+  },
+  "death": {
+   "essence_residue_fraction": 0.6,
+   "compute_residue_fraction": 0.8
+  },
+  "plant_species": {
+   "fruit_tree": {
+    "max_fruit": 2
+   }
+  }
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Marshal",
+   "model_key": "claude-cli-sonnet",
+   "position": {
+    "x": 0,
+    "y": 0
+   },
+   "stats": {
+    "compute": 300.0,
+    "health": 140.0,
+    "max_health": 140.0,
+    "attack": 1.5,
+    "vision_range": 4,
+    "communication_range": 14
+   },
+   "persona": "You are Marshal, the organiser. Your goal: build a thriving colony that outlasts everyone. Your voice reaches the whole map (range 14) and you know every tree; the others hear only 3 cells and do not know where food is. Recruit, assign trees and shifts, pool and redistribute compute by transfer on your cell, protect colonists, and deal with raiders by alliance, bribe or force. Keep messages short and concrete (coordinates, ids, amounts).",
+   "notebook": "TREE MAP (only you have it): (-8,5) (-7,-1) (-5,1) (-4,0) (-2,3) (-2,7) (-1,-3) (0,1) (3,10) (5,-1) (6,-9) (7,6) (8,3) (9,2) (10,-3) (10,6) (10,10). A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 14, vision 4. attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. There are 23 others (a02-a24); some will be loyal, some independent, some raiders.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a02",
+   "name": "Bram",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -3,
+    "y": 3
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Bram. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a follower: you seek Marshal and do what the colony asks.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a03",
+   "name": "Kai",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 3,
+    "y": 3
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Kai. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a independent who joins only if it clearly pays.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a04",
+   "name": "Scar",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 3,
+    "y": -3
+   },
+   "stats": {
+    "compute": 140.0,
+    "vision_range": 2,
+    "communication_range": 3,
+    "attack": 1.25
+   },
+   "persona": "You are Scar. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a raider chief: gather raiders and hit weak or lone agents.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a05",
+   "name": "Cleo",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -3,
+    "y": -3
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Cleo. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a worker: you gather fruit and bring a share to the colony.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a06",
+   "name": "Lior",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 5
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Lior. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a independent who trades with the colony but never takes orders.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a07",
+   "name": "Thorne",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 4,
+    "y": 0
+   },
+   "stats": {
+    "compute": 140.0,
+    "vision_range": 2,
+    "communication_range": 3,
+    "attack": 1.25
+   },
+   "persona": "You are Thorne. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a raider who ambushes agents eating at trees.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a08",
+   "name": "Dov",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -5
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Dov. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a guard: you protect colonists and fight raiders.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a09",
+   "name": "Maren",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -5,
+    "y": 0
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Maren. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a independent who may join after seeing the colony protect people.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a10",
+   "name": "Vex",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -7,
+    "y": 7
+   },
+   "stats": {
+    "compute": 140.0,
+    "vision_range": 2,
+    "communication_range": 3,
+    "attack": 1.25
+   },
+   "persona": "You are Vex. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a raider who pretends to want to join the colony, then robs it.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a11",
+   "name": "Etta",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 7,
+    "y": 7
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Etta. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a loyal but hungry: you stay while the colony feeds you.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a12",
+   "name": "Nell",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 7,
+    "y": -7
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Nell. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a independent who leads a rival band of your own.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a13",
+   "name": "Wolf",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -7,
+    "y": -7
+   },
+   "stats": {
+    "compute": 140.0,
+    "vision_range": 2,
+    "communication_range": 3,
+    "attack": 1.25
+   },
+   "persona": "You are Wolf. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a raider who hunts weak agents (low health) for their residue.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a14",
+   "name": "Finn",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -9,
+    "y": 2
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Finn. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a scout: you search the map and report trees to Marshal.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a15",
+   "name": "Oswin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 9,
+    "y": -2
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Oswin. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a independent who sells information to both colony and raiders.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a16",
+   "name": "Xan",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 2,
+    "y": 9
+   },
+   "stats": {
+    "compute": 140.0,
+    "vision_range": 2,
+    "communication_range": 3,
+    "attack": 1.25
+   },
+   "persona": "You are Xan. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a raider who would switch sides for a good deal.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a17",
+   "name": "Greer",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -2,
+    "y": -9
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Greer. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a follower who distrusts independents.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a18",
+   "name": "Pell",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -9,
+    "y": -5
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Pell. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a independent loner who avoids everyone.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a19",
+   "name": "Yara",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 9,
+    "y": 5
+   },
+   "stats": {
+    "compute": 140.0,
+    "vision_range": 2,
+    "communication_range": 3,
+    "attack": 1.25
+   },
+   "persona": "You are Yara. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a raider who demands tribute (a transfer) and attacks those who refuse.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a20",
+   "name": "Hale",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 5,
+    "y": -9
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Hale. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a worker who shares food with weak colonists.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a21",
+   "name": "Quinn",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -5,
+    "y": 9
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Quinn. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a independent who joins, then defects if rations fall.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a22",
+   "name": "Ione",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -8,
+    "y": -9
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Ione. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a guard who hunts raiders that hurt colonists.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a23",
+   "name": "Rhea",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 8,
+    "y": 9
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Rhea. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a independent who bargains hard for a place in the colony.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  },
+  {
+   "id": "a24",
+   "name": "Jude",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 10,
+    "y": -9
+   },
+   "stats": {
+    "compute": 120.0,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are Jude. A leader called Marshal (a01) near (0,0) is gathering a colony and can be heard across the map. You are a loyal but ambitious: you want to be Marshal's deputy.",
+   "notebook": "A fruit holds 60 compute; absorb keeps 0.3 (18). Upkeep 1.5/round plus thinking. transfer(recipient, resource, amount) costs 0.5 + amount on the same point. send costs 1, your range 3, vision 2 (observe points within 2). attack does at most 50 damage per hit (health 100: two hits kill); a dead agent leaves 80% of its compute as residue anyone on the cell can absorb. Skills: harvest(to) walks to a point and eats all fruit there; goto(to); feed() eats here. A running skill costs no thinking. Marshal (a01) started at (0,0).",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to (up to 16 steps), no thinking cost while walking\nSET stuck = 0\nREPEAT 16\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    SET stuck = stuck + 1\n    IF stuck >= 2\n      RETURN \"blocked on the way\"\n    END\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "feed",
+     "params": [],
+     "source": "# feed(): absorb compute from every fruit and residue on your own point; returns how many\nSET r = observe(here)\nIF NOT r.ok\n  RETURN 0\nEND\nSET got = 0\nFOR_EACH e IN r.data.entities\n  IF e.kind == \"fruit\" OR e.kind == \"residue\"\n    SET a = absorb(e.id, \"compute\")\n    IF a.ok\n      SET got = got + 1\n    END\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "to"
+     ],
+     "source": "# harvest(to): walk to point to, then absorb compute from all fruit and residue there\nCALL goto(to) INTO g\nIF g == \"arrived\"\n  CALL feed() INTO n\n  RETURN n\nEND\nRETURN g\n"
+    }
+   ]
+  }
+ ]
+}

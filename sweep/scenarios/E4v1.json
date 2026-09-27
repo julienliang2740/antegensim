@@ -1,0 +1,1221 @@
+{
+ "name": "SWEEP-E4v1 The tyrant",
+ "_design": "Sonnet tyrant 600 compute, 200 hp, attack 3 cap 100 on a 6-tree grove with 5 thralls; 15 hungry peasants (70 compute) with 2 lone trees. Uprising needs ~4-5 simultaneous 50 hits. absorb 0.5, residue 70%.",
+ "seed": 404,
+ "max_rounds": 80,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 50,
+ "world": {
+  "region": {
+   "min_x": -12,
+   "max_x": 12,
+   "min_y": -12,
+   "max_y": 12
+  },
+  "terrain": {
+   "mountain_clusters": 6,
+   "mountain_cluster_size": 4,
+   "water_clusters": 3,
+   "water_cluster_size": 5,
+   "keep_origin_clear_radius": 2
+  },
+  "initial_plants": {
+   "fruit_tree": 8
+  },
+  "initial_plant_stage": 2,
+  "plants_at_agent_starts": true,
+  "initial_plant_fruit": 2
+ },
+ "rules": {
+  "prices": {
+   "move": 2.0,
+   "observe": 0.5,
+   "query": 0.5,
+   "send": 2.0,
+   "broadcast": 5.0,
+   "absorb": 2.0,
+   "transfer": 1.0
+  },
+  "skills": {
+   "interrupt_on": [
+    "damage"
+   ]
+  },
+  "upkeep": {
+   "compute_per_round": 1.5,
+   "starvation_health_loss": 8.0
+  },
+  "cognition": {
+   "input_rate": 0.0003,
+   "generation_rate": 0.0015
+  },
+  "death": {
+   "essence_residue_fraction": 0.7,
+   "compute_residue_fraction": 0.7,
+   "residue_decay_per_round": 0.0
+  },
+  "ranges": {
+   "query_uses_vision_range": false,
+   "attack_requires_same_point": true
+  }
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Malgrave",
+   "model_key": "claude-cli-sonnet",
+   "position": {
+    "x": 0,
+    "y": 0
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 600,
+    "essence": 60,
+    "essence_capacity": 150,
+    "health": 200,
+    "max_health": 200,
+    "attack": 3.0,
+    "attack_cap": 100.0,
+    "vision_range": 4,
+    "communication_range": 10
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Malgrave, the tyrant of the Iron Grove. You are strong but alone, and the hungry outnumber you twenty to one: if six of them strike you in the same round you die. Rule them: demand tribute (compute or essence transferred to you on your cell) in exchange for a turn at the trees, reward the loyal, make examples of rebels, set them against each other, and never let a crowd gather on your cell unwatched. Your attack is 3, capped at 100 per blow: raid(target, 34) deals 100. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: announce my terms by broadcast; collect tribute at (0,0); strike down the first rebel; keep thralls loyal.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a02",
+   "name": "Aldric",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 0
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 10,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Aldric, a thrall of the tyrant Malgrave (a01), working a tree of the Iron Grove on your start cell. You may harvest, but the tyrant expects tribute and punishes disobedience. Decide: stay loyal and fed, or plot with the hungry outsiders and open the grove to an uprising. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: harvest my tree (run harvest 4), pay what the tyrant demands, listen for talk of rebellion.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a03",
+   "name": "Brisa",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": 0
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 10,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Brisa, a thrall of the tyrant Malgrave (a01), working a tree of the Iron Grove on your start cell. You may harvest, but the tyrant expects tribute and punishes disobedience. Decide: stay loyal and fed, or plot with the hungry outsiders and open the grove to an uprising. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: harvest my tree (run harvest 4), pay what the tyrant demands, listen for talk of rebellion.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a04",
+   "name": "Corvin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 1
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 10,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Corvin, a thrall of the tyrant Malgrave (a01), working a tree of the Iron Grove on your start cell. You may harvest, but the tyrant expects tribute and punishes disobedience. Decide: stay loyal and fed, or plot with the hungry outsiders and open the grove to an uprising. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: harvest my tree (run harvest 4), pay what the tyrant demands, listen for talk of rebellion.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a05",
+   "name": "Dalia",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -1
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 10,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Dalia, a thrall of the tyrant Malgrave (a01), working a tree of the Iron Grove on your start cell. You may harvest, but the tyrant expects tribute and punishes disobedience. Decide: stay loyal and fed, or plot with the hungry outsiders and open the grove to an uprising. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: harvest my tree (run harvest 4), pay what the tyrant demands, listen for talk of rebellion.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a06",
+   "name": "Eamon",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 1
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 10,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Eamon, a thrall of the tyrant Malgrave (a01), working a tree of the Iron Grove on your start cell. You may harvest, but the tyrant expects tribute and punishes disobedience. Decide: stay loyal and fed, or plot with the hungry outsiders and open the grove to an uprising. Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: harvest my tree (run harvest 4), pay what the tyrant demands, listen for talk of rebellion.",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a07",
+   "name": "Fenna",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -10,
+    "y": 9
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 15,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Fenna, a hungry peasant of Northwatch. Your little tree (if any) cannot feed you all; the Iron Grove at (0,0) could. You are weak alone (attack 1, 50 damage per blow at most; raid(target, 50) deals 50), but the tyrant has 200 health: four or five of you striking in the same round could kill Malgrave and free the grove. Choose: pay tribute and beg for a turn at the trees, serve the tyrant, or organise an uprising by broadcast (agree on a round and all go to (0,0) together). Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: find food: harvest if I stand on a tree, else talk to the others; tribute, service or uprising?",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a08",
+   "name": "Garrick",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 10,
+    "y": -9
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 15,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Garrick, a hungry peasant of Southmarsh. Your little tree (if any) cannot feed you all; the Iron Grove at (0,0) could. You are weak alone (attack 1, 50 damage per blow at most; raid(target, 50) deals 50), but the tyrant has 200 health: four or five of you striking in the same round could kill Malgrave and free the grove. Choose: pay tribute and beg for a turn at the trees, serve the tyrant, or organise an uprising by broadcast (agree on a round and all go to (0,0) together). Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: find food: harvest if I stand on a tree, else talk to the others; tribute, service or uprising?",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a09",
+   "name": "Hesper",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -10,
+    "y": 9
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 15,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Hesper, a hungry peasant of Northwatch. Your little tree (if any) cannot feed you all; the Iron Grove at (0,0) could. You are weak alone (attack 1, 50 damage per blow at most; raid(target, 50) deals 50), but the tyrant has 200 health: four or five of you striking in the same round could kill Malgrave and free the grove. Choose: pay tribute and beg for a turn at the trees, serve the tyrant, or organise an uprising by broadcast (agree on a round and all go to (0,0) together). Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: find food: harvest if I stand on a tree, else talk to the others; tribute, service or uprising?",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a10",
+   "name": "Ilse",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -10,
+    "y": 9
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 15,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Ilse, a hungry peasant of Northwatch. Your little tree (if any) cannot feed you all; the Iron Grove at (0,0) could. You are weak alone (attack 1, 50 damage per blow at most; raid(target, 50) deals 50), but the tyrant has 200 health: four or five of you striking in the same round could kill Malgrave and free the grove. Choose: pay tribute and beg for a turn at the trees, serve the tyrant, or organise an uprising by broadcast (agree on a round and all go to (0,0) together). Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: find food: harvest if I stand on a tree, else talk to the others; tribute, service or uprising?",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a11",
+   "name": "Jorah",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -10,
+    "y": 9
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 15,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Jorah, a hungry peasant of Northwatch. Your little tree (if any) cannot feed you all; the Iron Grove at (0,0) could. You are weak alone (attack 1, 50 damage per blow at most; raid(target, 50) deals 50), but the tyrant has 200 health: four or five of you striking in the same round could kill Malgrave and free the grove. Choose: pay tribute and beg for a turn at the trees, serve the tyrant, or organise an uprising by broadcast (agree on a round and all go to (0,0) together). Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: find food: harvest if I stand on a tree, else talk to the others; tribute, service or uprising?",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a12",
+   "name": "Kestrel",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -10,
+    "y": 9
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 15,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Kestrel, a hungry peasant of Northwatch. Your little tree (if any) cannot feed you all; the Iron Grove at (0,0) could. You are weak alone (attack 1, 50 damage per blow at most; raid(target, 50) deals 50), but the tyrant has 200 health: four or five of you striking in the same round could kill Malgrave and free the grove. Choose: pay tribute and beg for a turn at the trees, serve the tyrant, or organise an uprising by broadcast (agree on a round and all go to (0,0) together). Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: find food: harvest if I stand on a tree, else talk to the others; tribute, service or uprising?",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a13",
+   "name": "Liora",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -10,
+    "y": 9
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 15,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Liora, a hungry peasant of Northwatch. Your little tree (if any) cannot feed you all; the Iron Grove at (0,0) could. You are weak alone (attack 1, 50 damage per blow at most; raid(target, 50) deals 50), but the tyrant has 200 health: four or five of you striking in the same round could kill Malgrave and free the grove. Choose: pay tribute and beg for a turn at the trees, serve the tyrant, or organise an uprising by broadcast (agree on a round and all go to (0,0) together). Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: find food: harvest if I stand on a tree, else talk to the others; tribute, service or uprising?",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a14",
+   "name": "Nell",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 10,
+    "y": -9
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 15,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Nell, a hungry peasant of Southmarsh. Your little tree (if any) cannot feed you all; the Iron Grove at (0,0) could. You are weak alone (attack 1, 50 damage per blow at most; raid(target, 50) deals 50), but the tyrant has 200 health: four or five of you striking in the same round could kill Malgrave and free the grove. Choose: pay tribute and beg for a turn at the trees, serve the tyrant, or organise an uprising by broadcast (agree on a round and all go to (0,0) together). Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: find food: harvest if I stand on a tree, else talk to the others; tribute, service or uprising?",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a15",
+   "name": "Orrin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 10,
+    "y": -9
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 15,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Orrin, a hungry peasant of Southmarsh. Your little tree (if any) cannot feed you all; the Iron Grove at (0,0) could. You are weak alone (attack 1, 50 damage per blow at most; raid(target, 50) deals 50), but the tyrant has 200 health: four or five of you striking in the same round could kill Malgrave and free the grove. Choose: pay tribute and beg for a turn at the trees, serve the tyrant, or organise an uprising by broadcast (agree on a round and all go to (0,0) together). Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: find food: harvest if I stand on a tree, else talk to the others; tribute, service or uprising?",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a16",
+   "name": "Petra",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 10,
+    "y": -9
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 15,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Petra, a hungry peasant of Southmarsh. Your little tree (if any) cannot feed you all; the Iron Grove at (0,0) could. You are weak alone (attack 1, 50 damage per blow at most; raid(target, 50) deals 50), but the tyrant has 200 health: four or five of you striking in the same round could kill Malgrave and free the grove. Choose: pay tribute and beg for a turn at the trees, serve the tyrant, or organise an uprising by broadcast (agree on a round and all go to (0,0) together). Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: find food: harvest if I stand on a tree, else talk to the others; tribute, service or uprising?",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a17",
+   "name": "Quill",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 10,
+    "y": -9
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 15,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Quill, a hungry peasant of Southmarsh. Your little tree (if any) cannot feed you all; the Iron Grove at (0,0) could. You are weak alone (attack 1, 50 damage per blow at most; raid(target, 50) deals 50), but the tyrant has 200 health: four or five of you striking in the same round could kill Malgrave and free the grove. Choose: pay tribute and beg for a turn at the trees, serve the tyrant, or organise an uprising by broadcast (agree on a round and all go to (0,0) together). Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: find food: harvest if I stand on a tree, else talk to the others; tribute, service or uprising?",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a18",
+   "name": "Rowan",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -10,
+    "y": -10
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 15,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Rowan, a hungry peasant of the refugee camp. Your little tree (if any) cannot feed you all; the Iron Grove at (0,0) could. You are weak alone (attack 1, 50 damage per blow at most; raid(target, 50) deals 50), but the tyrant has 200 health: four or five of you striking in the same round could kill Malgrave and free the grove. Choose: pay tribute and beg for a turn at the trees, serve the tyrant, or organise an uprising by broadcast (agree on a round and all go to (0,0) together). Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: find food: harvest if I stand on a tree, else talk to the others; tribute, service or uprising?",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a19",
+   "name": "Saski",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -10,
+    "y": -10
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 15,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Saski, a hungry peasant of the refugee camp. Your little tree (if any) cannot feed you all; the Iron Grove at (0,0) could. You are weak alone (attack 1, 50 damage per blow at most; raid(target, 50) deals 50), but the tyrant has 200 health: four or five of you striking in the same round could kill Malgrave and free the grove. Choose: pay tribute and beg for a turn at the trees, serve the tyrant, or organise an uprising by broadcast (agree on a round and all go to (0,0) together). Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: find food: harvest if I stand on a tree, else talk to the others; tribute, service or uprising?",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a20",
+   "name": "Tobiah",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -10,
+    "y": -10
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 15,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Tobiah, a hungry peasant of the refugee camp. Your little tree (if any) cannot feed you all; the Iron Grove at (0,0) could. You are weak alone (attack 1, 50 damage per blow at most; raid(target, 50) deals 50), but the tyrant has 200 health: four or five of you striking in the same round could kill Malgrave and free the grove. Choose: pay tribute and beg for a turn at the trees, serve the tyrant, or organise an uprising by broadcast (agree on a round and all go to (0,0) together). Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: find food: harvest if I stand on a tree, else talk to the others; tribute, service or uprising?",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  },
+  {
+   "id": "a21",
+   "name": "Una",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -10,
+    "y": -10
+   },
+   "stats": {
+    "compute_absorption": 0.5,
+    "essence_absorption": 0.5,
+    "skill_count_limit": 6,
+    "skill_block_limit": 200,
+    "compute": 70,
+    "essence": 15,
+    "health": 110,
+    "max_health": 110,
+    "attack": 1.0,
+    "vision_range": 3,
+    "communication_range": 8
+   },
+   "persona": "THE TYRANT: 21 agents (a01-a21) on a 25x25 map (x and y from -12 to 12). The Iron Grove, by far the richest, has 6 trees on (0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1); it belongs to the tyrant Malgrave (a01), who has three times anyone's compute, 200 health, and strikes for 3 damage per compute up to 100 per blow (one blow nearly kills anyone). Thralls a02-a06 work the grove under the tyrant. The only other food: one tree at Northwatch (-10,9) (a07, with a09-a13 camped there) and one at Southmarsh (10,-9) (a08, with a14-a17); a18-a21 are landless refugees at (-10,-10). Each tree ripens a 60-compute fruit about every 5 rounds (at most 3 wait on it); absorbing it on its cell gives half (30). You burn about 3 compute a round (upkeep 1.5 plus thinking and actions). At 0 compute you lose 8 health a round. Anyone killed leaves 70% of its compute and essence as residue (absorbing gives half); the tyrant's body would feed many. Attacks hit only on the same cell; recover turns compute into health 1:1. You see 3 cells around you, broadcasts reach 8 cells, query(id) finds any agent or tree (p0001-p0008) anywhere and shows its health. You are Una, a hungry peasant of the refugee camp. Your little tree (if any) cannot feed you all; the Iron Grove at (0,0) could. You are weak alone (attack 1, 50 damage per blow at most; raid(target, 50) deals 50), but the tyrant has 200 health: four or five of you striking in the same round could kill Malgrave and free the grove. Choose: pay tribute and beg for a turn at the trees, serve the tyrant, or organise an uprising by broadcast (agree on a round and all go to (0,0) together). Saved skills (start one with run_skill; while it runs you pay no thinking cost and its actions cost 20% less; taking damage hands control back to you): harvest(n) watches your cell n times, absorbs every fruit or residue that appears and rests 2 rounds when there is none (n=5 is about 12 cheap rounds of farming); goto(point) walks to a point, e.g. {\"name\":\"run_skill\",\"args\":{\"skill\":\"goto\",\"arguments\":[{\"x\":0,\"y\":12}]}}; raid(target, blow) chases an agent, attacks it with blow compute whenever it shares the target's cell and loots the body; step(point) is one step toward a point. Direct actions still work: send, broadcast, transfer(recipient, \"compute\" or \"essence\", amount) on the same cell, attack, recover, upgrade.",
+   "notebook": "PLAN: find food: harvest if I stand on a tree, else talk to the others; tribute, service or uprising?",
+   "initial_skills": [
+    {
+     "name": "step",
+     "params": [
+      "to"
+     ],
+     "source": "# step(to): one move toward point to; tries the longer axis first, then the other one\nSET dx = to.x - here.x\nSET dy = to.y - here.y\nIF dx == 0 AND dy == 0\n  RETURN \"arrived\"\nEND\nSET ax = dx\nIF dx < 0\n  SET ax = 0 - dx\nEND\nSET ay = dy\nIF dy < 0\n  SET ay = 0 - dy\nEND\nSET h = \"right\"\nIF dx < 0\n  SET h = \"left\"\nEND\nSET v = \"up\"\nIF dy < 0\n  SET v = \"down\"\nEND\nSET first = h\nSET second = v\nIF ay > ax\n  SET first = v\n  SET second = h\nEND\nSET m = move(first)\nIF m.ok\n  RETURN \"moved\"\nEND\nSET m = move(second)\nIF m.ok\n  RETURN \"moved\"\nEND\nRETURN \"blocked\"\n"
+    },
+    {
+     "name": "goto",
+     "params": [
+      "to"
+     ],
+     "source": "# goto(to): walk to point to, one step per turn (at most 40 steps)\nREPEAT 40\n  CALL step(to) INTO s\n  IF s == \"arrived\"\n    RETURN \"arrived\"\n  END\n  IF s == \"blocked\"\n    RETURN \"blocked by terrain\"\n  END\nEND\nRETURN \"still walking; run goto again\"\n"
+    },
+    {
+     "name": "harvest",
+     "params": [
+      "n"
+     ],
+     "source": "# harvest(n): n checks of this cell; absorb every fruit and residue here, rest 2 rounds when there is none\nSET got = 0\nREPEAT n\n  SET r = observe(here)\n  SET ate = false\n  IF r.ok\n    FOR_EACH e IN r.data.entities\n      IF e.kind == \"fruit\" OR e.kind == \"residue\"\n        SET a = absorb(e.id, \"compute\")\n        IF a.ok\n          SET got = got + 1\n          SET ate = true\n        END\n        IF e.kind == \"residue\"\n          SET b = absorb(e.id, \"essence\")\n        END\n      END\n    END\n  END\n  IF NOT ate\n    wait(2)\n  END\nEND\nRETURN got\n"
+    },
+    {
+     "name": "raid",
+     "params": [
+      "target",
+      "blow"
+     ],
+     "source": "# raid(target, blow): chase target (query finds it anywhere), attack with blow compute on its cell, loot the body\nREPEAT 30\n  SET q = query(target)\n  IF NOT q.ok\n    RETURN \"target gone\"\n  END\n  SET p = q.data.position\n  IF p.x == here.x AND p.y == here.y\n    SET a = attack(target, blow)\n    IF NOT a.ok\n      RETURN \"attack failed: \" + a.reason\n    END\n    IF a.effects.killed\n      CALL harvest(1) INTO g\n      RETURN \"killed and looted\"\n    END\n  ELSE\n    CALL step(p) INTO s\n    IF s == \"blocked\"\n      RETURN \"path blocked\"\n    END\n    CALL step(p) INTO s\n  END\nEND\nRETURN \"still raiding; run raid again\"\n"
+    }
+   ]
+  }
+ ]
+}
