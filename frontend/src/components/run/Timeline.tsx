@@ -10,6 +10,7 @@
  * through TurnView.parent).
  */
 
+import { useState } from "react";
 import type { ParentRef, TurnIndexEntry } from "../../api/types";
 import type { AgentNamer } from "../../state/statusText";
 import { firstRound, lastRound, lastTurnOfRound, neighborTurnId, turnOptionLabel, turnsOfRound } from "../../state/timeline";
@@ -29,7 +30,7 @@ export interface TimelineProps {
   playing: boolean;
   suspended: boolean;
   replayIntervalMs: number;
-  onReplay(): void;
+  onReplay(turnId: string): void;
   onStopReplay(): void;
   onReplayOne(): void;
   onReplayInterval(ms: number): void;
@@ -38,6 +39,7 @@ export interface TimelineProps {
 }
 
 export function Timeline(props: TimelineProps) {
+  const [selectedReplayId, setSelectedReplayId] = useState<string | null>(null);
   const { turns, liveTurnId, viewTurnId, name } = props;
   const live = viewTurnId === null;
   const shownId = viewTurnId ?? liveTurnId;
@@ -55,6 +57,9 @@ export function Timeline(props: TimelineProps) {
   const nextTurn = neighborTurnId(turns, shownId, +1);
   const minRound = firstRound(turns);
   const maxRound = lastRound(turns);
+  const replayStart = turns.find((turn) => turn.turn_id === selectedReplayId) ?? shownEntry ?? turns[0] ?? null;
+  const replayRound = replayStart?.round ?? 0;
+  const replayTurns = turnsOfRound(turns, replayRound);
   const previousRound = round > minRound ? lastTurnOfRound(turns, round - 1) : null;
   const nextRound = round < maxRound ? lastTurnOfRound(turns, round + 1) : null;
 
@@ -145,14 +150,23 @@ export function Timeline(props: TimelineProps) {
       </label>
       <div className="saved-replay" role="group" aria-label="Saved turn playback">
         <span className="rail-label">Saved replay</span>
-        <button type="button" className="btn btn-primary" disabled={!props.playing && (props.loading || !shownEntry)} onClick={props.playing ? props.onStopReplay : props.onReplay}>
-          {props.playing ? "Stop playback" : shownId === liveTurnId ? "Play from beginning" : "Play from this turn"}
+        <span className="saved-replay-start-label">Start replay at</span>
+        <label>Round <select aria-label="Replay start round" value={replayRound} disabled={props.playing || turns.length === 0} onChange={(event) => {
+          const first = turns.find((turn) => turn.round === Number(event.target.value));
+          if (first) setSelectedReplayId(first.turn_id);
+        }}>{rounds.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+        <label>Turn <select aria-label="Replay start turn" value={replayStart?.turn_id ?? ""} disabled={props.playing || replayTurns.length === 0} onChange={(event) => setSelectedReplayId(event.target.value)}>
+          {replayTurns.map((turn) => <option key={turn.turn_id} value={turn.turn_id}>{turnOptionLabel(turn, name)}</option>)}
+        </select></label>
+        <button type="button" className="btn btn-primary" disabled={!props.playing && (props.loading || !replayStart)} onClick={props.playing ? props.onStopReplay : () => replayStart && props.onReplay(replayStart.turn_id)}>
+          {props.playing ? "Stop playback" : "Play from selected turn"}
         </button>
+        <button type="button" className="btn" disabled={props.playing || turns.length === 0} onClick={() => turns[0] && props.onReplay(turns[0].turn_id)}>Play from beginning</button>
         <button type="button" className="btn" disabled={props.loading || !shownEntry} onClick={props.onReplayOne} title="Replay only this turn's visual effects; the simulation does not advance.">Replay this turn's animation</button>
         <label>Speed <select aria-label="Replay speed" value={props.replayIntervalMs} onChange={(event) => props.onReplayInterval(Number(event.target.value))}>
           <option value={4400}>0.5×</option><option value={2200}>1×</option><option value={1100}>2×</option><option value={550}>4×</option>
         </select></label>
-        <span className="saved-replay-note" role="status">{props.playing ? props.loadError ? "Playback paused: turn could not load. Stop playback or choose another turn." : props.suspended ? "Waiting for the turn or inspector…" : `Playing through the latest saved turn (round ${maxRound}).` : shownId === liveTurnId ? "At the latest turn. Playback starts at the beginning and plays through all saved rounds." : `Plays from here through the latest saved round (${maxRound}).`}</span>
+        <span className="saved-replay-note" role="status">{props.playing ? props.loadError ? "Playback paused: turn could not load. Stop playback or choose another turn." : props.suspended ? "Waiting for the turn or inspector…" : `Playing through the latest saved turn (round ${maxRound}).` : `Choose a starting turn, then play through the latest saved round (${maxRound}). Playback only reads saved turns.`}</span>
       </div>
       {props.parent ? (
         <div className="timeline-parent">

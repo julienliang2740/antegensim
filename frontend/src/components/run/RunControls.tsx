@@ -42,7 +42,7 @@ export function RunControls(props: RunControlsProps) {
             <strong>Advance 1 turn</strong> runs one agent action (or the round-end update), then stops.
             <strong> Finish round</strong> runs the remaining agents and the world update, then stops.
             <strong> Start simulation</strong> keeps creating new turns until you press <strong>Pause simulation</strong>.
-            An active turn finishes and is saved before pausing. To watch saved turns, use Play from this turn in the Replay panel.
+            An active turn finishes and is saved before pausing. To watch saved turns, choose a replay start and use Play from selected turn in the Replay panel.
             {props.onResetLayout ? (
               <div className="controls-help-layout">
                 <strong>Layout:</strong> open a workspace panel, then drag its edge (or focus the resize handle and use the arrow keys) to resize it; double-click a resize handle for its default size.{" "}

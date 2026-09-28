@@ -138,7 +138,7 @@ Start and pause share one button, so only three simulation command buttons are s
 | Area | Label | Effect | API | States |
 | --- | --- | --- | --- | --- |
 | Timeline | **Jump to round** | Jump to the first recorded turn of a chosen round | Existing saved-turn GET | |
-| Timeline | **Play from this turn** / **Play from beginning** / **Stop playback** | Play across rounds through the latest saved turn, including newly indexed checkpoints. At the latest turn, playback begins at the first checkpoint. The fetching indicator has a reserved line, so loading does not move the navigation buttons | Existing saved-turn GET only; no simulation commands | |
+| Timeline | **Start replay at** (round and turn selects), **Play from selected turn** / **Play from beginning** / **Stop playback** | Choose any saved starting round and turn, even while viewing the latest checkpoint; play across rounds through the latest saved turn, including newly indexed checkpoints. The fetching indicator has a reserved line, so loading does not move the navigation buttons | Existing saved-turn GET only; no simulation commands | |
 | Timeline | **Replay this turn's animation** | Restart only the selected turn's visual cues in either view; does not advance the simulation | | |
 | Timeline | **Replay speed** | 0.5× (4.4 s), 1× (2.2 s), 2× (1.1 s) or 4× (0.55 s) per loaded turn | | |
 

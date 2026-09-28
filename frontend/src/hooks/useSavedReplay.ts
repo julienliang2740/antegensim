@@ -1,6 +1,6 @@
 /** Local playback through the latest saved turn. Never sends a simulation command.
  * Waits for checkpoint loads and follows additions to the existing turn index.
- * At the latest checkpoint, starting replay begins at the first recorded turn.
+ * The starting turn is selected explicitly by the replay controls.
  */
 import { useCallback, useEffect, useState } from "react";
 import type { TurnIndexEntry } from "../api/types";
@@ -23,10 +23,9 @@ export function useSavedReplay(props: {
     return () => document.removeEventListener("visibilitychange", change);
   }, []);
   const stop = useCallback(() => setPlaying(false), []);
-  const start = () => {
-    const at = props.turns.findIndex((turn) => turn.turn_id === props.shownId);
-    if (at < 0) return;
-    const first = props.turns[props.shownId === props.latestSavedId ? 0 : at];
+  const start = (turnId: string) => {
+    const first = props.turns.find((turn) => turn.turn_id === turnId);
+    if (!first) return;
     setPlaying(true);
     props.onView(first.turn_id);
     setToken((old) => old + 1);

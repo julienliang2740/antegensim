@@ -51,7 +51,7 @@ try {
  let held = false; let released = false;
  await page.route(`**/turns/${next}`, async route => { held=true; await wait(2200); released=true; await route.continue(); });
  await page.getByLabel('Replay speed',{exact:true}).selectOption('1100');
- await page.getByRole('button',{name:/^(Play from this turn|Play from beginning)$/}).click();
+ await page.getByRole('button',{name:'Play from selected turn',exact:true}).click();
  await page.waitForFunction(() => document.querySelector('.saved-replay-note')?.textContent?.includes('Waiting'),null,{timeout:8000});
  await wait(400);
  assert.ok(held && !released,'next checkpoint is still loading');
@@ -63,7 +63,7 @@ try {
  const stopped = await shown(); await wait(1600); assert.equal(await shown(),stopped,'stop holds current turn');
  await page.unroute(`**/turns/${next}`);
  // Opening a profile suspends playback so reading details cannot silently skip turns.
- await page.getByRole('button',{name:/^(Play from this turn|Play from beginning)$/}).click();
+ await page.getByRole('button',{name:'Play from selected turn',exact:true}).click();
  await page.getByRole('button',{name:'Session & agents',exact:true}).click();
  await page.locator('.roster-row').first().click();
  await page.locator('.profile-card').waitFor();
@@ -73,13 +73,13 @@ try {
  await page.getByRole('button',{name:'Close inspector panel',exact:true}).click();
  await page.getByRole('button',{name:'Stop playback',exact:true}).click();
  // A direct round jump stops playback and chooses that round's first turn.
- await page.getByRole('button',{name:/^(Play from this turn|Play from beginning)$/}).click();
+ await page.getByRole('button',{name:'Play from selected turn',exact:true}).click();
  await page.getByLabel('Jump to round',{exact:true}).selectOption('2');
  const firstRound = turns.find(t=>t.round===2).turn_id;
  await page.waitForFunction(id=>document.querySelector('.insp-marks')?.getAttribute('data-turn-id')===id,firstRound);
  assert.equal(await page.getByRole('button',{name:'Stop playback',exact:true}).count(),0);
  // Same-run route navigation also cancels the old replay queue.
- await page.getByRole('button',{name:/^(Play from this turn|Play from beginning)$/}).click();
+ await page.getByRole('button',{name:'Play from selected turn',exact:true}).click();
  await page.evaluate(({run,after})=>{ location.hash=`/run/${run}?turn=${after}`; },{run,after});
  await page.waitForFunction(id=>document.querySelector('.insp-marks')?.getAttribute('data-turn-id')===id,after);
  assert.equal(await page.getByRole('button',{name:'Stop playback',exact:true}).count(),0);
@@ -87,12 +87,12 @@ try {
  const boundary = [...turns].reverse().find(t=>t.kind==='round_end' && t.round<turns.at(-1).round);
  await open(boundary.turn_id);
  await page.getByLabel('Replay speed',{exact:true}).selectOption('550');
- await page.getByRole('button',{name:'Play from this turn',exact:true}).click();
+ await page.getByRole('button',{name:'Play from selected turn',exact:true}).click();
  const firstInFinalRound = turns.find(t=>t.round===turns.at(-1).round).turn_id;
  await page.waitForFunction(id=>document.querySelector('.insp-marks')?.getAttribute('data-turn-id')===id,firstInFinalRound,{timeout:10000});
  await page.getByRole('button',{name:'Stop playback',exact:true}).waitFor({state:'hidden',timeout:60000});
  assert.equal(await shown(),turns.at(-1).turn_id,'cross-round playback reaches latest checkpoint');
- // At the latest checkpoint, the primary button restarts the recording, not one animation.
+ // The separate Play from beginning button restarts the recording, not one animation.
  await page.getByRole('button',{name:'Play from beginning',exact:true}).click();
  await page.waitForFunction(id=>document.querySelector('.insp-marks')?.getAttribute('data-turn-id')===id,turns[0].turn_id);
  await page.waitForFunction(id=>document.querySelector('.insp-marks')?.getAttribute('data-turn-id')===id,turns[1].turn_id);
@@ -100,7 +100,7 @@ try {
  // End-of-record playback remains in history and creates no new simulation turns.
  await open(turns.at(-2).turn_id);
  await page.getByLabel('Replay speed',{exact:true}).selectOption('1100');
- await page.getByRole('button',{name:/^(Play from this turn|Play from beginning)$/}).click();
+ await page.getByRole('button',{name:'Play from selected turn',exact:true}).click();
  await page.getByRole('button',{name:'Stop playback',exact:true}).waitFor({state:'hidden',timeout:12000});
  assert.equal(await shown(),turns.at(-1).turn_id);
  assert.equal(await page.locator('.timeline .mode-badge').textContent(),'HISTORY');
@@ -130,7 +130,7 @@ try {
  });
  await open(turns.at(-4).turn_id);
  await page.getByLabel('Replay speed',{exact:true}).selectOption('2200');
- await page.getByRole('button',{name:'Play from this turn',exact:true}).click();
+ await page.getByRole('button',{name:'Play from selected turn',exact:true}).click();
  appended = true;
  await page.getByRole('button',{name:'Stop playback',exact:true}).waitFor({state:'hidden',timeout:20000});
  assert.equal(await shown(),turns.at(-1).turn_id,'replay includes newly indexed turns beyond the initial recording tail');
@@ -152,9 +152,18 @@ try {
  await page.getByRole('button',{name:"Replay this turn's animation",exact:true}).click();
  assert.equal(await page.locator('.turn-cue-impact').first().evaluate(e=>getComputedStyle(e).animationName),'none');
  assert.equal(await page.locator('.turn-cue-impact').first().evaluate(e=>getComputedStyle(e).opacity),'0');
+ // A replay may start from an explicitly chosen past turn while the latest turn is on screen.
+ await open(turns.at(-1).turn_id);
+ await page.getByLabel('Replay start round',{exact:true}).selectOption(String(turns[Math.max(1,at)].round));
+ await page.getByLabel('Replay start turn',{exact:true}).selectOption(start);
+ await page.getByLabel('Replay speed',{exact:true}).selectOption('550');
+ await page.getByRole('button',{name:'Play from selected turn',exact:true}).click();
+ await page.waitForFunction(id=>document.querySelector('.insp-marks')?.getAttribute('data-turn-id')===id,start);
+ await page.waitForFunction(id=>document.querySelector('.insp-marks')?.getAttribute('data-turn-id')===id,next);
+ await page.getByRole('button',{name:'Stop playback',exact:true}).click();
  await page.setViewportSize({width:390,height:844});
  await page.locator('.saved-replay').scrollIntoViewIfNeeded();
- assert.ok(await page.getByRole('button',{name:/^(Play from this turn|Play from beginning)$/}).isVisible());
+ assert.ok(await page.getByRole('button',{name:'Play from selected turn',exact:true}).isVisible());
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth),'mobile has no horizontal overflow');
  await page.screenshot({path:'/tmp/empyrean-replay-check/mobile.png'});
  assert.deepEqual(commands,[],'saved playback sends no simulation commands');

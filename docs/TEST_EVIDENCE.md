@@ -344,6 +344,10 @@ Responsive browser checks passed at 1366×768, 1600×1000, 1024×768 and 390×84
 
 Focused map regression: **3 passed, 0 failed** (`qa/out/2026-09-27_18-15-25/log.json`). Production build, all 96 state tests and documentation checks pass. Lint has zero errors and the same four existing warnings. Backend health is reachable through the running public tunnel.
 
+### Replay from a chosen saved turn — 2026-09-28
+
+`node qa/replay_refinement_check.mjs` passes on the recorded SWEEP run. It selects a past round and exact turn while the latest turn is on screen, then verifies playback starts there and advances to the next saved checkpoint. The existing loading, stop, inspector suspension, cross-round, beginning, appended-turn, single-turn animation, reduced-motion and mobile checks also pass. No simulation command requests were sent. Production build and frontend type check pass.
+
 ### Clone saved session setup — 2026-09-27
 
 - Full backend suite: **716 passed, 4 skipped** in 137.14 s, including five new clone cases. These verify exact original settings after simulated progress and settings edits, all 16 agent cards, archived/closed sources, distinct new-world identity, a fresh initial checkpoint, unchanged source bytes, inherited setup for continuations, and missing/corrupt reference errors. Fake models only.
