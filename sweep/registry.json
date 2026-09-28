@@ -769,7 +769,7 @@
    "world_id": "world_20260927_194926_5e1e",
    "name": "SWEEP-S1v2 Identical eight",
    "scenario": "sweep/scenarios/S1v2.json",
-   "status": "finished",
+   "status": "deleted",
    "port": 8001,
    "agents": 8,
    "max_rounds": 60,
@@ -777,7 +777,8 @@
    "notes": [
     "19:58 r36: all alive, a05 roamer broke r34, 7 camp at ~5/r burn, 0 msgs; most random trees hold 3 unseen fruit (observe-here loop). keep to r60 as convergence result",
     "20:03 finished at r00060_end",
-    "20:07 FINAL r60: 7/8 alive; a05 roamer died r52; a03 learned tree rhythm (wait 3 after each fruit from r23), most compute left; 0 msgs, 0 skills. middling, best S1"
+    "20:07 FINAL r60: 7/8 alive; a05 roamer died r52; a03 learned tree rhythm (wait 3 after each fruit from r23), most compute left; 0 msgs, 0 skills. middling, best S1",
+    "2026-09-28 05:29 deleted at the operator's request (middling); verdict kept in sweep/notes"
    ]
   },
   "S6v2": {
@@ -785,7 +786,7 @@
    "world_id": "world_20260927_194927_d599",
    "name": "SWEEP-S6v2 Roommates",
    "scenario": "sweep/scenarios/S6v2.json",
-   "status": "finished",
+   "status": "deleted",
    "port": 8000,
    "agents": 8,
    "max_rounds": 60,
@@ -793,7 +794,8 @@
    "notes": [
     "19:58 r33: 4 pairs, 4 stories: a01 found near tree/a02 starving; a03+a04 moved together to tree p0006 (a04 wins races); a05+a06 left together, talked r20-21, broke 2 steps from full home tree; a07 left east/a08 starved at centre. keep",
     "20:02 finished at r00060_end",
-    "20:07 FINAL r60: 3/8 alive; four pairs four stories (loser a01 ends richest; a04 outraces roommate a03 who starves r54; a05+a06 talk then starve together; a07 roams, a08 starves). success"
+    "20:07 FINAL r60: 3/8 alive; four pairs four stories (loser a01 ends richest; a04 outraces roommate a03 who starves r54; a05+a06 talk then starve together; a07 roams, a08 starves). success",
+    "2026-09-28 05:29 deleted at the operator's request (middling); verdict kept in sweep/notes"
    ]
   },
   "S7v2": {
@@ -816,7 +818,7 @@
    "world_id": "world_20260927_195559_cf1d",
    "name": "SWEEP-S4v3 The commons",
    "scenario": "sweep/scenarios/S4v3.json",
-   "status": "finished",
+   "status": "deleted",
    "port": 8001,
    "agents": 6,
    "max_rounds": 60,
@@ -825,7 +827,8 @@
     "19:55 v3 of S4 (last strike): v2 + mature trees fruit every 2 rounds (inflow 36); v2 finished all dead r36-43 after the contest ended at r7 because one tree (~3 net/round) could not feed even a monopolist",
     "20:05 r46: a03 monopolised the commons (21 fruit, 165 compute, observe/absorb rhythm one round ahead of the rest); the other 5 lost 13 races, broke r19-21, starved r37-39; 0 messages/attacks. Keeping to r60.",
     "20:07 finished at r00060_end",
-    "20:10 finished r60: a03 sole survivor (monopolised the commons tree), 5 starved r37-39; 0 messages/transfers/attacks. Verdict success (narrow: winner-takes-all among identical agents)"
+    "20:10 finished r60: a03 sole survivor (monopolised the commons tree), 5 starved r37-39; 0 messages/transfers/attacks. Verdict success (narrow: winner-takes-all among identical agents)",
+    "2026-09-28 05:29 deleted at the operator's request (middling); verdict kept in sweep/notes"
    ]
   },
   "S5v3": {
@@ -1034,14 +1037,15 @@
    "world_id": "world_20260927_203109_ac9d",
    "name": "SWEEP-S16v1 Frontier",
    "scenario": "sweep/scenarios/S16v1.json",
-   "status": "finished",
+   "status": "deleted",
    "port": 8000,
    "agents": 32,
    "max_rounds": 50,
    "launched": "2026-09-27 20:31:10",
    "notes": [
     "20:31 32 agents, 31x31, five 2x2 groves on a plus (centre 4 agents, arms 7 each), same rules as S14, persona + S15 tip, 50 rounds",
-    "20:57 finished at r00050_end"
+    "20:57 finished at r00050_end",
+    "2026-09-28 05:29 deleted at the operator's request (middling); verdict kept in sweep/notes"
    ]
   },
   "S15v2": {
@@ -1129,7 +1133,7 @@
    "world_id": "world_20260927_221308_7a75",
    "name": "SWEEP-S17v1 Frontier replica A",
    "scenario": "sweep/scenarios/S17v1.json",
-   "status": "finished",
+   "status": "deleted",
    "port": 8000,
    "agents": 32,
    "max_rounds": 50,
@@ -1137,7 +1141,8 @@
    "notes": [
     "22:59 parked: paused: Claude account session limit hit (rate_limited, resets 00:30 UTC); resume after the reset",
     "01:04 resumed on :8000",
-    "01:19 finished at r00050_end"
+    "01:19 finished at r00050_end",
+    "2026-09-28 05:29 deleted at the operator's request (middling); verdict kept in sweep/notes"
    ]
   },
   "S18v1": {
@@ -1178,7 +1183,7 @@
    "world_id": "world_20260927_221311_a16c",
    "name": "SWEEP-S20v1 Frontier, cheap minds",
    "scenario": "sweep/scenarios/S20v1.json",
-   "status": "finished",
+   "status": "deleted",
    "port": 8001,
    "agents": 32,
    "max_rounds": 60,
@@ -1186,7 +1191,8 @@
    "notes": [
     "22:59 parked: paused: Claude account session limit hit (rate_limited, resets 00:30 UTC); resume after the reset",
     "00:46 resumed on :8001",
-    "01:04 finished at r00060_end"
+    "01:04 finished at r00060_end",
+    "2026-09-28 05:29 deleted at the operator's request (middling); verdict kept in sweep/notes"
    ]
   },
   "S22v1": {

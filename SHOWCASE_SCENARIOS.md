@@ -49,10 +49,10 @@
      * `analyze.py`: the per-agent table;
      * `weather.py`: droughts and rain through god mode;
      * `launch_on.py`, `branch_words_removed.py`, `phases.py`, `skills_src.py`.
-3. **Cleanup.** 42 quiet, failed or superseded runs were deleted through the product's delete API;
-   their verdicts stay in `sweep/notes/` and `sweep/registry.json`. 20 runs remain.
+3. **Cleanup.** 48 quiet, failed, middling or superseded runs were deleted through the product's delete API;
+   their verdicts stay in `sweep/notes/` and `sweep/registry.json`. 14 runs remain.
 
-## Scenarios left (20 runs)
+## Scenarios left (14 runs)
 
 | Run | Role | Result |
 | --- | --- | --- |
@@ -63,10 +63,8 @@
 | `SWEEP-S29v2 One tree, two mouths` | pairs and betrayal | score 40.5: 4 kills, 3 peace pacts |
 | `SWEEP-S30v1 Frontier, lean years` | drought cycles | score 41.5: a mutual hunt and kill, 11 pleas, a gift |
 | `SWEEP-S26v2 Frontier drought` | hunger A/B by phase | score 32: tenfold talk in the drought |
-| `SWEEP-S16v3 Frontier`, `SWEEP-S17v1 Frontier replica A` | replicas of the flagship world | hunt and kill on each seed |
-| `SWEEP-S16v1 Frontier`, `SWEEP-S20v1 Frontier, cheap minds` | talk | 13 and 20 messages, pleas, a refusal answered with an attack |
+| `SWEEP-S16v3 Frontier` | first run of the flagship world | score 21: a hunt and kill, retaliation, 5 skill writers |
 | `SWEEP-S14v2 Frontier, plain` | control without the tip | 0 messages, 0 skills, 0 attacks on agents |
-| `SWEEP-S1v2 Identical eight`, `SWEEP-S4v3 The commons`, `SWEEP-S6v2 Roommates` | plain-instruction divergence | stayers against roamers; one agent takes all the fruit; four pairs, four outcomes |
 | `SWEEP-B1v1 Blood arena II`, `SWEEP-B2v2 Two tribes`, `SWEEP-E7v2 Three clans blood feud` | earlier sweep, directive personas | wars with 11-17 kills |
 
 ## Scenarios created in this round
