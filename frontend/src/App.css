@@ -338,6 +338,29 @@
   gap: 8px;
 }
 
+.resume-run-actions, .resume-rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.resume-pinned {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.resume-rename label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.resume-rename input { min-width: 130px; max-width: 220px; }
+.resume-rename .error-inline { flex-basis: 100%; }
+
 .resume-run-name {
   font-size: 15px;
   font-weight: 600;

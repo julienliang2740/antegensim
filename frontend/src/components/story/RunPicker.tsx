@@ -4,7 +4,7 @@
  * an unfinished story (choosing, brief ready, writing, paused, interrupted) are
  * listed first, most recently touched first, with a "Stories" cell that says
  * what is going on; a "Finished stories" button at the top right of the table
- * opens the complete stories of every run, newest first.  Both come from
+ * opens the complete stories of every run, newest first. Pinned runs top the picker. Both come from
  * GET /api/assistant/stories.  Nothing here opens a run: the lists are read
  * from storage and Story Mode works on closed runs.  OWNER: WP6.
  */

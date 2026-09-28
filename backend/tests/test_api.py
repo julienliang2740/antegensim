@@ -38,6 +38,7 @@ from empyrean.schemas import (
     RunSettings,
     RunStatus,
     RunSummary,
+    RunPresentationUpdate,
     SchedulerState,
     TurnId,
     TurnIndexEntry,
@@ -160,6 +161,11 @@ class FakeManager:
         if run_id == "missing":
             raise StorageError("unknown run")
         return make_summary()
+
+    def update_run_presentation(self, run_id: str, update: RunPresentationUpdate) -> RunSummary:
+        if run_id == "missing":
+            raise StorageError("unknown run")
+        return make_summary().model_copy(update={"name": update.name or "First fake run", "pinned": update.pinned or False})
 
     def delete_run(self, run_id: str) -> list[str]:
         from empyrean.storage import RunInUseError
@@ -306,6 +312,15 @@ def test_archive_unarchive_delete_routes_and_list_filter(client: TestClient, fak
     assert client.post(f"/api/runs/{RUN}/open").status_code == 200
     in_use = client.delete(f"/api/runs/{RUN}")
     assert in_use.status_code == 409 and in_use.json()["error"] == "run_in_use" and fake_manager.deleted == [RUN]
+
+
+def test_run_presentation_route_and_validation(client: TestClient) -> None:
+    renamed = client.patch(f"/api/runs/{RUN}/presentation", json={"name": "  New name  ", "pinned": True})
+    assert renamed.status_code == 200 and renamed.json()["name"] == "New name" and renamed.json()["pinned"] is True
+    for body in ({}, {"name": "   "}, {"name": "x" * 121}, {"pinned": "yes"}):
+        invalid = client.patch(f"/api/runs/{RUN}/presentation", json=body)
+        assert invalid.status_code == 422 and invalid.json()["error"] == "validation_error"
+    assert client.patch("/api/runs/missing/presentation", json={"pinned": True}).json()["error"] == "not_found"
 
 
 def test_create_and_validate_runs(client: TestClient, fake_manager: FakeManager) -> None:

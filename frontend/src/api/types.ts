@@ -1247,6 +1247,12 @@ export interface RunSummary {
   archived: boolean;
   /** When the run was archived (ISO); null while active. */
   archived_at: string | null;
+  pinned: boolean;
+}
+
+export interface RunPresentationUpdate {
+  name?: string;
+  pinned?: boolean;
 }
 
 /** GET /api/runs?archived=: "0" active runs only (default), "1" archived only, "all". */

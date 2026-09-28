@@ -40,6 +40,7 @@ import type {
   RunCreateRequest,
   RunStatus,
   RunSummary,
+  RunPresentationUpdate,
   RunValidationResponse,
   StagedInterventionsResponse,
   TurnIndexEntry,
@@ -175,10 +176,15 @@ export function previewWorld(body: WorldPreviewRequest): Promise<MapState> {
 // Runs / sessions
 // ---------------------------------------------------------------------------
 
-/** Saved runs, newest first.  `archived`: "0" active only (default), "1" the archive, "all". */
+/** Saved runs, pinned first then newest. `archived`: "0" active only (default), "1" the archive, "all". */
 export function listRuns(archived: RunArchiveFilter = "0"): Promise<RunSummary[]> {
   const query = archived === "0" ? "" : `?archived=${archived}`;
   return request("GET", `/api/runs${query}`);
+}
+
+/** Change a run's displayed name or pin without touching saved turns. */
+export function updateRunPresentation(runId: string, body: RunPresentationUpdate): Promise<RunSummary> {
+  return request("PATCH", `/api/runs/${enc(runId)}/presentation`, body);
 }
 
 /** Hide a run from the default list (writes <run>/archive.json; idempotent). */

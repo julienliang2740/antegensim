@@ -59,6 +59,7 @@ from empyrean.schemas import (
     RoundEndOutcome,
     RulesConfig,
     RunCreateRequest,
+    RunPresentation,
     RunSummary,
     SchedulerState,
     Situation,
@@ -466,6 +467,9 @@ class FakeStorage:
 
     def archive_state(self, world_id: str, run_id: str) -> tuple[bool, Optional[str]]:
         return False, None  # no archive markers in the in-memory storage
+
+    def read_run_presentation(self, world_id: str, run_id: str) -> RunPresentation:
+        return RunPresentation()  # no display metadata in the in-memory storage
 
     def code_revision(self) -> str:
         return "test"

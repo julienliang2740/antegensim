@@ -148,6 +148,7 @@ from .schemas import (
     ReloadResponse,
     RunCommand,
     RunCreateRequest,
+    RunPresentationUpdate,
     RunSettings,
     RunStatus,
     RunSummary,
@@ -405,10 +406,11 @@ def summary_from_manifest(manifest: Manifest, status: Optional[str] = None) -> R
     if status is None:
         status = "finished" if manifest.finished else "paused"
     archived, archived_at = storage.archive_state(manifest.world_id, manifest.run_id)
+    presentation = storage.read_run_presentation(manifest.world_id, manifest.run_id)
     return RunSummary(
         world_id=manifest.world_id,
         run_id=manifest.run_id,
-        name=manifest.name,
+        name=presentation.name or manifest.name,
         current_turn_id=manifest.current_turn_id,
         last_round=manifest.last_round,
         last_turn_index=manifest.last_turn_index,
@@ -421,6 +423,7 @@ def summary_from_manifest(manifest: Manifest, status: Optional[str] = None) -> R
         run_dir=storage.run_dir_path(manifest.world_id, manifest.run_id),
         archived=archived,
         archived_at=archived_at,
+        pinned=presentation.pinned,
     )
 
 
@@ -3106,7 +3109,13 @@ class RunManager:
                 out.append(summary_from_manifest(worker.manifest, worker.status().state))
             else:
                 out.append(summary)
+        out.sort(key=lambda summary: (summary.pinned, summary.saved_at, summary.run_id), reverse=True)
         return out
+
+    def update_run_presentation(self, run_id: str, update: RunPresentationUpdate) -> RunSummary:
+        """Persist the run's displayed name or pin without changing the simulation."""
+        storage.update_run_presentation(run_id, update)
+        return self.get_summary(run_id)
 
     def archive_run(self, run_id: str) -> RunSummary:
         """Write the run's archive marker (idempotent) and return its summary.  An open run

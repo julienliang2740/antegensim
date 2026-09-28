@@ -45,6 +45,7 @@ Route table (all JSON; see docs/INTERFACES.md "API" for request/response models)
     POST   /api/runs/{run_id}/open                       -> RunStatus
     POST   /api/runs/{run_id}/close                      -> RunStatus (paused, worker stopped)
     GET    /api/runs/{run_id}                            -> RunSummary
+    PATCH  /api/runs/{run_id}/presentation RunPresentationUpdate -> RunSummary
     DELETE /api/runs/{run_id}                            -> 204 (folder removed for good; 409 run_in_use while open)
     POST   /api/runs/{run_id}/archive                    -> RunSummary (writes archive.json; idempotent)
     POST   /api/runs/{run_id}/unarchive                  -> RunSummary (removes archive.json; idempotent)
@@ -150,6 +151,7 @@ from .schemas import (
     RunCreateRequest,
     RunStatus,
     RunSummary,
+    RunPresentationUpdate,
     RunValidationResponse,
     StagedInterventionsResponse,
     TurnIndexEntry,
@@ -374,6 +376,10 @@ def create_app(manager: RunManager, assistant: Optional["AssistantService"] = No
     @app.get("/api/runs/{run_id}", response_model=RunSummary)
     def get_run(run_id: str) -> RunSummary:
         return manager.get_summary(run_id)
+
+    @app.patch("/api/runs/{run_id}/presentation", response_model=RunSummary)
+    def update_run_presentation(run_id: str, body: RunPresentationUpdate) -> RunSummary:
+        return manager.update_run_presentation(run_id, body)
 
     @app.delete("/api/runs/{run_id}", status_code=204)
     def delete_run(run_id: str) -> Response:

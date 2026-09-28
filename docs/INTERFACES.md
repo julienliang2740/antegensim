@@ -800,6 +800,7 @@ atomic_write_json(path, data, fsync=True) ; read_json(path)
 add_call_usage(ledger, record, interrupted=False) -> RealUsageLedger   # pure ledger helper (rev 3); one rule with runner.add_record_to_ledger (fix pass): every record counts in `calls`, an interrupted one ALSO in `interrupted_calls` (a subset)
 new_run_id(name) ; new_world_id() ; code_revision()
 list_runs() -> list[RunSummary] ; read_manifest(run_id) ; write_manifest(manifest)   # list_runs returns archived runs too (RunSummary.archived)
+read_run_presentation(world_id, run_id) -> RunPresentation ; update_run_presentation(run_id, update) -> RunPresentation
 read_archive_marker(rdir) -> RunArchiveMarker | None ; archive_state(world_id, run_id) -> (archived, archived_at)
 archive_run(run_id, note="") -> RunArchiveMarker ; unarchive_run(run_id)   # write / remove <run>/archive.json (idempotent)
 delete_run(run_id) -> [removed folders]   # writer lock (RunInUseError when held), manifest first, then the run folder; runs/ and the world folder only when left empty
@@ -865,6 +866,7 @@ worlds/world_20260925_101500_ab12/runs/run_20260925_101500_cd34/
   manifest.json                       # commit point
   .writer.lock                        # flock held by the one open worker (one active writer)
   archive.json                        # RunArchiveMarker, only while the run is archived (Resume page)
+  presentation.json                   # RunPresentation, optional displayed name and pinned flag
   run_request.json                    # the RunCreateRequest used (reference only)
   assumptions.json                    # [AssumptionEntry] recorded at creation
   staged_snapshots/iv_0003.json       # WorkingState of a staged apply_working_files
@@ -986,6 +988,12 @@ agent's own growing file plus the constant call/packet/map files); `map.json` a 
 active). A marker that cannot be read is logged and the run is listed as active.
 `DELETE /api/runs/{run_id}` removes the whole run folder (manifest first, so a half-finished removal
 is never listed), then `runs/` and the world folder only if they are left empty.
+
+`presentation.json` (`RunPresentation`, optional): `{"name": "A better name", "pinned": true}`.
+`PATCH /api/runs/{run_id}/presentation` changes either field, including for an open or archived run.
+The displayed name overlays the manifest name in `RunSummary`; the original creation setup and
+simulation checkpoints retain their recorded names. Pinned runs sort first, then by save time.
+Recovery and checkpoint commits leave this sidecar untouched; a continuation does not copy it.
 
 `working/README.txt` explains: pause the run, edit any file here, then `POST /api/runs/{id}/working/reload`
 (or the "Reload working files" button); invalid files are reported and nothing changes; the
@@ -1260,13 +1268,14 @@ compares all four (path parameters are compared by position, query strings are i
 | GET | `/models?include_assistant=0&include_test=0` | | `ModelInfo[]` (assistant-only refs hidden unless `include_assistant=1`; the test doubles `fake-scripted` and `fake-malformed` hidden unless `include_test=1`; `ModelInfo.test_only`) |
 | GET | `/assumptions` | | `AssumptionsView` |
 | POST | `/world/preview` | `WorldPreviewRequest` | `MapState` |
-| GET | `/runs?archived=0\|1\|all` | | `RunSummary[]` (default `0`: active runs only; `1` the archive; `all` both) |
+| GET | `/runs?archived=0\|1\|all` | | `RunSummary[]` (default `0`: active runs only; `1` the archive; `all` both; pinned first, then newest saved) |
 | POST | `/runs` | `RunCreateRequest` | `RunSummary` (201) |
 | POST | `/runs/validate` | `RunCreateRequest` | `RunValidationResponse` |
 | GET | `/runs/{run_id}/setup` | | `RunCreateRequest` (original creation setup, `world_id: null`; read-only, works without opening the run) |
 | POST | `/runs/{run_id}/open` | | `RunStatus` |
 | POST | `/runs/{run_id}/close` | | `RunStatus` |
 | GET | `/runs/{run_id}` | | `RunSummary` |
+| PATCH | `/runs/{run_id}/presentation` | `RunPresentationUpdate` (`name?`, `pinned?`) | `RunSummary` (display name/pin saved outside checkpoints; 422 for blank or overlong name) |
 | DELETE | `/runs/{run_id}` | | 204, no body (the run folder is removed for good; 409 `run_in_use` while open; 404 unknown) |
 | POST | `/runs/{run_id}/archive` | | `RunSummary` (writes `archive.json`; idempotent, keeps the first `archived_at`) |
 | POST | `/runs/{run_id}/unarchive` | | `RunSummary` (removes `archive.json`; idempotent) |
@@ -1380,6 +1389,11 @@ come from the run folder's `archive.json` in every summary (`GET /runs`, `GET /r
 continuation, archive, unarchive). `GET /runs` hides archived runs unless `archived=1` or `all`; the
 Story Mode run picker and the assistant's `list_runs` tool use the default. Archiving an open run is
 allowed (it keeps running; only the listing changes). Deleting needs the run closed everywhere.
+
+Run presentation: `RunSummary.pinned` (bool, default false) and its displayed `name` come from
+`presentation.json` when present. `RunPresentationUpdate` changes at least one of `name` (trimmed,
+1–120 characters) or `pinned` (boolean). These are independent of the manifest commit point and
+persist across archive/restore and recovery.
 
 Frontend polling: `pollEvents(runId, …, initialSince = max(0, status.latest_seq − 300))` every
 ~700 ms (also while paused, cheaply), plus `getLiveState` when `status.current_turn_id`
@@ -1696,3 +1710,10 @@ model availability is checked by the normal validate/create endpoints. The front
 `#/new?clone=<run_id>` loads this complete request directly, suggests a copy name, and waits for
 the user to edit/validate/create. Seed, cards, rules, context and budgets are preserved; progress,
 memories acquired during simulation, history, assistant settings and stories are not copied.
+
+Applied for run organization (2026-09-28): `RunPresentation(LooseModel)` is an optional
+`<run>/presentation.json` sidecar with `name` and `pinned`; `RunSummary.pinned` defaults to false
+for old runs. `PATCH /api/runs/{run_id}/presentation` accepts `RunPresentationUpdate` and returns
+the updated summary. Both the active and archive lists put pinned runs first. This does not rewrite
+the manifest or the original creation request, so it is safe for an open run and does not alter
+saved simulation turns.

@@ -2063,6 +2063,37 @@ class RunSummary(StrictModel):
     # are hidden from ``GET /api/runs`` unless ``?archived=1|all``; nothing else changes.
     archived: bool = False
     archived_at: Optional[str] = None
+    pinned: bool = False
+
+
+class RunPresentation(LooseModel):
+    """``<run>/presentation.json``: a rename and pin independent of simulation checkpoints."""
+
+    name: Optional[str] = None
+    pinned: bool = False
+
+
+class RunPresentationUpdate(StrictModel):
+    """Partial update for the run's displayed name and pin."""
+
+    name: Optional[str] = Field(default=None, max_length=120)
+    pinned: Optional[bool] = Field(default=None, strict=True)
+
+    @field_validator("name")
+    @classmethod
+    def nonempty_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("name cannot be blank")
+        return value
+
+    @model_validator(mode="after")
+    def has_change(self) -> "RunPresentationUpdate":
+        if self.name is None and self.pinned is None:
+            raise ValueError("provide a name or pinned value")
+        return self
 
 
 class RunArchiveMarker(LooseModel):

@@ -772,12 +772,13 @@ export function unfinishedByRun(stories: StorySessionSummary[]): Map<string, Run
 }
 
 /**
- * Story Mode run picker order: runs with an unfinished story first (the most recently touched
- * story first), then every other run newest saved first.  Pure; the picker renders this list.
+ * Story Mode run picker order: pinned runs first, then runs with an unfinished story
+ * (most recently touched first), then every other run newest saved first.
  */
-export function orderRunsForPicker<R extends { run_id: string; saved_at: string }>(runs: R[], work: Map<string, RunStoryWork>): R[] {
+export function orderRunsForPicker<R extends { run_id: string; saved_at: string; pinned?: boolean }>(runs: R[], work: Map<string, RunStoryWork>): R[] {
   const key = (r: R) => work.get(r.run_id)?.story?.updated_at ?? "";
   return [...runs].sort((a, b) => {
+    if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
     const wa = work.has(a.run_id) ? 1 : 0;
     const wb = work.has(b.run_id) ? 1 : 0;
     if (wa !== wb) return wb - wa;

@@ -11,6 +11,7 @@ world_sample/runs/run_sample/
   manifest.json              commit point: current turn, counters, real-usage ledger
   (archive.json)             only while the run is archived on the Resume page: {archived_at, note};
                              not in this sample
+  (presentation.json)        optional displayed name and pinned flag; not in this sample
   run_request.json           the request the run was created from (agent cards, settings)
   assumptions.json           the assumption table in force at creation
   turns/

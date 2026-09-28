@@ -1091,7 +1091,7 @@ test("storybookWorkingLabel says how many turns are being narrated; the status l
 });
 
 
-test("story mode run picker: unfinished stories first, finished newest first", () => {
+test("story mode run picker: pinned first, then unfinished stories, finished newest first", () => {
   const story = (over) => ({ story_id: "s", run_id: "r1", run_name: "", title: "T", status: "complete", unit: "turn", chapters_done: 0, chapters_total: 0, spent_usd: 0, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", ...over });
   const stories = [
     story({ story_id: "a", run_id: "r1", status: "generating", chapters_done: 3, chapters_total: 11, title: "The Chronicle", updated_at: "2026-01-03T00:00:00Z" }),
@@ -1112,6 +1112,7 @@ test("story mode run picker: unfinished stories first, finished newest first", (
     { run_id: "r2", saved_at: "2026-01-02T00:00:00Z" },
   ];
   assert.deepEqual(storyMode.orderRunsForPicker(runs, work).map((r) => r.run_id), ["r2", "r1", "r3", "r4"]);
+  assert.deepEqual(storyMode.orderRunsForPicker(runs.map((run) => ({ ...run, pinned: run.run_id === "r4" })), work).map((r) => r.run_id), ["r4", "r2", "r1", "r3"]);
   assert.equal(storyMode.unfinishedStoryText(work.get("r1")), "writing 3 of 11 · The Chronicle (+1 more)");
   assert.equal(storyMode.unfinishedStoryText(work.get("r2")), "Story brief waiting for you · T");
   assert.equal(storyMode.unfinishedStoryText(undefined), "");

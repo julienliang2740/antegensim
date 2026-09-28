@@ -8,6 +8,7 @@ Layout (see docs/INTERFACES.md "Storage layout" for example contents):
         .writer.lock                     flock held by the one open worker (acquire_writer_lock)
         archive.json                     RunArchiveMarker, present only while the run is archived
                                          (archive_run / unarchive_run; hidden from the default list)
+        presentation.json                RunPresentation, optional displayed name and pinned flag
         run_request.json                 the RunCreateRequest used (reference only)
         assumptions.json                 [AssumptionEntry] recorded once at creation
         staged_snapshots/{iv_id}.json    WorkingState snapshot of a staged apply_working_files
@@ -101,6 +102,7 @@ Recovery (recover_run, called by RunManager.open_run)
   and 5) is deleted instead: its usage is already in ``manifest.real_usage``.
 * ``list_runs`` skips run dirs without a manifest.
 * ``archive.json`` is never touched by recovery and never copied by ``create_continuation``.
+* ``presentation.json`` is never touched by recovery or checkpoint commits and is not copied by continuations.
 
 Archive and delete (run archive)
 --------------------------------
@@ -185,6 +187,8 @@ from .schemas import (
     Residue,
     RulesConfig,
     RunArchiveMarker,
+    RunPresentation,
+    RunPresentationUpdate,
     RunCreateRequest,
     RunSettings,
     RunSummary,
@@ -209,6 +213,7 @@ RUN_REQUEST_FILE = "run_request.json"
 ASSUMPTIONS_FILE = "assumptions.json"
 WRITER_LOCK_FILE = ".writer.lock"  # exclusive advisory lock held by the one open worker (spec: one active writer)
 ARCHIVE_FILE = "archive.json"  # RunArchiveMarker; present only while the run is archived
+PRESENTATION_FILE = "presentation.json"  # display name and pin, outside checkpoint data
 STAGED_SNAPSHOTS_DIR = "staged_snapshots"
 WORKING_DIR = "working"
 TURNS_DIR = "turns"
@@ -469,7 +474,7 @@ def acquire_writer_lock(run_id: str) -> Optional[WriterLock]:
 
 def list_runs() -> list[RunSummary]:
     """Scan ``worlds/*/runs/*/manifest.json`` (dirs without one are skipped, unreadable
-    manifests are logged and skipped); newest ``updated_at`` first.  ``status`` is
+    manifests are logged and skipped); pinned first, then newest ``updated_at``.  ``status`` is
     "finished" when ``manifest.finished`` else "paused" (the runner overlays live status).
     Every run is returned, archived or not (``archived``/``archived_at`` from ``archive.json``);
     ``RunManager.list_runs`` filters."""
@@ -484,8 +489,33 @@ def list_runs() -> list[RunSummary]:
             log.warning("skipping run with unreadable manifest: %s", exc)
             continue
         summaries.append(_summary_from_manifest(manifest))
-    summaries.sort(key=lambda s: (_timestamp_key(s.saved_at), s.run_id), reverse=True)
+    summaries.sort(key=lambda s: (s.pinned, _timestamp_key(s.saved_at), s.run_id), reverse=True)
     return summaries
+
+
+def read_run_presentation(world_id: str, run_id: str) -> RunPresentation:
+    """Read a run's display metadata, defaulting for old runs and ignoring damaged metadata."""
+    path = run_dir(world_id, run_id) / PRESENTATION_FILE
+    if not path.is_file():
+        return RunPresentation()
+    try:
+        return _read_model(path, RunPresentation, str(path))
+    except StorageError as exc:
+        log.warning("ignoring unreadable run presentation: %s", exc)
+        return RunPresentation()
+
+
+def update_run_presentation(run_id: str, update: RunPresentationUpdate) -> RunPresentation:
+    """Atomically change the display name or pin without rewriting a live run's manifest."""
+    rdir = find_run_dir(run_id)
+    manifest = _read_model(rdir / MANIFEST_FILE, Manifest, str(rdir / MANIFEST_FILE))
+    current = read_run_presentation(manifest.world_id, run_id)
+    changed = current.model_copy(update={
+        "name": update.name if update.name is not None else current.name,
+        "pinned": update.pinned if update.pinned is not None else current.pinned,
+    })
+    atomic_write_json(rdir / PRESENTATION_FILE, changed)
+    return changed
 
 
 def read_archive_marker(rdir: Path) -> Optional[RunArchiveMarker]:
@@ -1457,10 +1487,11 @@ def _manifest_after_commit(manifest: Manifest, checkpoint: Checkpoint) -> Manife
 
 def _summary_from_manifest(manifest: Manifest) -> RunSummary:
     archived, archived_at = archive_state(manifest.world_id, manifest.run_id)
+    presentation = read_run_presentation(manifest.world_id, manifest.run_id)
     return RunSummary(
         world_id=manifest.world_id,
         run_id=manifest.run_id,
-        name=manifest.name,
+        name=presentation.name or manifest.name,
         current_turn_id=manifest.current_turn_id,
         last_round=manifest.last_round,
         last_turn_index=manifest.last_turn_index,
@@ -1473,6 +1504,7 @@ def _summary_from_manifest(manifest: Manifest) -> RunSummary:
         run_dir=run_dir_path(manifest.world_id, manifest.run_id),
         archived=archived,
         archived_at=archived_at,
+        pinned=presentation.pinned,
     )
 
 

@@ -77,6 +77,27 @@ def test_open_run_can_be_archived_and_keeps_its_live_status(client, default_requ
     assert client.get("/api/runs").json() == []
 
 
+def test_rename_and_pin_persist_without_changing_run_setup(client, default_request, worlds_dir: Path) -> None:
+    first = create_closed_run(client, default_request, "first")
+    second = create_closed_run(client, default_request, "second")
+    run_id = first["run_id"]
+    original_manifest = storage.read_manifest(run_id).model_dump(mode="json")
+    renamed = client.patch(f"/api/runs/{run_id}/presentation", json={"name": "  Favourite run  ", "pinned": True})
+    assert renamed.status_code == 200 and renamed.json()["name"] == "Favourite run" and renamed.json()["pinned"] is True
+    assert ids(client.get("/api/runs")) == [run_id, second["run_id"]]
+    assert client.get(f"/api/runs/{run_id}").json()["name"] == "Favourite run"
+    assert storage.read_manifest(run_id).model_dump(mode="json") == original_manifest
+    assert client.get(f"/api/runs/{run_id}/setup").json()["name"] == "first"
+    assert json.loads((Path(storage.find_run_dir(run_id)) / storage.PRESENTATION_FILE).read_text()) == {"name": "Favourite run", "pinned": True}
+    assert client.post(f"/api/runs/{run_id}/open").status_code == 200
+    assert client.get(f"/api/runs/{run_id}").json()["name"] == "Favourite run"
+    assert client.post(f"/api/runs/{run_id}/close").status_code == 200
+    assert client.post(f"/api/runs/{run_id}/archive").json()["pinned"] is True
+    assert client.post(f"/api/runs/{run_id}/unarchive").json()["name"] == "Favourite run"
+    assert client.patch(f"/api/runs/{run_id}/presentation", json={"pinned": False}).json()["pinned"] is False
+    assert ids(client.get("/api/runs")) == [second["run_id"], run_id]
+
+
 def test_delete_closed_run_removes_its_folder_and_the_emptied_world(client, default_request, worlds_dir: Path) -> None:
     summary = create_closed_run(client, default_request, "doomed")
     rdir = Path(storage.find_run_dir(summary["run_id"]))

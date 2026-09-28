@@ -332,6 +332,7 @@ worlds/
   world_<stamp>_<hex>/runs/run_<stamp>_<hex>/
     manifest.json        commit point: current turn, counters, real-usage ledger, parent
     archive.json         only while the run is archived: {archived_at, note} (hidden from the run list)
+    presentation.json    optional displayed name and pinned flag (outside simulation checkpoints)
     run_request.json     the request the run was created from
     assumptions.json     the assumption table in force at creation
     working/             editable copy of the latest checkpoint (literal god mode)
@@ -357,6 +358,11 @@ removes the file. Recovery never touches the marker and continuations do not cop
 removes its whole folder for good, including its turns, storybook and stories, and then the world
 folder if no run is left in it. The backend refuses to delete a run that is open (409
 `run_in_use`), so leave a run before deleting it.
+
+Renaming or pinning a run writes `presentation.json`. Its optional name replaces the manifest name
+in run summaries; the original creation request and committed checkpoints stay unchanged. Pinned
+runs sort above other runs, then by latest save time. The file survives archive/restore and recovery;
+continuations start with their own name and no pin.
 
 ## God mode, interventions and continuations
 

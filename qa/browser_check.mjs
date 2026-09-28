@@ -1834,7 +1834,7 @@ async function runResumeArchiveStep(page) {
   await step(
     page,
     "resume-select-archive-delete",
-    "Resume page: Ctrl/Shift multi-select, archive, archive view, restore, delete with confirmation",
+    "Resume page: rename and pin selected runs, Ctrl/Shift multi-select, archive, restore, delete",
     async (rec) => {
       const prefix = `${RUN_NAME} tidy-`;
       const request = withFakeModels(await api("GET", "/defaults?agent_count=6"));
@@ -1861,6 +1861,22 @@ async function runResumeArchiveStep(page) {
       const cell = (id) => row(id).locator("td").nth(3); // "Saved at": plain text, not a control
       const checked = async () => rows.evaluateAll((trs) => trs.filter((tr) => tr.querySelector("input.resume-check")?.checked).map((tr) => tr.getAttribute("data-run-id")));
 
+      // Rename and pin live in the selection toolbar, and survive a list refresh.
+      await row(order[4]).locator("input.resume-check").click();
+      const pinToolbar = page.getByRole("region", { name: "Selected runs" });
+      await pinToolbar.getByRole("button", { name: "Rename selected" }).click();
+      await pinToolbar.getByLabel("Run name").fill(`${prefix} renamed`);
+      await pinToolbar.getByRole("button", { name: "Save name" }).click();
+      await waitApi("renamed run", async () => (await api("GET", `/runs/${order[4]}`)).name, (name) => name === `${prefix} renamed`, 10_000);
+      await pinToolbar.getByRole("button", { name: "Pin selected", exact: true }).click();
+      await waitApi("pinned run", async () => (await api("GET", `/runs/${order[4]}`)).pinned, (pinned) => pinned === true, 10_000);
+      if ((await rows.first().getAttribute("data-run-id")) !== order[4]) throw new Error("pinned run did not move to the top");
+      await page.getByRole("button", { name: "Refresh list" }).click();
+      await waitApi("pinned order after refresh", async () => rows.first().getAttribute("data-run-id"), (id) => id === order[4], 10_000);
+      await pinToolbar.getByRole("button", { name: "Unpin selected", exact: true }).click();
+      await waitApi("unpinned run", async () => (await api("GET", `/runs/${order[4]}`)).pinned, (pinned) => pinned === false, 10_000);
+      await pinToolbar.getByRole("button", { name: "Clear selection" }).click();
+
       await cell(order[0]).click({ modifiers: ["Control"] });
       await cell(order[2]).click({ modifiers: ["Control"] });
       const afterCtrl = await checked();
@@ -1872,6 +1888,10 @@ async function runResumeArchiveStep(page) {
       if (afterShift.join() !== expected.join()) throw new Error(`Shift-click range gave ${afterShift}, expected ${expected}`);
       const toolbar = page.getByRole("region", { name: "Selected runs" });
       await waitVisible(toolbar.getByText("4 selected"), "the toolbar count '4 selected'");
+      await toolbar.getByRole("button", { name: "Pin selected", exact: true }).click();
+      if (!(await Promise.all(expected.map(async (id) => (await api("GET", `/runs/${id}`)).pinned))).every(Boolean)) throw new Error("Pin selected did not pin all selected runs");
+      await toolbar.getByRole("button", { name: "Unpin selected", exact: true }).click();
+      await waitApi("all selected runs unpinned", async () => Promise.all(expected.map(async (id) => (await api("GET", `/runs/${id}`)).pinned)), (pins) => pins.every((pin) => !pin), 10_000);
       await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-resume-selection-toolbar.png`) });
 
       await toolbar.getByRole("button", { name: "Archive selected" }).click();

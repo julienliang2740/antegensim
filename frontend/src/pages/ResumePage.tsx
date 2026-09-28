@@ -9,15 +9,15 @@
  * It works for active and archived runs without opening or changing the source.
  *
  * Run housekeeping: a checkbox column selects runs (click, Ctrl/Cmd-click, Shift-click
- * ranges and row clicks; the rules are in state/selection.ts).  The selection toolbar
- * archives runs (they move to the archive view, GET /api/runs?archived=1, and can be
+ * ranges and row clicks; the rules are in state/selection.ts). The selection toolbar
+ * renames one run, pins or unpins a group, and archives runs (they move to the archive view, GET /api/runs?archived=1, and can be
  * restored) or deletes them after a confirmation dialog (the run folders are removed for
  * good; the backend refuses a run that is open, 409 run_in_use, and the dialog shows that
  * per run).
  */
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { ApiClientError, archiveRun, deleteRun, listRuns, unarchiveRun } from "../api/client";
+import { ApiClientError, archiveRun, deleteRun, listRuns, unarchiveRun, updateRunPresentation } from "../api/client";
 import type { RunSummary } from "../api/types";
 import { ConfirmDialog } from "../components/common/ConfirmDialog";
 import { PageHeader } from "../components/common/PageHeader";
@@ -102,13 +102,15 @@ export function ResumePage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [dialog, setDialog] = useState<DeleteDialogState | null>(null);
+  const [editing, setEditing] = useState<{ runId: string; name: string; error: string | null } | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   useEffect(() => {
     document.title = "Resume session · Empyrean";
   }, []);
 
   const source = view === "active" ? active : archived;
   const list = useMemo(
-    () => [...(source.data ?? [])].filter((r) => !hidden.has(r.run_id)).sort((a, b) => (a.saved_at < b.saved_at ? 1 : -1)),
+    () => [...(source.data ?? [])].filter((r) => !hidden.has(r.run_id)).sort((a, b) => Number(b.pinned) - Number(a.pinned) || (a.saved_at < b.saved_at ? 1 : a.saved_at > b.saved_at ? -1 : a.run_id.localeCompare(b.run_id))),
     [source.data, hidden],
   );
   const listIds = useMemo(() => list.map((r) => r.run_id), [list]);
@@ -133,22 +135,67 @@ export function ResumePage() {
     setAnchor(null);
     setHidden(new Set());
     setNotice(null);
+    setEditing(null);
   }
 
   function click(runId: string, event: MouseEvent, from: SelectionSource) {
     const next = applySelectionClick(selected, anchor, runId, shownIds, { ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey, source: from });
     setSelection(next.selection);
     setAnchor(next.anchor);
+    setEditing(null);
   }
 
   function clearSelection() {
     setSelection(new Set());
     setAnchor(null);
+    setEditing(null);
   }
 
   function reloadBoth() {
     active.reload();
     archived.reload();
+  }
+
+  function applySummaries(updated: RunSummary[]) {
+    const byId = new Map(updated.map((run) => [run.run_id, run]));
+    if (active.data) active.set(active.data.map((run) => byId.get(run.run_id) ?? run));
+    if (archived.data) archived.set(archived.data.map((run) => byId.get(run.run_id) ?? run));
+  }
+
+  async function changePins(runs: RunSummary[], pinned: boolean) {
+    if (!runs.length || updatingId || busy) return;
+    const targets = runs.filter((run) => run.pinned !== pinned);
+    if (!targets.length) return;
+    setBusy(pinned ? `Pinning ${plural(targets.length, "run")}…` : `Unpinning ${plural(targets.length, "run")}…`);
+    const results = await Promise.allSettled(targets.map((run) => updateRunPresentation(run.run_id, { pinned })));
+    const updated: RunSummary[] = [];
+    const failures: string[] = [];
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled") updated.push(result.value);
+      else failures.push(`${targets[index].name}: ${failureText(result.reason)}`);
+    });
+    applySummaries(updated);
+    setBusy(null);
+    setNotice({ text: updated.length ? `${pinned ? "Pinned" : "Unpinned"} ${plural(updated.length, "run")}.` : `Could not ${pinned ? "pin" : "unpin"} the selected runs.`, failures });
+  }
+
+  async function saveRename() {
+    if (!editing || updatingId || busy) return;
+    const name = editing.name.trim();
+    if (!name || name.length > 120) {
+      setEditing({ ...editing, error: name ? "Use 120 characters or fewer." : "Enter a run name." });
+      return;
+    }
+    setUpdatingId(editing.runId);
+    try {
+      applySummaries([await updateRunPresentation(editing.runId, { name })]);
+      setEditing(null);
+      setNotice({ text: `Renamed run to ${name}.`, failures: [] });
+    } catch (error) {
+      setEditing((current) => current?.runId === editing.runId ? { ...current, error: failureText(error) } : current);
+    } finally {
+      setUpdatingId(null);
+    }
   }
 
   /** Archive (active view) or restore (archive view) runs: they leave the list at once, then both lists reload. */
@@ -215,7 +262,7 @@ export function ResumePage() {
 
   return (
     <div className="page resume-page">
-      <PageHeader title="Resume session" subtitle="Saved runs, newest first. Opening a run loads its latest complete checkpoint; it opens paused." />
+      <PageHeader title="Resume session" subtitle="Pinned runs first, then newest saved runs. Opening a run loads its latest complete checkpoint; it opens paused." />
       <div className="action-row resume-filter-row">
         <label className="field">
           <span>Filter by name or id</span>
@@ -277,6 +324,16 @@ export function ResumePage() {
             onClick={() => navigate({ name: "new", cloneRunId: selectedRuns[0].run_id })}>
             Clone setup
           </button>
+          {editing ? (
+            <form className="resume-rename" onSubmit={(event) => { event.preventDefault(); void saveRename(); }}>
+              <label>Run name <input autoFocus type="text" maxLength={120} value={editing.name} onChange={(event) => setEditing({ ...editing, name: event.target.value, error: null })} /></label>
+              <button type="submit" className="btn btn-small btn-primary" disabled={updatingId !== null || busy !== null}>Save name</button>
+              <button type="button" className="btn btn-small" disabled={updatingId !== null} onClick={() => setEditing(null)}>Cancel</button>
+              {editing.error ? <span className="error-inline" role="alert">{editing.error}</span> : null}
+            </form>
+          ) : <button type="button" className="btn" disabled={busy !== null || updatingId !== null || selectedRuns.length !== 1} title={selectedRuns.length === 1 ? "Change this run's displayed name" : "Select exactly one run to rename"} onClick={() => setEditing({ runId: selectedRuns[0].run_id, name: selectedRuns[0].name, error: null })}>Rename selected</button>}
+          <button type="button" className="btn" disabled={busy !== null || updatingId !== null || !selectedRuns.some((run) => !run.pinned)} onClick={() => void changePins(selectedRuns, true)}>Pin selected</button>
+          <button type="button" className="btn" disabled={busy !== null || updatingId !== null || !selectedRuns.some((run) => run.pinned)} onClick={() => void changePins(selectedRuns, false)}>Unpin selected</button>
           {view === "active" ? (
             <button type="button" className="btn" disabled={busy !== null} onClick={() => void moveRuns(selectedRuns, "archive")}>
               Archive selected
@@ -312,6 +369,7 @@ export function ResumePage() {
                   onToggle={() => {
                     setSelection(toggleAllShown(selected, shownIds));
                     setAnchor(null);
+                    setEditing(null);
                   }}
                 />
               </th>
@@ -353,18 +411,15 @@ export function ResumePage() {
                     />
                   </td>
                   <td>
-                    {view === "active" ? (
-                      <button type="button" className="btn btn-link run-open" onClick={() => navigate({ name: "run", runId: run.run_id, turnId: null })}>
-                        Open {run.name}
-                      </button>
-                    ) : (
-                      <div className="resume-archived-name">
-                        <span className="resume-run-name">{run.name}</span>
-                        <button type="button" className="btn btn-small" disabled={busy !== null} onClick={() => void moveRuns([run], "active")} title="Put this run back in the active list">
-                          Restore
+                    <div className="resume-run-actions">
+                      {view === "active" ? (
+                        <button type="button" className="btn btn-link run-open" onClick={() => navigate({ name: "run", runId: run.run_id, turnId: null })}>
+                          Open {run.name}
                         </button>
-                      </div>
-                    )}
+                      ) : <span className="resume-run-name">{run.name}</span>}
+                      {run.pinned ? <span className="resume-pinned">★ Pinned</span> : null}
+                      {view === "archive" ? <button type="button" className="btn btn-small" disabled={busy !== null} onClick={() => void moveRuns([run], "active")} title="Put this run back in the active list">Restore</button> : null}
+                    </div>
                     {run.parent ? (
                       <div className="hint">
                         continuation of <code>{run.parent.run_id}</code> from <code>{run.parent.turn_id}</code>
