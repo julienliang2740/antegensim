@@ -97,7 +97,8 @@
   }
  },
  "context": {
-  "input_token_cap": 8000
+  "input_token_cap": 8000,
+  "persona_tip": false
  },
  "agents": [
   {

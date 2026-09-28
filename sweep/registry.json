@@ -592,6 +592,943 @@
     "08:43 finished at r00050_end",
     "08:44 SUCCESS (combat), weaker than v2 on talk: finished r50, 5/18 alive; 8 kills spread r18-49 by 9 attackers, 28 hits, 5 starvation; 78% skill actions; only 4 messages: interrupting skills on messages did not create talk"
    ]
+  },
+  "S1v1": {
+   "run_id": "run_20260927_193927_a185",
+   "world_id": "world_20260927_193927_b0f0",
+   "name": "SWEEP-S1v1 Identical eight",
+   "scenario": "sweep/scenarios/S1v1.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:39:27",
+   "notes": [
+    "19:47 finished at r00060_end",
+    "19:49 finished r60: all 8 starved (r36-60), 0 msgs/skills/meetings; roamers a05,a06,a02,a01,a03 broke r18-24 died r36-42; campers a08,a07,a04 died r47,55,60. thinking 74% of spend. Divergence camp vs roam real but quiet starvation line -> v2 (denser 11x11, comm 4, vision 3, 20 trees, 250 start)",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S2v1": {
+   "run_id": "run_20260927_193927_e949",
+   "world_id": "world_20260927_193927_29f9",
+   "name": "SWEEP-S2v1 Expensive minds",
+   "scenario": "sweep/scenarios/S2v1.json",
+   "status": "finished",
+   "port": 8001,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:39:28",
+   "notes": [
+    "19:45 finished at r00045_end",
+    "19:49 finished r45, all 8 dead of starvation (r34-r45) after resource_skip from r15-r25; 0 skills, 0 messages; 87% of spend on thinking (13.6/decision); no thought mentions skills or thinking cost. Fail on the skills question; clean 'death by unaffordable thought' record. -> S2v2 (thinking ~8, skill discount 0.5, trees fruit every 3)"
+   ]
+  },
+  "S3v1": {
+   "run_id": "run_20260927_193928_3366",
+   "world_id": "world_20260927_193928_f3ce",
+   "name": "SWEEP-S3v1 Free minds",
+   "scenario": "sweep/scenarios/S3v1.json",
+   "status": "cut",
+   "port": 8000,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:39:28",
+   "notes": [
+    "19:49 cut: control arm judged: at r45 (the round the last S2v1 agent starved) all 8 S3v1 agents alive at h100, 0 skills in both arms; comparison clear, slot freed for S2v2/S3v2"
+   ]
+  },
+  "S4v1": {
+   "run_id": "run_20260927_193928_b3ae",
+   "world_id": "world_20260927_193928_f445",
+   "name": "SWEEP-S4v1 The commons",
+   "scenario": "sweep/scenarios/S4v1.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 6,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:39:28",
+   "notes": [
+    "19:45 cut: r19 quiet starvation line: 4 of 6 agents at 0 compute (resource_skip from r18), 0 messages, 0 races, 0 contact; trees at random points found only by blind one-point observes (observe 58 of 101 actions)",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S5v1": {
+   "run_id": "run_20260927_193929_7b46",
+   "world_id": "world_20260927_193929_0ebb",
+   "name": "SWEEP-S5v1 Rich and poor",
+   "scenario": "sweep/scenarios/S5v1.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:39:30",
+   "notes": [
+    "19:45 cut: r23 no contact: all 4 poor at 0 compute (can't think from r9-r14, h25-50), 0 messages, 0 transfers; rich and poor never observed each other's point, so nobody knew a neighbour existed",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S6v1": {
+   "run_id": "run_20260927_193930_5b50",
+   "world_id": "world_20260927_193930_2c9f",
+   "name": "SWEEP-S6v1 Roommates",
+   "scenario": "sweep/scenarios/S6v1.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:39:31",
+   "notes": [
+    "19:47 finished at r00055_end",
+    "19:49 finished (all dead r55): 4/4 pairs identical: r2 race, loser left and starved blind, winner camped and starved later (r35-55). 0 msgs/transfers; a03 attacked own tree p0002 r15-24 for essence. One tree 3.6/r vs ~6.3/r spend -> no real choice. v2: absorption 0.5, start 180, 11x11 pairs at +-3, vision 3, comm 4",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S7v1": {
+   "run_id": "run_20260927_194358_76f6",
+   "world_id": "world_20260927_194358_a85a",
+   "name": "SWEEP-S7v1 Last harvest",
+   "scenario": "sweep/scenarios/S7v1.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:43:58",
+   "notes": [
+    "19:50 finished at r00045_end",
+    "19:50 cut: quiet starvation by discovery failure: all 8 agents at 0-17 compute at r22-25, two already unable to think (resource_skip), 12 fruit untouched on 4 trees 1-3 steps away; agents only observe their own point",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S4v2": {
+   "run_id": "run_20260927_194702_550c",
+   "world_id": "world_20260927_194702_3651",
+   "name": "SWEEP-S4v2 The commons",
+   "scenario": "sweep/scenarios/S4v2.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 6,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:47:02",
+   "notes": [
+    "19:47 v2 of S4: only change is the start point, all 6 on the centre commons tree (0,0); v1 cut r19 for blind search and no contact",
+    "19:52 finished at r00043_end",
+    "19:55 finished: 7 speed-decided fruit races r2-r7 at the commons, then 0 messages/transfers, all broke r17-23, starved r36-r43 (quiet line). Verdict fail; -> S4v3 faster fruit",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S5v2": {
+   "run_id": "run_20260927_194702_81f8",
+   "world_id": "world_20260927_194702_7bca",
+   "name": "SWEEP-S5v2 Rich and poor",
+   "scenario": "sweep/scenarios/S5v2.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:47:02",
+   "notes": [
+    "19:47 v2 of S5: rich/poor pairs share a point with one tree, poor start 80; v1 cut r23 for no contact",
+    "19:56 cut: r44: outcome settled. All 4 poor starved r37-r41 (broke r17-r23), all 4 rich alive at ~200-340; 0 messages, 0 transfers, 0 attacks on agents; rich a07 killed the shared tree p0004 at r17 for ~1 essence. Verdict middling (clean wealth divergence, no flow)",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S2v2": {
+   "run_id": "run_20260927_194914_9fd2",
+   "world_id": "world_20260927_194914_fddb",
+   "name": "SWEEP-S2v2 Expensive minds",
+   "scenario": "/home/ubuntu/antegensim/sweep/scenarios/S2v2.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:49:14",
+   "notes": [
+    "19:57 r35: 0 skills (1 of ~190 thoughts mentions skills). Divergence: a02/a07 stay on their trees and deliberate the same observe/absorb cycle every round (~8 compute each) and hold ~200; a01 ~100; a03-a06 and a08 wandered, resource_skip from r21-r34. Fail on skills -> S2v3 (v2 world + the allowed persona sentence). Kept running a few rounds to record deaths vs survivors.",
+    "20:01 finished at r00060_end",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S3v2": {
+   "run_id": "run_20260927_194918_3bbe",
+   "world_id": "world_20260927_194918_bbbd",
+   "name": "SWEEP-S3v2 Free minds",
+   "scenario": "/home/ubuntu/antegensim/sweep/scenarios/S3v2.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:49:18",
+   "notes": [
+    "19:57 cut: control arm judged at r32: 8/8 alive (191-524 compute), 0 skills, 0 messages; S2v2 at the same round had 5 of 8 out of compute and 0 skills. Slot freed for S3v3",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S1v2": {
+   "run_id": "run_20260927_194926_57ce",
+   "world_id": "world_20260927_194926_5e1e",
+   "name": "SWEEP-S1v2 Identical eight",
+   "scenario": "sweep/scenarios/S1v2.json",
+   "status": "finished",
+   "port": 8001,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:49:26",
+   "notes": [
+    "19:58 r36: all alive, a05 roamer broke r34, 7 camp at ~5/r burn, 0 msgs; most random trees hold 3 unseen fruit (observe-here loop). keep to r60 as convergence result",
+    "20:03 finished at r00060_end",
+    "20:07 FINAL r60: 7/8 alive; a05 roamer died r52; a03 learned tree rhythm (wait 3 after each fruit from r23), most compute left; 0 msgs, 0 skills. middling, best S1"
+   ]
+  },
+  "S6v2": {
+   "run_id": "run_20260927_194927_7968",
+   "world_id": "world_20260927_194927_d599",
+   "name": "SWEEP-S6v2 Roommates",
+   "scenario": "sweep/scenarios/S6v2.json",
+   "status": "finished",
+   "port": 8000,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:49:27",
+   "notes": [
+    "19:58 r33: 4 pairs, 4 stories: a01 found near tree/a02 starving; a03+a04 moved together to tree p0006 (a04 wins races); a05+a06 left together, talked r20-21, broke 2 steps from full home tree; a07 left east/a08 starved at centre. keep",
+    "20:02 finished at r00060_end",
+    "20:07 FINAL r60: 3/8 alive; four pairs four stories (loser a01 ends richest; a04 outraces roommate a03 who starves r54; a05+a06 talk then starve together; a07 roams, a08 starves). success"
+   ]
+  },
+  "S7v2": {
+   "run_id": "run_20260927_195035_3ac1",
+   "world_id": "world_20260927_195035_fdf6",
+   "name": "SWEEP-S7v2 Last harvest",
+   "scenario": "sweep/scenarios/S7v2.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 8,
+   "max_rounds": 50,
+   "launched": "2026-09-27 19:50:35",
+   "notes": [
+    "19:57 cut: r25: discovery fixed (fruit races at r2-5 split pairs into haves/have-nots) but 0 messages, 0 transfers; 5 of 8 unable to think by r23; winners keep re-checking trees that never refruit; heading for a quiet starvation line",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S4v3": {
+   "run_id": "run_20260927_195559_d440",
+   "world_id": "world_20260927_195559_cf1d",
+   "name": "SWEEP-S4v3 The commons",
+   "scenario": "sweep/scenarios/S4v3.json",
+   "status": "finished",
+   "port": 8001,
+   "agents": 6,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:55:59",
+   "notes": [
+    "19:55 v3 of S4 (last strike): v2 + mature trees fruit every 2 rounds (inflow 36); v2 finished all dead r36-43 after the contest ended at r7 because one tree (~3 net/round) could not feed even a monopolist",
+    "20:05 r46: a03 monopolised the commons (21 fruit, 165 compute, observe/absorb rhythm one round ahead of the rest); the other 5 lost 13 races, broke r19-21, starved r37-39; 0 messages/attacks. Keeping to r60.",
+    "20:07 finished at r00060_end",
+    "20:10 finished r60: a03 sole survivor (monopolised the commons tree), 5 starved r37-39; 0 messages/transfers/attacks. Verdict success (narrow: winner-takes-all among identical agents)"
+   ]
+  },
+  "S5v3": {
+   "run_id": "run_20260927_195656_3b24",
+   "world_id": "world_20260927_195656_24e8",
+   "name": "SWEEP-S5v3 Rich and poor",
+   "scenario": "sweep/scenarios/S5v3.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:56:56",
+   "notes": [
+    "19:56 v3 of S5 (last strike): 5x5 village, 8 agents on the ring around the centre, rich/poor alternating one step apart, own tree each; v2 co-located pairs never spoke",
+    "20:07 cut: r45 (last strike): all 4 poor starved r35-r39 (broke r16-r21 after wandering off their own trees), all 4 rich alive (~200-300); 0 messages, 0 transfers, 0 attacks; rich a03/a05 harvested the abandoned trees of poor a02/a04. Same no-flow result as v2 in a different geometry.",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S2v3": {
+   "run_id": "run_20260927_195758_af97",
+   "world_id": "world_20260927_195758_b0a2",
+   "name": "SWEEP-S2v3 Expensive minds",
+   "scenario": "/home/ubuntu/antegensim/sweep/scenarios/S2v3.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:57:58",
+   "notes": [
+    "20:07 cut: v3 (last strike) judged at r43: 0 skills and 0 thoughts mentioning skills despite the persona sentence; 6 of 8 farm their start trees (fruit 84 vs 73 in S3v3 by r36), a01 starved r41 after 20 rounds unable to think, a07 broke since r32. S2 skills question: fail after 3 strikes",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S3v3": {
+   "run_id": "run_20260927_195758_c2a9",
+   "world_id": "world_20260927_195758_8b90",
+   "name": "SWEEP-S3v3 Free minds",
+   "scenario": "/home/ubuntu/antegensim/sweep/scenarios/S3v3.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:57:58",
+   "notes": [
+    "20:07 cut: control judged at r42: 8/8 alive (115-712 compute), 0 skills, 4 messages (a04-a05 exchange r22-26), 11 upgrades, 2 plant attacks",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S8v1": {
+   "run_id": "run_20260927_195814_cb06",
+   "world_id": "world_20260927_195814_b989",
+   "name": "SWEEP-S8v1 Crowded table",
+   "scenario": "sweep/scenarios/S8v1.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 19:58:14",
+   "notes": [
+    "20:05 cut: r23: 5/8 broke, 0 messages even with all 8 co-located; the table had 2 fruit so all 8 left by r7-11, 33 of 45 moves were 'right' (all drifted east) past 3-fruit trees one step W/N/SW; quiet blind starvation. v2 makes the table worth staying at",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S11v1": {
+   "run_id": "run_20260927_200138_7be5",
+   "world_id": "world_20260927_200138_49a0",
+   "name": "SWEEP-S11v1 Cheap talk",
+   "scenario": "sweep/scenarios/S11v1.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 20:01:38",
+   "notes": [
+    "20:15 finished at r00060_end",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S9v1": {
+   "run_id": "run_20260927_200429_9de2",
+   "world_id": "world_20260927_200429_abab",
+   "name": "SWEEP-S9v1 Free hands",
+   "scenario": "/home/ubuntu/antegensim/sweep/scenarios/S9v1.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 20:04:30",
+   "notes": [
+    "20:05 cut: design correction at r1-2, before any result: discount x0 also makes recover and attack free inside skills (free healing = starvation-proof, free 50-damage hits), a degenerate exploit; relaunch as S9v2 with x0.1",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S10v1": {
+   "run_id": "run_20260927_200458_11eb",
+   "world_id": "world_20260927_200458_639d",
+   "name": "SWEEP-S10v1 Essence famine",
+   "scenario": "sweep/scenarios/S10v1.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 20:04:59",
+   "notes": [
+    "20:04 monitor 3 new idea: each agent alone on its own tree, 0 essence, essence absorption 0.5; does anyone kill its own food source for essence, and what follows?",
+    "20:16 finished r60: 0 tree attacks, 0 upgrades, 0 messages. Keepers a03, a06, a07, a08 lived on their own trees (73-110 compute); wanderers a04, a05 (r40), a02 (r47), a01 (r49) starved after leaving to search, several citing essence ('essence starvation is lethal long-term'). Negative on its question; clean keeper/wanderer divergence.",
+    "20:16 finished at r00060_end",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S9v2": {
+   "run_id": "run_20260927_200505_9c3b",
+   "world_id": "world_20260927_200505_7571",
+   "name": "SWEEP-S9v2 Free hands",
+   "scenario": "/home/ubuntu/antegensim/sweep/scenarios/S9v2.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 20:05:05",
+   "notes": [
+    "20:11 cut: judged at r30: 0 skills and 0 of 214 thoughts mention skills although every price line reads 'skill 0.1'. Same trajectory as S2v2 (2 broke, 6 farming). Stopped here: no world price produced a skill; no v3",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S8v2": {
+   "run_id": "run_20260927_200639_f150",
+   "world_id": "world_20260927_200639_3126",
+   "name": "SWEEP-S8v2 Crowded table",
+   "scenario": "sweep/scenarios/S8v2.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 8,
+   "max_rounds": 60,
+   "launched": "2026-09-27 20:06:40",
+   "notes": [
+    "20:12 r25: a04 upgraded speed r9 ('Speed 1 is my critical weakness in this crowded location') and holds the table with a03; a05 left r7 and found a 3-fruit tree at (2,1) by r14 (95 compute); 5/8 broke r20-23, 3 of them sat broke at the table beside 2 fruit; 0 msgs. keep",
+    "20:18 finished at r00060_end",
+    "20:18 FINAL r60: 2/8 alive: a04 (upgraded speed r9 to win the table's races, 23 fruit, 118) and a05 (left the crowd r7 for a 3-fruit tree at (2,1), 29 fruit, 212); 6 starved r39-47; 0 msgs. middling",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S12v1": {
+   "run_id": "run_20260927_201617_1475",
+   "world_id": "world_20260927_201617_7289",
+   "name": "SWEEP-S12v1 Told about skills",
+   "scenario": "sweep/scenarios/S12v1.json",
+   "status": "finished",
+   "port": 8000,
+   "agents": 8,
+   "max_rounds": 50,
+   "launched": "2026-09-27 20:16:17",
+   "notes": [
+    "20:29 finished at r00050_end"
+   ]
+  },
+  "S13v1": {
+   "run_id": "run_20260927_201617_968a",
+   "world_id": "world_20260927_201617_cc2d",
+   "name": "SWEEP-S13v1 Stronger minds",
+   "scenario": "sweep/scenarios/S13v1.json",
+   "status": "finished",
+   "port": 8001,
+   "agents": 8,
+   "max_rounds": 40,
+   "launched": "2026-09-27 20:16:17",
+   "notes": [
+    "launched on :8001 by launch_on.py (Sonnet key exists only there)",
+    "20:24 finished at r00040_end"
+   ]
+  },
+  "S14v1": {
+   "run_id": "run_20260927_203109_992f",
+   "world_id": "world_20260927_203109_00e3",
+   "name": "SWEEP-S14v1 Two groves",
+   "scenario": "sweep/scenarios/S14v1.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 24,
+   "max_rounds": 60,
+   "launched": "2026-09-27 20:31:09",
+   "notes": [
+    "20:31 user request: clusters+many agents+defend-or-take. 24 agents, lush centre grove (8 trees/8 agents) between two barren camps (8 agents on 2 trees each) 5 steps away; ranged cheap attack, full loot; plain persona",
+    "20:57 finished at r00060_end",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S15v1": {
+   "run_id": "run_20260927_203109_1e16",
+   "world_id": "world_20260927_203109_7358",
+   "name": "SWEEP-S15v1 Two groves, told",
+   "scenario": "sweep/scenarios/S15v1.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 24,
+   "max_rounds": 60,
+   "launched": "2026-09-27 20:31:09",
+   "notes": [
+    "20:31 S14 world + factual tip (S12 skill tip + send/transfer/attack/loot mechanisms) in every persona; user-requested nudge",
+    "20:45 cut: r39: tree-killing spiral. The cheap attack (attack 2, tree health 5-25) let agents kill 5 of 12 trees for residue (grove holder a02 alone killed p0002 r16, p0003 r26, p0007 r37); 1 message, 2 attacks on agents (a20->a23 r28), 0 skills at thinking ~4.3. -> S15v2: trees hard and worthless to kill, S12 skill economy, max health 80",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S16v1": {
+   "run_id": "run_20260927_203109_7cc2",
+   "world_id": "world_20260927_203109_ac9d",
+   "name": "SWEEP-S16v1 Frontier",
+   "scenario": "sweep/scenarios/S16v1.json",
+   "status": "finished",
+   "port": 8000,
+   "agents": 32,
+   "max_rounds": 50,
+   "launched": "2026-09-27 20:31:10",
+   "notes": [
+    "20:31 32 agents, 31x31, five 2x2 groves on a plus (centre 4 agents, arms 7 each), same rules as S14, persona + S15 tip, 50 rounds",
+    "20:57 finished at r00050_end"
+   ]
+  },
+  "S15v2": {
+   "run_id": "run_20260927_204538_bc27",
+   "world_id": "world_20260927_204538_6c62",
+   "name": "SWEEP-S15v2 Two groves, told",
+   "scenario": "sweep/scenarios/S15v2.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 24,
+   "max_rounds": 60,
+   "launched": "2026-09-27 20:45:39",
+   "notes": [
+    "20:49 v2: tough trees, S12 skill economy, max health 80; v1 cut r39 for a tree-killing spiral",
+    "21:10 finished at r00060_end",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S16v2": {
+   "run_id": "run_20260927_204946_3975",
+   "world_id": "world_20260927_204946_baf7",
+   "name": "SWEEP-S16v2 Frontier",
+   "scenario": "sweep/scenarios/S16v2.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 50,
+   "launched": "2026-09-27 20:49:46",
+   "notes": [
+    "20:49 v2: S16 layout + tough trees (essence 300, no residue), S12 skill economy (thinking ~8, fruit every 3, 200 compute), max health 80; tip as v1",
+    "21:13 cut: r38: after the first transfer of the sweep (a26->a11 20 compute r25, asked r17) and an early resource attack (a14->a28 40 dmg r7 'a28 is monopolizing resources'), quiet from r25; thinking ~8 took 83% of spend and suppressed talk (6 messages vs 13 in v1); starvation deaths from r34. -> S16v3: thinking back to ~4.3, fruit every 4, one-hit kills (attack cap 100)",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S16v3": {
+   "run_id": "run_20260927_211402_6462",
+   "world_id": "world_20260927_211402_1154",
+   "name": "SWEEP-S16v3 Frontier",
+   "scenario": "sweep/scenarios/S16v3.json",
+   "status": "finished",
+   "port": 8000,
+   "agents": 32,
+   "max_rounds": 50,
+   "launched": "2026-09-27 21:14:02",
+   "notes": [
+    "21:14 v3 (last strike): thinking ~4.3, tough trees, fruit every 4, 200 compute, max health 80 + attack cap 100 (one 40-compute hit kills), tip",
+    "21:41 finished at r00050_end",
+    "21:45 finished r50 $12.17: SUCCESS. 6 skills by 5 agents (top-3 richest all skill users), first kill (a29 hunts a15 r18-r25 after a15 fled), retaliation a30->a17, pleas and a compute-for-essence trade offer; 10 deaths (9 starvation, 1 attack)"
+   ]
+  },
+  "S14v2": {
+   "run_id": "run_20260927_211403_7feb",
+   "world_id": "world_20260927_211403_d720",
+   "name": "SWEEP-S14v2 Frontier, plain",
+   "scenario": "sweep/scenarios/S14v2.json",
+   "status": "cut",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 50,
+   "launched": "2026-09-27 21:14:03",
+   "notes": [
+    "21:14 S16v3 world exactly with the plain persona (tip control)",
+    "21:30 cut: r32: plain-persona control of the S16v3 world: 0 messages, 0 skills, 0 attacks on agents, 26 attacks on the (now 300-essence) trees (a08 x7, a30 x6, a20 x5) wasting compute; same world with the tip had a kill, 6 skills and pleas by r25. Boring and stays so.",
+    "21:45 cut r32: plain control of S16v3 world: 0 msgs/skills/agent attacks, 26 futile tree attacks"
+   ]
+  },
+  "S15v3": {
+   "run_id": "run_20260927_213024_a354",
+   "world_id": "world_20260927_213024_2fbd",
+   "name": "SWEEP-S15v3 Crowded frontier",
+   "scenario": "sweep/scenarios/S15v3.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 40,
+   "max_rounds": 45,
+   "launched": "2026-09-27 21:30:24",
+   "notes": [
+    "21:30 last S15 strike: S16v3 world on the frontier layout with 40 agents (arms 9 on 4 trees), 33x33, 45 rounds",
+    "21:56 finished at r00045_end",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S17v1": {
+   "run_id": "run_20260927_221308_1a95",
+   "world_id": "world_20260927_221308_7a75",
+   "name": "SWEEP-S17v1 Frontier replica A",
+   "scenario": "sweep/scenarios/S17v1.json",
+   "status": "finished",
+   "port": 8000,
+   "agents": 32,
+   "max_rounds": 50,
+   "launched": "2026-09-27 22:13:09",
+   "notes": [
+    "22:59 parked: paused: Claude account session limit hit (rate_limited, resets 00:30 UTC); resume after the reset",
+    "01:04 resumed on :8000",
+    "01:19 finished at r00050_end"
+   ]
+  },
+  "S18v1": {
+   "run_id": "run_20260927_221309_cc43",
+   "world_id": "world_20260927_221309_ec7a",
+   "name": "SWEEP-S18v1 Frontier replica B",
+   "scenario": "sweep/scenarios/S18v1.json",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 50,
+   "launched": "2026-09-27 22:13:09",
+   "notes": [
+    "22:59 parked: paused: Claude account session limit hit (rate_limited, resets 00:30 UTC); resume after the reset",
+    "00:31 resumed on :8001",
+    "00:46 finished at r00050_end"
+   ]
+  },
+  "S19v1": {
+   "run_id": "run_20260927_221309_e418",
+   "world_id": "world_20260927_221309_96c1",
+   "name": "SWEEP-S19v1 Citadel",
+   "scenario": "sweep/scenarios/S19v1.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 50,
+   "launched": "2026-09-27 22:13:09",
+   "notes": [
+    "22:59 parked: paused: Claude account session limit hit (rate_limited, resets 00:30 UTC); resume after the reset",
+    "01:04 resumed on :8001",
+    "01:21 finished at r00050_end",
+    "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S20v1": {
+   "run_id": "run_20260927_221311_ceec",
+   "world_id": "world_20260927_221311_a16c",
+   "name": "SWEEP-S20v1 Frontier, cheap minds",
+   "scenario": "sweep/scenarios/S20v1.json",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-27 22:13:12",
+   "notes": [
+    "22:59 parked: paused: Claude account session limit hit (rate_limited, resets 00:30 UTC); resume after the reset",
+    "00:46 resumed on :8001",
+    "01:04 finished at r00060_end"
+   ]
+  },
+  "S22v1": {
+   "run_id": "run_20260927_221947_1d3f",
+   "world_id": "world_20260927_221947_b321",
+   "name": "SWEEP-S22v1 Frontier, catalysts",
+   "scenario": "sweep/scenarios/S22v1.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 50,
+   "launched": "2026-09-27 22:19:47",
+   "notes": [
+    "launched on :8001 by launch_on.py (Sonnet key exists only there)",
+    "22:59 parked: paused: Claude account session limit hit (rate_limited, resets 00:30 UTC); resume after the reset",
+    "23:01 cut: no interaction by r22: 4 Sonnet catalysts wrote skills (4 writers) but 0 messages, 0 attacks, 0 transfers; Haiku majority unchanged; not worth more Sonnet quota",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S21v1": {
+   "run_id": "run_20260927_221948_1e61",
+   "world_id": "world_20260927_221948_f897",
+   "name": "SWEEP-S21v1 Frontier, permission",
+   "scenario": "sweep/scenarios/S21v1.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 32,
+   "max_rounds": 50,
+   "launched": "2026-09-27 22:19:48",
+   "notes": [
+    "22:51 cut: no effect by r22: permission sentence gave 0 messages, 0 attacks, 0 skills (tip runs had all three by r13); also easing a provider rate limit",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S23v1": {
+   "run_id": "run_20260927_221949_1dc9",
+   "world_id": "world_20260927_221949_e95d",
+   "name": "SWEEP-S23v1 Frontier, other aim",
+   "scenario": "sweep/scenarios/S23v1.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 32,
+   "max_rounds": 50,
+   "launched": "2026-09-27 22:19:49",
+   "notes": [
+    "22:51 cut: no effect by r21: 'end with the most compute' aim gave 0 messages, 0 attacks, 0 skills; also easing a provider rate limit",
+    "2026-09-28 00:10 run folder deleted in the showcase cleanup (boring, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S26v1": {
+   "run_id": "run_20260928_003125_3515",
+   "world_id": "world_20260928_003125_2861",
+   "name": "SWEEP-S26v1 Frontier drought",
+   "scenario": "sweep/scenarios/S26v1.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 00:31:25",
+   "notes": [
+    "00:57 weather: mature trees fruit every 8, saplings every 16 (drought: fruit every 8 rounds)",
+    "01:26 cut: plateau: quiet starvation; no notable event r34-58 (14 starvation deaths, 0 kills, 0 messages in drought)",
+    "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S24v1": {
+   "run_id": "run_20260928_003127_264a",
+   "world_id": "world_20260928_003127_5f05",
+   "name": "SWEEP-S24v1 Frontier long A",
+   "scenario": "sweep/scenarios/S24v1.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 00:31:27",
+   "notes": [
+    "00:41 r15 clean: 2 msgs (a06->a22 reply), 2 skill writers, 0 hits; launched S25v1",
+    "01:17 cut: fail: story score 7.5 at r45 and flat (6 at r30); 1 hit (10 dmg), 0 kills, 0 transfers; 11 agents at 0 compute sliding into quiet starvation",
+    "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S27v1": {
+   "run_id": "run_20260928_003140_db24",
+   "world_id": "world_20260928_003140_fda9",
+   "name": "SWEEP-S27v1 Citadel siege",
+   "scenario": "sweep/scenarios/S27v1.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 00:31:40",
+   "notes": [
+    "01:15 cut: failure: quiet starvation line, camps 4 steps out never found the citadel, score flat 20.5 since r31, 13 starvations",
+    "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S28v1": {
+   "run_id": "run_20260928_003904_7325",
+   "world_id": "world_20260928_003904_72cd",
+   "name": "SWEEP-S28v1 Frontier, lean and talkative",
+   "scenario": "sweep/scenarios/S28v1.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 00:39:05",
+   "notes": [
+    "01:45 cut: plateau: quiet starvation; no notable event r46-65 (13 starvation deaths, 0 kills)",
+    "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S25v1": {
+   "run_id": "run_20260928_004126_64d0",
+   "world_id": "world_20260928_004126_da43",
+   "name": "SWEEP-S25v1 Frontier long B",
+   "scenario": "sweep/scenarios/S25v1.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 00:41:27",
+   "notes": [
+    "01:28 cut: fail: story score 4.5 at r46, flat since r34; 1 hunt of three 10-damage hits (a32->a19, no kill), 0 transfers, pleas refused; non-writers mean compute 73",
+    "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S27v2": {
+   "run_id": "run_20260928_011552_908c",
+   "world_id": "world_20260928_011552_13fb",
+   "name": "SWEEP-S27v2 Citadel siege, at the walls",
+   "scenario": "sweep/scenarios/S27v2.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 01:15:53",
+   "notes": [
+    "01:53 cut: failure: starvation line, 17 of 30 at 0 compute by r42, 0 messages, score 7",
+    "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S24v2": {
+   "run_id": "run_20260928_011834_f320",
+   "world_id": "world_20260928_011834_979d",
+   "name": "SWEEP-S24v2 Frontier long A",
+   "scenario": "sweep/scenarios/S24v2.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 01:18:34",
+   "notes": [
+    "02:22 cut: fail: quiet starvation; 14 starvation deaths r43-61, 1 hit (a13->a14 40, r33), 0 kills, 0 transfers despite ranged transfers; score flat 14.5 since r52; survivors farm",
+    "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S26v2": {
+   "run_id": "run_20260928_012656_2f11",
+   "world_id": "world_20260928_012656_d79f",
+   "name": "SWEEP-S26v2 Frontier drought",
+   "scenario": "sweep/scenarios/S26v2.json",
+   "status": "cut",
+   "port": 8000,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 01:26:57",
+   "notes": [
+    "01:54 weather: mature trees fruit every 8, saplings every 16 (drought: fruit every 8 rounds)",
+    "02:30 weather: mature trees fruit every 4, saplings every 8 (rains: fruit every 4 rounds again)",
+    "02:47 parked: session limit, resets 03:40 UTC",
+    "03:03 resumed on :8001",
+    "03:35 cut: quiet since r78 and past $20; drought before/during/after comparison complete; operator: cut quiet runs",
+    "03:41 resumed on :8000",
+    "03:42 cut: re-cut: my 03:41 resume overrode the 03:35 operator cut (quiet since r78, past $20); restoring the cut"
+   ]
+  },
+  "S31v1": {
+   "run_id": "run_20260928_012735_714f",
+   "world_id": "world_20260928_012735_3c24",
+   "name": "SWEEP-S31v1 Frontier warlords",
+   "scenario": "sweep/scenarios/S31v1.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 01:27:35",
+   "notes": [
+    "02:30 cut: failure: starvation line, warlords passive, score 11 flat since r44, 12 starvations r42-52",
+    "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S25v2": {
+   "run_id": "run_20260928_012855_777d",
+   "world_id": "world_20260928_012855_96d5",
+   "name": "SWEEP-S25v2 Frontier long B",
+   "scenario": "sweep/scenarios/S25v2.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 01:28:55",
+   "notes": [
+    "02:31 cut: fail: quiet starvation; 13 starvation deaths r41-54, 0 hits, 0 transfers; score flat 15 since r45; survivors farm",
+    "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S28v2": {
+   "run_id": "run_20260928_014701_fe7d",
+   "world_id": "world_20260928_014701_eff1",
+   "name": "SWEEP-S28v2 Frontier, lean and talkative",
+   "scenario": "sweep/scenarios/S28v2.json",
+   "status": "finished",
+   "port": 8000,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 01:47:02",
+   "notes": [
+    "02:47 parked: session limit, resets 03:40 UTC",
+    "03:03 resumed on :8000",
+    "03:35 finished at r00100_end",
+    "03:41 resumed on :8000",
+    "03:41 finished at r00100_end"
+   ]
+  },
+  "S27v3": {
+   "run_id": "run_20260928_015354_3c8e",
+   "world_id": "world_20260928_015354_3e8a",
+   "name": "SWEEP-S27v3 Citadel siege, fed camps",
+   "scenario": "sweep/scenarios/S27v3.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 01:53:55",
+   "notes": [
+    "02:48 parked: session limit, resets 03:40 UTC",
+    "03:03 resumed on :8000",
+    "03:05 resumed on :8000",
+    "03:14 cut: plateau: no notable event since r34, starvation line, 11 starvations r43-53",
+    "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S29v1": {
+   "run_id": "run_20260928_022242_73dc",
+   "world_id": "world_20260928_022242_1b38",
+   "name": "SWEEP-S29v1 One tree, two mouths",
+   "scenario": "sweep/scenarios/S29v1.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 02:22:42",
+   "notes": [
+    "02:45 parked: session limit, resets 03:40 UTC",
+    "03:03 resumed on :8001",
+    "03:48 cut: plateau: story complete; pacts, one gift (a23->a21 r42) and the giver's starvation (r65); 18 losers starved r40-65 with 0 attacks; 13 survivors farm alone",
+    "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S31v2": {
+   "run_id": "run_20260928_023114_297b",
+   "world_id": "world_20260928_023114_b6cd",
+   "name": "SWEEP-S31v2 Frontier, hungry warlords",
+   "scenario": "sweep/scenarios/S31v2.json",
+   "status": "deleted",
+   "port": 8000,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 02:31:15",
+   "notes": [
+    "02:48 parked: session limit, resets 03:40 UTC",
+    "03:03 resumed on :8000",
+    "03:05 resumed on :8000",
+    "03:11 parked: session limit on :8001",
+    "03:11 resumed on :8000",
+    "03:35 cut: quiet: no notable event since r27 (19 rounds); operator: cut quiet runs",
+    "03:35 cut: plateau: no notable event since r27, starvation wave, warlords never attacked",
+    "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S25v3": {
+   "run_id": "run_20260928_023557_6446",
+   "world_id": "world_20260928_023557_a206",
+   "name": "SWEEP-S25v3 Frontier long B",
+   "scenario": "sweep/scenarios/S25v3.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 02:35:58",
+   "notes": [
+    "02:45 parked: session limit, resets 03:40 UTC",
+    "03:03 resumed on :8001",
+    "03:54 cut: fail: quiet starvation; 12 starvation deaths r42-57, 0 hits, 0 transfers, no message since r38; score flat ~16-17 since r40; 7 skill writers (6/7 alive, mean 206) vs non-writers (14/25, mean 107)",
+    "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
+   ]
+  },
+  "S30v1": {
+   "run_id": "run_20260928_034307_50fb",
+   "world_id": "world_20260928_034307_7181",
+   "name": "SWEEP-S30v1 Frontier, lean years",
+   "scenario": "sweep/scenarios/S30v1.json",
+   "status": "cut",
+   "port": 8000,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 03:43:07",
+   "notes": [
+    "03:51 weather: mature trees fruit every 8, saplings every 16 (drought 1: fruit every 8 rounds)",
+    "04:13 weather: mature trees fruit every 4, saplings every 8 (rains 1: fruit every 4 rounds again)",
+    "04:31 weather: mature trees fruit every 8, saplings every 16 (drought 2: fruit every 8 rounds)",
+    "04:40 cut: plateau: story complete; no notable event since r53 (drought 2 on 13 farming survivors gave no talk or conflict)"
+   ]
+  },
+  "S29v2": {
+   "run_id": "run_20260928_034839_c3c2",
+   "world_id": "world_20260928_034839_de65",
+   "name": "SWEEP-S29v2 One tree, two mouths",
+   "scenario": "sweep/scenarios/S29v2.json",
+   "status": "finished",
+   "port": 8000,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 03:48:40",
+   "notes": [
+    "04:46 finished at r00100_end"
+   ]
+  },
+  "S24v3": {
+   "run_id": "run_20260928_035703_ca2a",
+   "world_id": "world_20260928_035703_ac96",
+   "name": "SWEEP-S24v3 Frontier long A",
+   "scenario": "sweep/scenarios/S24v3.json",
+   "status": "deleted",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 03:57:03",
+   "notes": [
+    "04:50 cut: plateau: story complete; no new event since r64 (a27/a14 odd/even fruit deal); 1 gift (a13->a16 30, r38), 0 hits; 18 survivors farm",
+    "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
+   ]
   }
  }
 }

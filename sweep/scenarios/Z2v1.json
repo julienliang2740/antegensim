@@ -5,7 +5,8 @@
  "real_budget_usd": 3,
  "default_model_key": "claude-cli-haiku",
  "context": {
-  "input_token_cap": 10000
+  "input_token_cap": 10000,
+  "persona_tip": false
  },
  "agents": [
   {

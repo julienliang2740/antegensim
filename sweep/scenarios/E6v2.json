@@ -53,7 +53,8 @@
   }
  },
  "context": {
-  "input_token_cap": 10000
+  "input_token_cap": 10000,
+  "persona_tip": false
  },
  "agents": [
   {

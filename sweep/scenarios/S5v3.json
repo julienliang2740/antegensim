@@ -1,0 +1,190 @@
+{
+ "name": "SWEEP-S5v3 Rich and poor",
+ "_design": "v3 fix (world only: map size and start points, the planned 'smaller ring' fallback). v2 (cut r44 after the 4th poor death) put rich/poor pairs on one point: they saw each other from r1 but never spoke (0 messages, 0 transfers in 44 rounds); the poor went broke r17-r23 and starved r37-r41, all 4 rich alive. Across this sweep, co-located agents never messaged, while agents that discovered another agent on a different point did greet (S7v1). v3 makes a village: a 5x5 map with the 8 agents on the 8 points around the centre, rich (400) and poor (80) alternating, so every poor agent has two rich neighbours one step away and every observe of a neighbouring point is likely to find an agent (and its tree). A tree with 1 ripe fruit on every start point plus 2 random (10 total, as v1/v2). Comm range 4 reaches the whole ring. Transfer and attack still need the same point, so giving or taking means walking one step. Everything else as v2 (vision 2, thinking ~4.3, absorption 0.3, residue 100%).",
+ "seed": 505,
+ "max_rounds": 60,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 15,
+ "context": {
+  "input_token_cap": 10000,
+  "persona_tip": false
+ },
+ "world": {
+  "region": {
+   "min_x": -2,
+   "max_x": 2,
+   "min_y": -2,
+   "max_y": 2
+  },
+  "terrain": {
+   "mountain_clusters": 0,
+   "water_clusters": 0
+  },
+  "initial_plants": {
+   "fruit_tree": 10
+  },
+  "initial_plant_fruit": 1,
+  "plants_at_agent_starts": true
+ },
+ "rules": {
+  "skills": {
+   "interrupt_on": [
+    "damage",
+    "message"
+   ]
+  },
+  "death": {
+   "compute_residue_fraction": 1.0
+  },
+  "cognition": {
+   "input_rate": 0.0004,
+   "generation_rate": 0.002
+  }
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Aster",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": -1
+   },
+   "stats": {
+    "compute_absorption": 0.3,
+    "vision_range": 2,
+    "communication_range": 4,
+    "compute": 400
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a02",
+   "name": "Boreas",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": -1
+   },
+   "stats": {
+    "compute_absorption": 0.3,
+    "vision_range": 2,
+    "communication_range": 4,
+    "compute": 80
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a03",
+   "name": "Cyrene",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": -1
+   },
+   "stats": {
+    "compute_absorption": 0.3,
+    "vision_range": 2,
+    "communication_range": 4,
+    "compute": 400
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a04",
+   "name": "Damaris",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 0
+   },
+   "stats": {
+    "compute_absorption": 0.3,
+    "vision_range": 2,
+    "communication_range": 4,
+    "compute": 80
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a05",
+   "name": "Eos",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 1,
+    "y": 1
+   },
+   "stats": {
+    "compute_absorption": 0.3,
+    "vision_range": 2,
+    "communication_range": 4,
+    "compute": 400
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a06",
+   "name": "Ferrin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 0,
+    "y": 1
+   },
+   "stats": {
+    "compute_absorption": 0.3,
+    "vision_range": 2,
+    "communication_range": 4,
+    "compute": 80
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a07",
+   "name": "Galene",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": 1
+   },
+   "stats": {
+    "compute_absorption": 0.3,
+    "vision_range": 2,
+    "communication_range": 4,
+    "compute": 400
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a08",
+   "name": "Halcyon",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -1,
+    "y": 0
+   },
+   "stats": {
+    "compute_absorption": 0.3,
+    "vision_range": 2,
+    "communication_range": 4,
+    "compute": 80
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  }
+ ]
+}

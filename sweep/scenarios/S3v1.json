@@ -1,0 +1,189 @@
+{
+ "name": "SWEEP-S3v1 Free minds",
+ "_design": "Control arm for S2: the same seed, world, agents and instruction, but thinking costs nothing. Judged against S2 (skills written, via-skill share, observe spam, deaths), not on its own drama.",
+ "seed": 202,
+ "max_rounds": 60,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 15,
+ "context": {
+  "input_token_cap": 10000,
+  "persona_tip": false
+ },
+ "world": {
+  "region": {
+   "min_x": -7,
+   "max_x": 7,
+   "min_y": -7,
+   "max_y": 7
+  },
+  "terrain": {
+   "mountain_clusters": 0,
+   "water_clusters": 0
+  },
+  "initial_plants": {
+   "fruit_tree": 20
+  },
+  "initial_plant_fruit": 2
+ },
+ "rules": {
+  "skills": {
+   "interrupt_on": [
+    "damage",
+    "message"
+   ]
+  },
+  "death": {
+   "compute_residue_fraction": 1.0
+  },
+  "cognition": {
+   "input_rate": 0.0,
+   "generation_rate": 0.0
+  }
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Aster",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 2,
+    "y": 5
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a02",
+   "name": "Boreas",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 5,
+    "y": 2
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a03",
+   "name": "Cyrene",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 5,
+    "y": -2
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a04",
+   "name": "Damaris",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 2,
+    "y": -5
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a05",
+   "name": "Eos",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -2,
+    "y": -5
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a06",
+   "name": "Ferrin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -5,
+    "y": -2
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a07",
+   "name": "Galene",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -5,
+    "y": 2
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a08",
+   "name": "Halcyon",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -2,
+    "y": 5
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  }
+ ]
+}

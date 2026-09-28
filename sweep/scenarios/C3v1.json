@@ -113,7 +113,8 @@
   }
  },
  "context": {
-  "notebook_max_tokens": 500
+  "notebook_max_tokens": 500,
+  "persona_tip": false
  },
  "agents": [
   {

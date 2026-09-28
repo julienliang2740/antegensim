@@ -1,0 +1,229 @@
+{
+ "name": "SWEEP-S2v3 Expensive minds",
+ "_design": "v3 = the S2v2 world unchanged plus the one allowed persona exception (brief rule 4), appended word for word to every agent's shared persona: 'Saved skills run on later turns without a new decision, so they cost no thinking.' Why: S2v2 (thinking ~8, skill discount 0.5, trees fruit every 3) still had 0 skills by r35; its two best agents (a02, a07) ran a perfectly mechanical observe-here/absorb cycle by deliberating every round ('Continuing the reliable harvesting cycle'), paying ~8 compute per round for it, and 5 of 8 wandered off and ran out of compute. Only one of ~190 thoughts mentioned skills. The world price signal did not make the thinking saving visible; this sentence states it as a rule fact. Paired with S3v3 (same world and same sentence, thinking free).",
+ "seed": 202,
+ "max_rounds": 60,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 15,
+ "context": {
+  "input_token_cap": 10000,
+  "persona_tip": false
+ },
+ "world": {
+  "region": {
+   "min_x": -7,
+   "max_x": 7,
+   "min_y": -7,
+   "max_y": 7
+  },
+  "terrain": {
+   "mountain_clusters": 0,
+   "water_clusters": 0
+  },
+  "initial_plants": {
+   "fruit_tree": 20
+  },
+  "initial_plant_fruit": 2
+ },
+ "rules": {
+  "skills": {
+   "interrupt_on": [
+    "damage",
+    "message"
+   ],
+   "action_discount": 0.5
+  },
+  "death": {
+   "compute_residue_fraction": 1.0
+  },
+  "cognition": {
+   "input_rate": 0.0006,
+   "generation_rate": 0.006
+  },
+  "plant_species": {
+   "fruit_tree": {
+    "stages": [
+     {
+      "name": "sprout",
+      "min_age_rounds": 0,
+      "size": 1.0,
+      "energy_inflow_per_round": 2.0,
+      "essence_inflow_per_round": 0.2,
+      "max_energy": 60.0,
+      "max_essence": 10.0,
+      "fruit_interval_rounds": 0,
+      "seed_interval_rounds": 0
+     },
+     {
+      "name": "sapling",
+      "min_age_rounds": 5,
+      "size": 2.0,
+      "energy_inflow_per_round": 6.0,
+      "essence_inflow_per_round": 0.5,
+      "max_energy": 120.0,
+      "max_essence": 25.0,
+      "fruit_interval_rounds": 8,
+      "seed_interval_rounds": 0
+     },
+     {
+      "name": "mature",
+      "min_age_rounds": 15,
+      "size": 3.0,
+      "energy_inflow_per_round": 20.0,
+      "essence_inflow_per_round": 1.0,
+      "max_energy": 180.0,
+      "max_essence": 60.0,
+      "fruit_interval_rounds": 3,
+      "seed_interval_rounds": 20
+     }
+    ]
+   }
+  }
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Aster",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 2,
+    "y": 5
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can. Saved skills run on later turns without a new decision, so they cost no thinking.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a02",
+   "name": "Boreas",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 5,
+    "y": 2
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can. Saved skills run on later turns without a new decision, so they cost no thinking.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a03",
+   "name": "Cyrene",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 5,
+    "y": -2
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can. Saved skills run on later turns without a new decision, so they cost no thinking.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a04",
+   "name": "Damaris",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 2,
+    "y": -5
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can. Saved skills run on later turns without a new decision, so they cost no thinking.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a05",
+   "name": "Eos",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -2,
+    "y": -5
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can. Saved skills run on later turns without a new decision, so they cost no thinking.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a06",
+   "name": "Ferrin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -5,
+    "y": -2
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can. Saved skills run on later turns without a new decision, so they cost no thinking.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a07",
+   "name": "Galene",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -5,
+    "y": 2
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can. Saved skills run on later turns without a new decision, so they cost no thinking.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a08",
+   "name": "Halcyon",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -2,
+    "y": 5
+   },
+   "stats": {
+    "compute": 200,
+    "compute_absorption": 0.5,
+    "vision_range": 2,
+    "communication_range": 3
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can. Saved skills run on later turns without a new decision, so they cost no thinking.",
+   "notebook": "",
+   "initial_skills": []
+  }
+ ]
+}

@@ -1,0 +1,194 @@
+{
+ "name": "SWEEP-S11v1 Cheap talk",
+ "_design": "Lead's new proposal from the runs: every S run so far had almost no messages, even with agents sharing a point. Is talk rare because it costs (send 3, broadcast 7 plus a decision), or because the agents do not think of it? Here talk is nearly free and reaches everyone (send and broadcast 0.5, communication range 20 on a 13x13 map), while food must be searched for: 16 trees at seeded random points, none on start points, 1 ripe fruit each; 8 identical agents on a ring, vision 2, 150 compute, absorption 0.4, thinking ~4.3 per decision. A shared find (\"fruit at (3,-1)\") is worth a lot to everyone. Question: does cheap talk create information sharing?",
+ "seed": 1111,
+ "max_rounds": 60,
+ "default_model_key": "claude-cli-haiku",
+ "real_budget_usd": 15,
+ "context": {
+  "input_token_cap": 10000,
+  "persona_tip": false
+ },
+ "world": {
+  "region": {
+   "min_x": -6,
+   "max_x": 6,
+   "min_y": -6,
+   "max_y": 6
+  },
+  "terrain": {
+   "mountain_clusters": 0,
+   "water_clusters": 0
+  },
+  "initial_plants": {
+   "fruit_tree": 16
+  },
+  "plants_at_agent_starts": false,
+  "initial_plant_fruit": 1
+ },
+ "rules": {
+  "skills": {
+   "interrupt_on": [
+    "damage",
+    "message"
+   ]
+  },
+  "death": {
+   "compute_residue_fraction": 1.0
+  },
+  "cognition": {
+   "input_rate": 0.0004,
+   "generation_rate": 0.002
+  },
+  "prices": {
+   "send": 0.5,
+   "broadcast": 0.5
+  }
+ },
+ "agents": [
+  {
+   "id": "a01",
+   "name": "Aster",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 2,
+    "y": 5
+   },
+   "stats": {
+    "compute": 150,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 20
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a02",
+   "name": "Boreas",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 5,
+    "y": 2
+   },
+   "stats": {
+    "compute": 150,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 20
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a03",
+   "name": "Cyrene",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 5,
+    "y": -2
+   },
+   "stats": {
+    "compute": 150,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 20
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a04",
+   "name": "Damaris",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": 2,
+    "y": -5
+   },
+   "stats": {
+    "compute": 150,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 20
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a05",
+   "name": "Eos",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -2,
+    "y": -5
+   },
+   "stats": {
+    "compute": 150,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 20
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a06",
+   "name": "Ferrin",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -5,
+    "y": -2
+   },
+   "stats": {
+    "compute": 150,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 20
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a07",
+   "name": "Galene",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -5,
+    "y": 2
+   },
+   "stats": {
+    "compute": 150,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 20
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  },
+  {
+   "id": "a08",
+   "name": "Halcyon",
+   "model_key": "claude-cli-haiku",
+   "position": {
+    "x": -2,
+    "y": 5
+   },
+   "stats": {
+    "compute": 150,
+    "compute_absorption": 0.4,
+    "vision_range": 2,
+    "communication_range": 20
+   },
+   "persona": "You are one of several agents living in this world. Nobody has given you a role, a team or a strategy; how you live is your own choice. Your one standing aim is to stay alive for as long as you can.",
+   "notebook": "",
+   "initial_skills": []
+  }
+ ]
+}

@@ -434,5 +434,8 @@
     }
    ]
   }
- ]
+ ],
+ "context": {
+  "persona_tip": false
+ }
 }

@@ -89,7 +89,8 @@
   }
  },
  "context": {
-  "include_skill_source": true
+  "include_skill_source": true,
+  "persona_tip": false
  },
  "agents": [
   {
