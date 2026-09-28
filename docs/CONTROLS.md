@@ -130,6 +130,7 @@ Opening the page opens the run (`POST /api/runs/{run_id}/open`) and polls
 | Left Replay panel | **‹ Previous turn** / **Next turn ›** | View the neighbouring turn | same | |
 | Left Replay panel | **‹ Parent run** / **Open parent run at that turn** | On a continuation's first turn: open the parent run at the branch turn | | |
 | Left Replay panel | Turn select | Pick any turn of the viewed round; action names use plain phrases such as "Looked at cell" and "Checked details", with failures marked | `GET /api/runs/{run_id}/turns` | |
+| Left Replay panel | **Try again** | Retry a saved turn after a temporary loading error; gateway HTML is shown as a short connection error | `GET /api/runs/{run_id}/turns/{turn_id}` | Loading error |
 | Agents roster | Agent row | Select that agent and open its profile card (the Inspector tab shows it behind, unless God mode is open) | | |
 
 Start and pause share one button, so only three simulation command buttons are shown at once. Saved playback is separate:

@@ -714,6 +714,31 @@ async function runSteps(page) {
       await sleep(600);
       rec.found.live_indicator = await textVisible(page, /\blive\b/i, 3000);
       if (!rec.found.history_indicator) rec.notes.push("no 'history' indicator seen after the previous arrow");
+
+      // A gateway page must not spill HTML into the timeline; retry loads the same saved turn.
+      const latest = turns.at(-1);
+      const retryTurn = [...turns].reverse().find((turn) => turn.round === latest?.round && turn.kind === "agent_turn" && turn.turn_id !== latest?.turn_id);
+      if (retryTurn) {
+        const routePattern = `**/api/runs/${state.runId}/turns/${retryTurn.turn_id}`;
+        let attempts = 0;
+        await page.route(routePattern, async (route) => {
+          attempts += 1;
+          if (attempts === 1) await route.fulfill({ status: 502, contentType: "text/html", body: "<!DOCTYPE html><html><body>Bad gateway</body></html>".repeat(20) });
+          else await route.continue();
+        });
+        await page.reload({ waitUntil: "domcontentloaded" }); // clear the committed-turn cache
+        await page.locator(".turn-select select").selectOption(retryTurn.turn_id);
+        const error = page.locator(".timeline .error-line");
+        await error.waitFor({ state: "visible", timeout: STEP_TIMEOUT_MS });
+        const shown = await error.innerText();
+        if (shown.length > 220 || /<!doctype|<html/i.test(shown)) throw new Error(`gateway HTML leaked into the timeline: ${shown.slice(0, 240)}`);
+        await error.getByRole("button", { name: "Try again" }).click();
+        await error.waitFor({ state: "detached", timeout: STEP_TIMEOUT_MS });
+        if (attempts !== 2) throw new Error(`retry fetched the saved turn ${attempts} times, expected 2`);
+        rec.found.gateway_retry = { safe_error: shown, attempts };
+        await page.unroute(routePattern);
+        await page.locator(".timeline-history").getByRole("button", { name: /return to live/i }).click();
+      }
     },
     { needs: ["runId"] },
   );

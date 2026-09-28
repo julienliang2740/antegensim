@@ -16,7 +16,7 @@
 // DOCS: Dictate uploads the raw MediaRecorder blob; capability status ready|loading|unavailable|disabled
 // gates the button; 10 MB / 60 s caps come from capabilities.speech (max_bytes, max_seconds).
 
-import { API_BASE, ApiClientError, request } from "./client";
+import { API_BASE, ApiClientError, httpFailureMessage, request } from "./client";
 import type { ApiError, ApiErrorCode, ApiProblem, TranscriptionResult } from "./types";
 
 /** capabilities.speech (backend assistant/models.py SpeechCapability). */
@@ -62,7 +62,7 @@ async function errorFromResponse(response: Response): Promise<ApiClientError> {
   }
   const message = parsed
     ? `${parsed.error}${parsed.detail ? `: ${parsed.detail}` : ""}`
-    : `${response.status} ${response.statusText} ${text}`.trim();
+    : httpFailureMessage(response, text);
   return new ApiClientError(response.status, message, parsed);
 }
 

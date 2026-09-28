@@ -74,6 +74,16 @@ export class ApiClientError extends Error {
   }
 }
 
+/** Keep proxy and gateway error pages out of UI messages while preserving short plain-text errors. */
+export function httpFailureMessage(response: Response, text: string): string {
+  const status = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
+  if (/text\/html/i.test(response.headers.get("content-type") ?? "") || /<(!doctype|html)\b/i.test(text)) {
+    return `${status}: The connection to the server was interrupted. Try again.`;
+  }
+  const plain = text.replace(/\s+/g, " ").trim();
+  return plain ? `${status}: ${plain.slice(0, 180)}${plain.length > 180 ? "…" : ""}` : `${status}: Request failed. Try again.`;
+}
+
 function locToPath(loc: unknown[]): string {
   // FastAPI loc ["body", "agents", 2, "position"] -> "agents[2].position"
   let path = "";
@@ -124,7 +134,7 @@ export async function request<T>(method: string, path: string, body?: unknown, s
     }
     const message = parsed
       ? `${parsed.error}${parsed.detail ? `: ${parsed.detail}` : ""}`
-      : `${response.status} ${response.statusText} ${text}`.trim();
+      : httpFailureMessage(response, text);
     throw new ApiClientError(response.status, message, parsed);
   }
   if (response.status === 204) return undefined as T;

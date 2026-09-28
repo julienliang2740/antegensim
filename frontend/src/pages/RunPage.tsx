@@ -644,6 +644,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
             viewTurnId={viewTurnId}
             loading={viewTurnId !== null && history.loading}
             loadError={viewTurnId !== null ? history.error : index.error}
+            onRetryLoad={viewTurnId !== null ? history.reload : undefined}
             name={name}
             parent={viewed.parent}
             onView={navigateHistory}

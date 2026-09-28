@@ -22,6 +22,7 @@ export interface TimelineProps {
   viewTurnId: string | null;
   loading: boolean;
   loadError: string | null;
+  onRetryLoad?: () => void;
   name: AgentNamer;
   /** Parent run of the viewed turn (first turn of a continuation). */
   parent: ParentRef | null;
@@ -163,7 +164,8 @@ export function Timeline(props: TimelineProps) {
       ) : null}
       {props.loadError ? (
         <div className="error-line" role="alert">
-          Could not load the turn: {props.loadError}
+          Could not load the turn: {props.loadError}{" "}
+          {props.onRetryLoad ? <button type="button" className="btn btn-small" disabled={props.loading} onClick={props.onRetryLoad}>Try again</button> : null}
         </div>
       ) : null}
     </section>

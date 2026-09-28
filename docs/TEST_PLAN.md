@@ -58,7 +58,7 @@ ends in `error`.
 | U3 | Plant rules easy to see and modify | `test_e2e_godmode.py::test_plant_rules_are_readable_and_editable_as_a_species_change`. Browser `plant-rules` |
 | U4 | All model calls through `model.py` | `test_e2e_boundaries.py::test_provider_sdks_are_imported_only_by_model_py`. The call record equals the packet in `test_packets_cite_only_the_agents_own_records` |
 | U5 | All actions and state per turn logged in a clear folder structure | `test_create_run_from_defaults…` (run, working and init layout), `test_run_turn_step_round_play_pause_and_layout` (every committed turn dir is complete; events carry turn ids and actors; index and manifest agree). `scripts/run_sim.py` prints a tree of one turn |
-| U6 | Left/right arrows through rounds and turns; edit a selected scenario | Browser `timeline`. API: the `previous_turn_id` chain in `assert_chain`; `test_continuation_from_history_keeps_the_parent_future` |
+| U6 | Left/right arrows through rounds and turns; edit a selected scenario | Browser `timeline` (including a short gateway error and retry). API: the `previous_turn_id` chain in `assert_chain`; `test_continuation_from_history_keeps_the_parent_future` |
 | U7 | Voice from nowhere | `test_voice_reaches_only_recipients_and_their_next_packet`. Browser `god-mode` |
 | U8 | Change stats, place/remove objects | `test_set_stat_place_and_remove_entity_without_charging_agents`, `test_unaffordable_agent_is_skipped_and_starves_at_round_end` (set_stat). Browser `god-mode` |
 | U9 | Edit files directly and in game, with an explicit apply | `test_working_file_edit_and_reload_records_before_after`, `test_invalid_working_json_is_reported_and_state_stays_intact`, plus the UI-path tests above |

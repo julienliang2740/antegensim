@@ -80,7 +80,7 @@ model, and every direct `POST /api/runs` sets `default_model_key` to `fake-heuri
 | 7 | `run-turn` | **Advance 1 turn** commits exactly one turn, and a `[r1 t1] ...` feed line appears | U12, U13 |
 | 8 | `play-pause` | **Start simulation**, then **Pause simulation**. Records whether "Pause requested" was seen before "Paused" | U12 |
 | 9 | `step-round` | **Finish round** stops at `r{n}_end` | U12 |
-| 10 | `timeline` | Previous/next arrows, a history indicator, turn selection, then **return to live** | U6 |
+| 10 | `timeline` | Previous/next arrows, a history indicator, turn selection, then **Return to live**; a simulated HTML 502 stays a short error and **Try again** loads the saved turn | U6 |
 | 11 | `crowded-coordinate` | Hovers and clicks the coordinate with the most occupants (taken from the API). Every occupant id must be listed (a profile card opened by the click is closed first) | U1 |
 | 12 | `select-occupants` | Selects each occupant and expects its profile card with details, closing it between clicks | U1, U2 |
 | 13 | `agent-inspector` | The agent's profile card: stats, model, Skills and Knowledge sections; the Decisions row's **Packet** opens the decision packet (the card hides behind the record viewer and comes back after Escape), then its **Model call** | U2 |
