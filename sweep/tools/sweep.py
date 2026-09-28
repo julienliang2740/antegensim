@@ -29,7 +29,7 @@ BACKEND_ENV = {"EMPYREAN_FSYNC": "0", "EMPYREAN_MODEL_CONCURRENCY": "12", "EMPYR
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 LIVE_KEYS = {"claude-cli-haiku", "claude-cli-sonnet"}
 MAX_CONCURRENT = MAX_PER_BACKEND * len(BACKENDS)
-MAX_ROUNDS = 80  # hard cap; things should happen by round 30-40
+MAX_ROUNDS = 100  # hard cap (operator: 80 on 2026-09-27, raised to 100 for the showcase runs on 2026-09-28)
 
 
 def call(method, path, body=None, timeout=60, port=8000):
@@ -93,7 +93,7 @@ def load_scenario(path):
         if a.get("model_key") not in LIVE_KEYS:
             raise SystemExit(f"agent {a.get('id')} model_key must be one of {sorted(LIVE_KEYS)} (got {a.get('model_key')!r})")
     if not (1 <= int(sc.get("max_rounds", 0)) <= MAX_ROUNDS):
-        raise SystemExit(f"max_rounds must be 1..{MAX_ROUNDS} (operator budget rule 2026-09-27)")
+        raise SystemExit(f"max_rounds must be 1..{MAX_ROUNDS} (operator budget rule)")
     return sc
 
 

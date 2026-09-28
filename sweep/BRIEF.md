@@ -14,13 +14,17 @@ E balanced stories) and 4-5 proposals in it.
 2. Only launch runs through the sweep tool (below). Never run `scripts/run_sim.py` yourself and never
    set `EMPYREAN_ALLOW_LIVE` / `EMPYREAN_LIVE_TESTS`. The tool's `dryrun` forces every agent onto the
    free `fake-heuristic` model.
-3. **Budget rule (operator, 2026-09-27 after the async-round rework):** `max_rounds` is at most **80**
+3. **Budget rule (operator, 2026-09-27 after the async-round rework; raised to 100 on 2026-09-28):** `max_rounds` is at most **100**
    for every run (the tool refuses more). Things should start happening within rounds 30-40; a run
    still quiet at round 30-40 is cut, anything running past 40 needs a clear reason. Rounds now take
    about one model-call latency (all agents decide at once, A-SCHED-5), so an 80-round run takes
    roughly 15-40 minutes.
+3b. **Persona tip (2026-09-28):** the engine now appends the persona tip itself when `context.persona_tip` is on,
+   which `GET /api/defaults` does by default (A-KNOW-9). New scenarios keep the plain persona and leave the
+   setting on; never paste the tip into personas. Every scenario written before the setting existed pins
+   `"context": {"persona_tip": false}` so it reproduces what actually ran.
 4. Agent models: `claude-cli-haiku` for everyone, `claude-cli-sonnet` only where the proposal says so
-   (about 5-10% of agents at most). Every run: `max_rounds` <= 80.
+   (about 5-10% of agents at most). Every run: `max_rounds` <= 100.
 5. **Three strikes:** each proposal gets at most 3 versions (v1, v2, v3). Only touch your own tags.
 6. Keep your context lean: never print whole event files or run folders; use `metrics`.
 
@@ -50,7 +54,7 @@ kept in the file only (use `_design` for a short design note). Required:
 
 * `"name": "SWEEP-<TAG> <Title>"` (e.g. `"SWEEP-A1v1 Orchard rows"`). This is how the operator finds
   runs in the UI, so the prefix must be exact.
-* `"seed"`, `"max_rounds"` (<= 80), `"default_model_key": "claude-cli-haiku"`,
+* `"seed"`, `"max_rounds"` (<= 100), `"default_model_key": "claude-cli-haiku"`,
   `"real_budget_usd"` (a runaway guard, e.g. 60), and `"agents"` (6-64 cards: `id` a01.., `name`,
   `model_key`, `position` {x,y}, optional `stats` (partial, merged with defaults), `persona` (one line;
   newlines are flattened, so never put skill code in a persona), `notebook`, `initial_skills`
