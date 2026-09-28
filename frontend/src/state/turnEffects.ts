@@ -223,12 +223,14 @@ export function actingEffect(view: TurnView): TurnEffect | null {
     }
     case "observe": {
       const point = isPoint(args.point) ? args.point : null;
-      return effect(view, { kind: "observe", actor, at, to: point, targetPoints: point ? [point] : [], ok, label: `observed${point ? ` (${point.x}, ${point.y})` : ""}${via}${failed}` });
+      return effect(view, { kind: "observe", actor, at, to: point, targetPoints: point ? [point] : [], ok, label: `${ok ? "looked" : "tried to look"} at what is in cell${point ? ` (${point.x}, ${point.y})` : ""}${via}${failed}` });
     }
     case "query": {
       const target = str(args.entity);
       const targets = target && target !== "self" ? [target] : [];
-      return effect(view, { kind: "query", actor, at, targets, ok, label: `queried ${target === "self" ? "itself" : (target ?? "?")}${via}${failed}` });
+      const verb = ok ? "checked" : "tried to check";
+      const detail = target === "self" ? `${verb} their own stats and resources` : `${verb} details about ${target ?? "an entity"}`;
+      return effect(view, { kind: "query", actor, at, targets, ok, label: `${detail}${via}${failed}` });
     }
     case "run_skill":
       return effect(view, { kind: "skill", actor, at, ok, label: `ran skill ${str(args.skill) ?? "?"}${failed}` });

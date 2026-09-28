@@ -128,6 +128,7 @@ export function EntityProfileCard(props: EntityProfileCardProps) {
   const askName = entity.kind === "agent" ? entity.name : entity.id;
   const askQuestion = `What is ${entity.kind === "agent" ? `${entity.name} (${entity.id})` : entity.id} up to?`;
   const terrain = terrainAt(turn, entity.position);
+  const agentBelief = props.agentView && entity.kind === "agent";
   const turnListProps = {
     runId: props.runId,
     turns: props.turns,
@@ -193,8 +194,8 @@ export function EntityProfileCard(props: EntityProfileCardProps) {
               <span className={`profile-badge ${life.cls}`}>{life.text}</span>
             </div>
             <div className="profile-sub">
-              {kindLabel(entity.kind)} at {fmtPoint(entity.position)}
-              {terrain ? ` · ${terrain}` : ""} · as of turn <code>{turn.turn.turn_id}</code> (round {turn.turn.round}) ·{" "}
+              {kindLabel(entity.kind)} at {agentBelief ? props.knowledge?.believed_self.position ? fmtPoint(props.knowledge.believed_self.position) : "unknown location" : fmtPoint(entity.position)}
+              {agentBelief ? " (believed)" : terrain ? ` · ${terrain}` : ""} · as of turn <code>{turn.turn.turn_id}</code> (round {turn.turn.round}) ·{" "}
               <span className={turn.live ? "profile-live" : "profile-history"}>{turn.live ? "live" : "history"}</span>
             </div>
           </div>

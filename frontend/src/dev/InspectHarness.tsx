@@ -21,6 +21,7 @@ import type { AgentViewOverlay } from "../components/inspect";
 import Map3dView from "../components/map3d/Map3dView";
 import type { LayerInput } from "../components/map3d";
 import { turnEffects } from "../state/turnEffects";
+import { knownTerrainFromKnowledge } from "../state/agentFog";
 import { INITIAL_STAGED, MODELS, effectiveSettings, historyTurn, knowledgeFor, liveTurn } from "./fixtures";
 
 /** Error shaped like client.ts ApiClientError (status + problems). */
@@ -94,7 +95,7 @@ export function InspectHarness() {
   const knowledge = selectedEntity?.kind === "agent" ? knowledgeFor(selectedEntity.id, turn.turn.turn_id, turn.entities) : null;
   const agentViewOverlay: AgentViewOverlay | null =
     agentView && selectedEntity?.kind === "agent" && knowledge
-      ? { agentId: selectedEntity.id, agentName: selectedEntity.name, believedPosition: knowledge.believed_self.position ?? null, observed: knowledge.observed_entities }
+      ? { agentId: selectedEntity.id, agentName: selectedEntity.name, believedPosition: knowledge.believed_self.position ?? null, observed: knowledge.observed_entities, knownTerrain: knownTerrainFromKnowledge(knowledge) }
       : null;
 
   const note = (line: string) => setLog((l) => [`${new Date().toLocaleTimeString()} ${line}`, ...l].slice(0, 8));
@@ -197,6 +198,7 @@ export function InspectHarness() {
             turn={turn}
             rules={turn.rules}
             agentView={agentView}
+            beliefPosition={agentViewOverlay?.believedPosition ?? null}
             onToggleAgentView={() => setAgentView((v) => !v)}
             onOpenProfile={() => note(`onOpenProfile(${selectedEntity?.id ?? ""})`)}
           />

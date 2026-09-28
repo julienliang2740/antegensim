@@ -129,7 +129,7 @@ Opening the page opens the run (`POST /api/runs/{run_id}/open`) and polls
 | Left Replay panel | **◀ Previous round** / **Next round ▶** | View the last turn of the neighbouring round | `GET /api/runs/{run_id}/turns/{turn_id}` | |
 | Left Replay panel | **‹ Previous turn** / **Next turn ›** | View the neighbouring turn | same | |
 | Left Replay panel | **‹ Parent run** / **Open parent run at that turn** | On a continuation's first turn: open the parent run at the branch turn | | |
-| Left Replay panel | Turn select | Pick any turn of the viewed round | `GET /api/runs/{run_id}/turns` | |
+| Left Replay panel | Turn select | Pick any turn of the viewed round; action names use plain phrases such as "Looked at cell" and "Checked details", with failures marked | `GET /api/runs/{run_id}/turns` | |
 | Agents roster | Agent row | Select that agent and open its profile card (the Inspector tab shows it behind, unless God mode is open) | | |
 
 Start and pause share one button, so only three simulation command buttons are shown at once. Saved playback is separate:
@@ -137,8 +137,8 @@ Start and pause share one button, so only three simulation command buttons are s
 | Area | Label | Effect | API | States |
 | --- | --- | --- | --- | --- |
 | Timeline | **Jump to round** | Jump to the first recorded turn of a chosen round | Existing saved-turn GET | |
-| Timeline | **Play saved turns** / **Replay from start** / **Stop replay** | Play across rounds through the latest saved turn, including newly indexed checkpoints. At the latest turn, replay begins at the first checkpoint | Existing saved-turn GET only; no simulation commands | |
-| Timeline | **Animate this turn** | Restart the selected turn's visual cues in either view | | |
+| Timeline | **Play from this turn** / **Play from beginning** / **Stop playback** | Play across rounds through the latest saved turn, including newly indexed checkpoints. At the latest turn, playback begins at the first checkpoint. The fetching indicator has a reserved line, so loading does not move the navigation buttons | Existing saved-turn GET only; no simulation commands | |
+| Timeline | **Replay this turn's animation** | Restart only the selected turn's visual cues in either view; does not advance the simulation | | |
 | Timeline | **Replay speed** | 0.5× (4.4 s), 1× (2.2 s), 2× (1.1 s) or 4× (0.55 s) per loaded turn | | |
 
 Replay waits for each checkpoint to finish loading and suspends while an entity profile or record is open, or the browser tab is hidden. Manual history navigation and simulation commands stop replay. Reduced-motion settings suppress transient movement and leave the existing static action marks/chips readable.
@@ -161,11 +161,12 @@ nothing else on the page changes with the switch.
 | Toolbar | **Center selection** | Centre on the selected cell |
 | Toolbar | **Go to** x / y + **Go** | Centre on and select a point inside the region |
 | Map | Click a cell / a dot; drag | Select a point (its occupants are listed in the Inspector) / an entity and open its profile card (a cell with one entity opens it too); pan |
-| Map | Count badge of a packed cell | Select the cell and pin its tooltip, which lists every occupant (no profile card opens) |
-| Cell tooltip | **Close (Esc)** | Close the hover details |
+| Map | Count badge of a packed cell | Select the cell and open its tooltip, which lists every occupant (no profile card opens) |
+| Cell tooltip | **Close (Esc)** | Close the hover details; moving away from both the cell and tooltip closes it immediately |
 | Cell tooltip | Entity row | Select that entity and open its profile card |
-| Status line, first line | (read-only) | The hovered dot or cell (over a count badge: "Cell (x, y) land · N occupants · click the count to list every occupant"); otherwise the viewed turn's caption, "Turn <id> · <name> (<id>) <what it did>" ("took no action", or for a round end "round <n> ended · 3 grew · 1 died"); while a live turn runs it ends with " · <name> (<id>) is deciding now" |
-| Status line, second line | "<N> cells packed: zoom in to spread the dots" | Shown when cells are packed (title: zoom in to spread them; the count badge shows each total). At the largest zoom it reads "<N> cells packed: click the count", or "<N> cells over capacity: click the count" when some cells still hold more dots than fit |
+| Status line, first line | **This turn** (read-only) | Always names what happened in the viewed turn; its title includes the turn id. It stays visible while cells are hovered |
+| Status line, second line | (read-only) | The hovered dot or cell (over a count badge: "Cell (x, y) land · N occupants · click the count to list every occupant"); otherwise a prompt to hover the map |
+| Status line, third line | "<N> cells packed: zoom in to spread the dots" | Selected point and packing status. At the largest zoom, the packing hint reads "<N> cells packed: click the count", or "<N> cells over capacity: click the count" when some cells still hold more dots than fit |
 | Status line | **show removed-entity markers (∅n)** | Mark cells where entities were removed |
 | Legend | Kind chips, **Select all**, **Unselect all** | Show or hide the dots of a kind on the map only (occupant lists and the tooltip stay complete) |
 | Legend | **Action marks** | Show or hide the viewed turn's action marks (on by default; remembered per browser) |
@@ -187,15 +188,13 @@ The initial view fits the whole region. Once you pan or zoom, that framing is re
   cell, bigger for more occupants, blue when an agent is there, with the count in digits from
   14 px (for two or more) and a thin kind bar on mixed cells.
 * Action marks show what the viewed turn did (live: the last saved turn). The acting agent
-  gets a purple badge whose glyph names the action (arrow = move, cross = attack, M message,
-  E absorb, T transfer, R recover, U upgrade, W wait, O observe, Q query, S skill, "·" no action;
-  red = failed). A move draws an arrow from a dashed ghost of the old position. Rings mark the
+  gets a purple word badge naming the action, such as "Looked at cell (1, 1)" for checking a cell's terrain and occupants or "Checked own stats" for inspecting its own details; red means the action failed. The fixed **This turn** line below the map gives the actor, target and result even while a cell is hovered. A move draws an arrow from a dashed ghost of the old position. Rings mark the
   entities the action or a world event touched: red hit, orange fed from, blue heard, green given,
   grey died, dashed queried, purple dashed operator voice, green grew or germinated, orange fruit,
   brown seed. An observe outlines the observed cell (dashed), a broadcast draws its reach as a
   diamond, and amounts are printed (−damage, +gained). Brief directional particles show moves, attacks, messages and resource flows; action-specific pulses identify wait, recover, upgrade, observe, query and skill. A failed action flashes a red cross at the actor. While a live turn runs, the agent deciding now has a pulsing
   dashed ring. The key names these marks in short: "packed: zoom in", "group: bigger = more,
-  blue = agent", "acting · pulses while deciding", "selected", "selected cell", "acted (red =
+  blue = agent", "acting · pulses while deciding", "selected", "selected cell", "the agent's action (red =
   failed)", "moved", "hit · fed · heard · given · died · queried", and the terrain colours.
 
 ### 3D view (centre)
@@ -216,14 +215,14 @@ than 60 units away the figures turn into columns as tall as the count, with badg
 | Toolbar | **Top view** | Look straight down at the region (T) |
 | Toolbar | **Focus selection** | Fly to the selected cell (Home); disabled with no selected cell |
 | Toolbar | **Layer down** / **Layer up** | Activate the layer below / above (PageDown / PageUp). A run has one layer today, so both are disabled; the chip reads "Layer 1 of 1 · World" |
-| Toolbar | **Animate once** | Play the viewed turn's animations again (R) |
+| Toolbar | **Replay turn animation** | Play the viewed turn's animations again (R) |
 | Toolbar | **Animations** | Animate the viewed turn (on by default; off and disabled when the system asks for reduced motion; the chips stay either way) |
 | Toolbar | **Controls** | Show or hide the help card "3D map controls" (also ? or H). The card opens by itself on the first 3D open; **Close**, Escape or a click on the board hides it |
 | Board | Agent label ("a03 Cyrene") | Select that agent and open its profile card (a focused label also takes Enter); closing the card returns the focus to the board, so the keys work straight away |
 | Board | Click a figure | Select that entity and open its profile card |
 | Board | Click a tile | Select the cell (a lone occupant is selected and its card opens too) |
 | Board | Left drag / right or middle drag / wheel or pinch | Look around / pan across the board / zoom toward the point under the pointer. Drag, wheel and hover also work over labels |
-| Board | Hover | The first status line names the figure or cell under the pointer (hovering a label hovers its entity); resting on an occupied cell opens its tooltip |
+| Board | Hover | The first status line names the figure or cell under the pointer (hovering a label hovers its entity); resting on an occupied cell opens its tooltip, which closes immediately when the pointer moves away from the board and tooltip |
 | Cell tooltip | **Close (Esc)** / entity row | Close it / select that entity and open its profile card (every occupant is a row; the hovered one is marked) |
 | Status line, first line | (read-only) | The hovered figure ("a03 Cyrene at (3, 4): click to select it") or cell ("Cell (3, 4) land · 7 occupants"), else a summary of the keys |
 | Status line, second line | (read-only) | "Selected: (x, y) <terrain> · <entity> · Turn <id>: <actor> <what it did> · Layer 1 of 1", plus "Not drawn: <kinds>" when legend kinds are hidden |
@@ -270,7 +269,7 @@ record is in the entity profile card.
 | **Clear selection** | Clear the entity selection | |
 | **Profile** | Open the selected entity's profile card | |
 | **Open its latest decision packet** / **View that turn** | Open the agent's latest packet / view the turn it was made in | `GET /api/runs/{run_id}/turns/{turn_id}/decision_packets/{packet_id}` |
-| **Agent view** checkbox (agents) | Map and occupants show only what the selected agent knows; the card's Overview shows its believed self | `GET /api/runs/{run_id}/agents/{agent_id}/knowledge` (live) or `/turns/{turn_id}/agents/{agent_id}/knowledge` |
+| **Agent view** checkbox (agents) | Turns on automatically when an agent is selected; the 2D and 3D maps darken cells with no observed terrain, show only known entities and the agent at its believed position, and the card's Overview shows believed self. Click a cell or **Clear selection** to leave the view; the checkbox can also turn it off | `GET /api/runs/{run_id}/agents/{agent_id}/knowledge` (live) or `/turns/{turn_id}/agents/{agent_id}/knowledge` |
 
 #### Entity profile card
 

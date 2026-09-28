@@ -63,7 +63,7 @@ export function Timeline(props: TimelineProps) {
         <span className={`mode-badge ${live ? "mode-live" : "mode-history"}`}>{live ? "LIVE" : "HISTORY"}</span>
         <span className="timeline-mode-text">
           <span title={shownId}>Round {round} · {shownEntry?.kind === "round_end" ? "round end" : shownEntry?.turn_index ? `turn ${shownEntry.turn_index}` : "initial state"}</span>
-          {props.loading ? <span className="hint"> Fetching the turn…</span> : null}
+          <span className="hint timeline-fetch" aria-hidden={!props.loading}>{props.loading ? "Fetching the turn…" : "\u00a0"}</span>
         </span>
       </div>
       <button type="button" className="btn btn-primary timeline-return" disabled={live} onClick={() => props.onView(null)}>
@@ -145,13 +145,13 @@ export function Timeline(props: TimelineProps) {
       <div className="saved-replay" role="group" aria-label="Saved turn playback">
         <span className="rail-label">Saved replay</span>
         <button type="button" className="btn btn-primary" disabled={!props.playing && (props.loading || !shownEntry)} onClick={props.playing ? props.onStopReplay : props.onReplay}>
-          {props.playing ? "Stop replay" : shownId === liveTurnId ? "Replay from start" : "Play saved turns"}
+          {props.playing ? "Stop playback" : shownId === liveTurnId ? "Play from beginning" : "Play from this turn"}
         </button>
-        <button type="button" className="btn" disabled={props.loading || !shownEntry} onClick={props.onReplayOne}>Animate this turn</button>
+        <button type="button" className="btn" disabled={props.loading || !shownEntry} onClick={props.onReplayOne} title="Replay only this turn's visual effects; the simulation does not advance.">Replay this turn's animation</button>
         <label>Speed <select aria-label="Replay speed" value={props.replayIntervalMs} onChange={(event) => props.onReplayInterval(Number(event.target.value))}>
           <option value={4400}>0.5×</option><option value={2200}>1×</option><option value={1100}>2×</option><option value={550}>4×</option>
         </select></label>
-        <span className="saved-replay-note" role="status">{props.playing ? props.loadError ? "Replay paused: turn could not load. Stop replay or choose another turn." : props.suspended ? "Waiting for the turn or inspector…" : `Playing through the latest saved turn (round ${maxRound}).` : shownId === liveTurnId ? "At the latest turn. Replay starts at the beginning and plays through all saved rounds." : `Plays from here through the latest saved round (${maxRound}).`}</span>
+        <span className="saved-replay-note" role="status">{props.playing ? props.loadError ? "Playback paused: turn could not load. Stop playback or choose another turn." : props.suspended ? "Waiting for the turn or inspector…" : `Playing through the latest saved turn (round ${maxRound}).` : shownId === liveTurnId ? "At the latest turn. Playback starts at the beginning and plays through all saved rounds." : `Plays from here through the latest saved round (${maxRound}).`}</span>
       </div>
       {props.parent ? (
         <div className="timeline-parent">

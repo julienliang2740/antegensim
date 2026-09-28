@@ -704,6 +704,12 @@
   fill: var(--insp-water);
 }
 
+/* No terrain was disclosed for this cell in the selected agent's records. */
+.insp-t-fog {
+  fill: #101827;
+  stroke: #26364a;
+}
+
 .insp-pat-mountain {
   stroke: var(--insp-mountain-line);
   stroke-width: 1.2;
@@ -954,6 +960,7 @@
 .insp-mark-badge text {
   fill: var(--insp-highlight-fg);
   font-weight: 800;
+  font-size: 11px;
   font-family: system-ui, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -1361,6 +1368,14 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.insp-map-status-action {
+  color: var(--insp-fg);
+}
+
+.insp-map-status-action strong {
+  color: var(--insp-highlight);
 }
 
 .insp-map-status-row {

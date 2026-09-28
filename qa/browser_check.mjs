@@ -1275,7 +1275,7 @@ async function runMapMarksStep(page) {
       const live = await api("GET", `/runs/${state.runId}/state`);
       const liveTurn = await api("GET", `/runs/${state.runId}/turns/${s.current_turn_id}`);
       rec.found.live_turn = { id: s.current_turn_id, kind: liveTurn.turn.kind };
-      await page.mouse.move(5, 5); // off the map: the first status line shows the caption
+      await page.mouse.move(5, 5);
 
       const marksChip = map.getByRole("checkbox", { name: "Action marks", exact: true });
       if ((await marksChip.getAttribute("aria-checked")) !== "true") {
@@ -1288,15 +1288,15 @@ async function runMapMarksStep(page) {
         await selectAll.click();
       }
 
-      // 1. The live turn: one marks group keyed by the turn id, with the turn's kind; the caption names the turn.
+      // 1. The live turn: one marks group keyed by the turn id; the fixed action line names what happened.
       const liveGroup = map.locator(`.insp-map-svg g.insp-marks[data-turn-id="${s.current_turn_id}"]`);
       await liveGroup.waitFor({ state: "attached", timeout: STEP_TIMEOUT_MS });
       rec.found.live_marks_kind = await liveGroup.getAttribute("data-kind");
       if (rec.found.live_marks_kind !== liveTurn.turn.kind) throw new Error(`marks data-kind ${rec.found.live_marks_kind}, turn kind ${liveTurn.turn.kind}`);
-      const caption = map.locator(".insp-map-status-hover");
-      rec.found.live_caption = await caption.innerText();
+      const caption = map.locator(".insp-map-status-action");
+      rec.found.live_caption = await caption.getAttribute("title");
       if ((await caption.getAttribute("data-turn-id")) !== s.current_turn_id || !rec.found.live_caption.includes(s.current_turn_id)) {
-        throw new Error(`the first status line does not name turn ${s.current_turn_id}: "${rec.found.live_caption}"`);
+        throw new Error(`the action line does not name turn ${s.current_turn_id}: "${rec.found.live_caption}"`);
       }
 
       // 2. The same group element survives a hover and a live refresh (it is keyed by the turn id, not remounted).
@@ -1333,12 +1333,15 @@ async function runMapMarksStep(page) {
         ok: pick.ok,
         group_kind: await group.getAttribute("data-kind"),
         badge_action: await badge.first().getAttribute("data-action"),
+        badge_word: (await badge.first().textContent())?.trim(),
         badge_ok: await badge.first().getAttribute("data-ok"),
         arrows,
-        caption: await caption.innerText(),
+        caption: await caption.getAttribute("title"),
+        visible_action: await caption.innerText(),
       };
       if (rec.found.history_turn.group_kind !== "agent_turn") throw new Error(`marks data-kind ${rec.found.history_turn.group_kind} for an agent turn`);
       if (rec.found.history_turn.badge_action !== glyphOf(pick.action_name)) throw new Error(`badge glyph ${rec.found.history_turn.badge_action}, expected ${glyphOf(pick.action_name)} for ${pick.action_name}`);
+      if (!rec.found.history_turn.badge_word || rec.found.history_turn.badge_word.length < 4) throw new Error(`badge does not explain the action: "${rec.found.history_turn.badge_word}"`);
       if (pick.action_name === "move" && pick.ok && arrows < 1) throw new Error("a successful move drew no arrow");
       if (!rec.found.history_turn.caption.includes(pick.turn_id) || !rec.found.history_turn.caption.includes(actor)) {
         throw new Error(`the caption does not name turn ${pick.turn_id} and ${actor}: "${rec.found.history_turn.caption}"`);
@@ -1531,8 +1534,7 @@ async function runMap3dStep(page) {
       const acted = (id) => turns.filter((t) => t.kind === "agent_turn" && t.acting_agent_id === id).length;
       const agent = [...living].sort((a, b) => acted(b.id) - acted(a.id) || a.id.localeCompare(b.id))[0] ?? null;
       if (agent) {
-        // The selected agent's label always shows (a crowded label may drop out), so select it first.
-        await selectById(page, agent.id);
+        // The selected agent's label always shows (a crowded label may drop out).
         rec.found.agent = { id: agent.id, position: `${agent.position.x},${agent.position.y}`, turns: acted(agent.id) };
       } else {
         rec.notes.push("no living agent in this run: the label checks expect no label and the label click is not checked");
@@ -1607,23 +1609,35 @@ async function runMap3dStep(page) {
       if ((await resources()).some((n) => /\/three[._/]/.test(n))) throw new Error("the board loaded Three.js");
       await page.screenshot({ path: path.join(OUT_DIR, `${pad(stepCounter)}-map-3d-board.png`) }).catch(() => {});
 
-      // 4. Labels: only agents (plus the selection), the selected agent's on its cell; a click opens its card and
+      // 4. Labels: in agent view, use what the agent believes is alive, not the true live roster.
+      //    The selected agent's label is on its believed cell; a click opens its card and
       //    Escape closes it with the focus back on the board.
+      if (agent) await selectById(page, agent.id);
       const animations = page.locator(".map3d-toolbar").getByRole("checkbox", { name: "Animations" });
       if (await animations.isEnabled()) await animations.uncheck();
       await page.mouse.move(5, 5);
       await sleep(300);
       const labelIds = await page.locator("button.map3d-label[data-entity-id]").evaluateAll((els) => els.map((el) => el.dataset.entityId));
-      const livingIds = new Set(living.map((x) => x.id));
-      rec.found.labels = { shown: labelIds.length, living_agents: living.length };
-      const strangers = labelIds.filter((id) => !livingIds.has(id));
-      if (strangers.length) throw new Error(`labels for entities that are not living agents: ${strangers}`);
-      if (labelIds.length > living.length) throw new Error(`${labelIds.length} labels for ${living.length} living agents`);
+      const knowledge = agent ? await api("GET", `/runs/${state.runId}/agents/${agent.id}/knowledge`) : null;
+      const latestKnown = new Map();
+      for (const sighting of knowledge?.observed_entities ?? []) {
+        const prior = latestKnown.get(sighting.id);
+        if (!prior || sighting.observed_round >= prior.observed_round) latestKnown.set(sighting.id, sighting);
+      }
+      const expectedLabels = knowledge
+        ? new Set([agent.id, ...[...latestKnown.values()].filter((sighting) => sighting.kind === "agent" && sighting.alive !== false).map((sighting) => sighting.id)])
+        : new Set(living.map((x) => x.id));
+      rec.found.labels = { shown: labelIds.length, known_living_agents: expectedLabels.size };
+      const strangers = labelIds.filter((id) => !expectedLabels.has(id));
+      if (strangers.length) throw new Error(`labels outside the viewed agent's known living agents: ${strangers}`);
+      if (labelIds.length > expectedLabels.size) throw new Error(`${labelIds.length} labels for ${expectedLabels.size} known living agents`);
       if (agent) {
         const label = page.locator(`button.map3d-label[data-entity-id="${agent.id}"]`);
         if ((await label.count()) !== 1) throw new Error(`no label for the selected agent ${agent.id}`);
         rec.found.labels.selected_cell = await label.getAttribute("data-cell");
-        if (rec.found.labels.selected_cell !== rec.found.agent.position) throw new Error(`label of ${agent.id} on ${rec.found.labels.selected_cell}, the API says ${rec.found.agent.position}`);
+        const believed = knowledge.believed_self.position;
+        if (believed && rec.found.labels.selected_cell !== `${believed.x},${believed.y}`) throw new Error(`label of ${agent.id} on ${rec.found.labels.selected_cell}, believed position is ${believed.x},${believed.y}`);
+        if (!(await page.locator(".map3d .insp-map-agentview-note").innerText()).includes("Dark cells")) throw new Error("agent view fog did not activate on selection");
         rec.found.status_selected = await page.locator(".map3d-status-row").innerText();
         await label.click();
         const card = await waitVisible(profileCard(page), "the profile card after a label click");
@@ -1634,11 +1648,14 @@ async function runMap3dStep(page) {
         await sleep(300);
         rec.found.focus_after_card = await page.evaluate(() => document.activeElement?.className ?? null);
         if (!/map3d-viewport/.test(rec.found.focus_after_card ?? "")) throw new Error(`focus after closing the card is on "${rec.found.focus_after_card}", not the 3D viewport`);
+        await openWorkspacePanel(page, "Inspector & tools");
+        await page.getByRole("button", { name: "Clear selection", exact: true }).click();
+        await page.getByRole("button", { name: "Close inspector panel", exact: true }).click();
       }
 
       // 5. Keys (the viewport has focus): F frames, W flies north, Space up, Shift down, Q turns; F again equals frameRegion.
       const viewport = page.locator(".map3d-viewport");
-      if (!agent) await viewport.focus();
+      await viewport.focus();
       await page.keyboard.press("f");
       await sleep(700);
       const c0 = (await map3dAttrs(page)).cameraPose;
@@ -1737,7 +1754,7 @@ async function runMap3dStep(page) {
         if (rec.found.history.actor_cell !== rec.found.history.api_to) throw new Error(`the actor's label is on ${rec.found.history.actor_cell}, the move went to ${rec.found.history.api_to}`);
         if (!rec.found.history.chip) throw new Error(`no move chip over ${move.acting_agent_id}`);
         if (await animations.isEnabled()) await animations.check();
-        await toolbar.getByRole("button", { name: "Animate once", exact: true }).click();
+        await toolbar.getByRole("button", { name: "Replay turn animation", exact: true }).click();
         const t0 = Date.now();
         let sawOne = null;
         let backToZero = null;

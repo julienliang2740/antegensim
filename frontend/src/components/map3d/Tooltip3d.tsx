@@ -38,6 +38,7 @@ export interface Tooltip3dProps {
   /** Receives the placement function (null on unmount) so the frame loop can re-place the card. */
   register(place: (() => void) | null): void;
   onEnter(): void;
+  onLeave(): void;
   onClose(): void;
   onPick(id: string): void;
 }
@@ -97,6 +98,7 @@ export function Tooltip3d(props: Tooltip3dProps) {
         role="dialog"
         aria-label={`Cell ${fmtPoint(cell)}`}
         onPointerEnter={props.onEnter}
+        onPointerLeave={props.onLeave}
         onPointerDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           e.stopPropagation();
@@ -108,7 +110,7 @@ export function Tooltip3d(props: Tooltip3dProps) {
       >
         <div className="insp-tooltip-head">
           <span>
-            <strong>{fmtPoint(cell)}</strong> {terrain ?? "outside region"} ·{" "}
+            <strong>{fmtPoint(cell)}</strong> {terrain ?? (props.agentViewOf ? "unknown" : "outside region")} ·{" "}
             {props.agentViewOf ? `${occupants.length} known here` : `${occupants.length} ${occupants.length === 1 ? "occupant" : "occupants"}`}
           </span>
           <button type="button" className="insp-tooltip-close" aria-label="Close cell details" title="Close (Esc)" onClick={props.onClose}>
@@ -129,7 +131,7 @@ export function Tooltip3d(props: Tooltip3dProps) {
             </li>
           ))}
         </ul>
-        <div className="insp-tooltip-hint">Click a row to select it · Esc or × closes · stays open when the pointer leaves the board</div>
+        <div className="insp-tooltip-hint">Click a row to select it · move away to close</div>
         {removed.length > 0 ? (
           <div className="insp-tooltip-removed">
             Removed here earlier: {removed.slice(0, 3).map((r) => `${r.id} (${r.reason}, round ${r.round})`).join(", ")}

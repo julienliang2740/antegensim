@@ -934,7 +934,7 @@ RETURN "completed"`}
         <p>
           A run always opens paused. <strong>Advance 1 turn</strong> plays one agent's turn, <strong>Finish round</strong> plays to the end of the round, and{" "}
           <strong>Start simulation</strong> / <strong>Pause simulation</strong> run continuously with the play delay between turns. The timeline goes back to any saved turn so you can
-          inspect it. Choose a round and turn, then use Play saved turns to watch saved actions through the latest saved round (Replay from start when already at the latest turn); replay never generates new turns.
+          inspect it. Choose a round and turn, then use Play from this turn to watch saved actions through the latest saved round (Play from beginning when already at the latest turn); playback never generates new turns.
         </p>
         <h3>God mode</h3>
         <p>

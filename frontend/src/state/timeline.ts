@@ -51,13 +51,28 @@ export function roundOfTurnId(turnId: string): number {
 }
 
 /** Readable option text for the turn selector; always contains the turn id. */
+const ACTION_LABELS: Record<string, string> = {
+  move: "Moved",
+  attack: "Attacked",
+  send: "Sent message",
+  broadcast: "Broadcast message",
+  absorb: "Collected resources",
+  transfer: "Gave resources",
+  recover: "Healed",
+  upgrade: "Improved ability",
+  wait: "Waited",
+  observe: "Looked at cell",
+  query: "Checked details",
+  run_skill: "Used a skill",
+};
+
 export function turnOptionLabel(entry: TurnIndexEntry, name: AgentNamer): string {
   if (entry.kind === "init") return `Initial state — ${entry.turn_id}`;
   if (entry.kind === "round_end") {
     const extra = entry.intervention_count > 0 ? ` · ${entry.intervention_count} edit(s)` : "";
     return `Round ${entry.round} end${extra} — ${entry.turn_id}`;
   }
-  const what = entry.action_name ? `${entry.action_name} ${entry.ok === false ? "failed" : "ok"}` : describeSource(entry.decision_source);
+  const what = entry.action_name ? `${ACTION_LABELS[entry.action_name] ?? entry.action_name.replaceAll("_", " ")}${entry.ok === false ? " (failed)" : ""}` : describeSource(entry.decision_source);
   const extra = entry.intervention_count > 0 ? ` · ${entry.intervention_count} edit(s)` : "";
   const turnNo = entry.turn_index !== null ? `t${String(entry.turn_index).padStart(2, "0")}` : "t?";
   return `${turnNo} · ${name(entry.acting_agent_id)} · ${what}${extra} — ${entry.turn_id}`;

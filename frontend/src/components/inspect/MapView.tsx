@@ -19,12 +19,12 @@
  * size grows with the count: circles are individuals, squares are groups.
  *
  * Action marks (state/mapIndicators.ts, from the `effects` prop = the viewed
- * turn's turnEffects): a purple badge on the agent that acted with a glyph for
+ * turn's turnEffects): a purple badge on the agent that acted naming
  * its action (red when it failed), an arrow along its move, rings on the
  * entities the turn touched, links across cells, the observed cell, a
  * broadcast reach and the amounts moved.  The layer is keyed by `turnId`, so
  * its short entrance animation plays once per turn change.  The status line
- * shows the caption of the viewed turn when nothing is hovered.  The acting
+ * keeps the caption of the viewed turn visible while the map is hovered.  The acting
  * agent's dot has a dashed ring, which pulses while that agent is deciding
  * (`pendingAgentId`); the selected entity's dot has a thick ring.
  *
@@ -72,8 +72,8 @@ const PAN_STEP_CELLS = 3;
 /** A pointer that moves less than this between down and up is a click, not a drag. */
 const CLICK_SLOP_PX = 4;
 const TOOLTIP_WIDTH = 390;
-/** Moving onto another cell replaces the tooltip after this delay, so the pointer can cross a neighbouring cell on its way into the tooltip. */
-const TOOLTIP_SWITCH_MS = 220;
+/** Only the short gap between the cell and its card gets a handoff window. */
+const TOOLTIP_TRANSIT_MS = 120;
 /** Tooltip: distance from the hovered cell and from the window edges. */
 const TOOLTIP_GAP = 6;
 const TOOLTIP_MARGIN = 8;
@@ -106,11 +106,10 @@ export function MapView(props: MapViewProps) {
     y: Math.min(region.max_y, Math.max(region.min_y, 0)),
   }));
   const [hover, setHover] = useState<Hover | null>(null);
-  // The tooltip's cell: the last hovered occupied cell.  It stays after the pointer leaves the map
-  // (so the pointer can move into it and scroll it) until another cell is hovered, Escape, "×", a
-  // click outside the map and the tooltip, or a new selection.
+  // The tooltip follows the hovered occupied cell and closes when the pointer leaves both it and the map.
   const [tip, setTip] = useState<Hover | null>(null);
-  const tipTimer = useRef<number | null>(null);
+  const tipDismissTimer = useRef<number | null>(null);
+  const tipTransitListener = useRef<((event: PointerEvent) => void) | null>(null);
   /** After a click selected something in this cell, hovering it again does not reopen the tooltip until the pointer leaves the cell. */
   const suppressKey = useRef<string | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -127,13 +126,30 @@ export function MapView(props: MapViewProps) {
   useEffect(() => saveKeyOpen(props.persistKey, keyOpen), [props.persistKey, keyOpen]);
   /** True while the view is "fit map": a resize of the map column fits the region again. */
   const [fitted, setFitted] = useState(false);
-  function cancelTipTimer() {
-    if (tipTimer.current !== null) window.clearTimeout(tipTimer.current);
-    tipTimer.current = null;
+  function cancelTipDismiss() {
+    if (tipDismissTimer.current !== null) window.clearTimeout(tipDismissTimer.current);
+    tipDismissTimer.current = null;
+    if (tipTransitListener.current) document.removeEventListener("pointermove", tipTransitListener.current);
+    tipTransitListener.current = null;
+  }
+  function dismissTipSoon() {
+    cancelTipDismiss();
+    tipTransitListener.current = (event) => {
+      if (!nearTooltip(event.clientX, event.clientY)) closeTip();
+    };
+    document.addEventListener("pointermove", tipTransitListener.current);
+    tipDismissTimer.current = window.setTimeout(() => {
+      cancelTipDismiss();
+      setTip(null);
+    }, TOOLTIP_TRANSIT_MS);
   }
   function closeTip() {
-    cancelTipTimer();
+    cancelTipDismiss();
     setTip(null);
+  }
+  function nearTooltip(clientX: number, clientY: number): boolean {
+    const rect = tooltipRef.current?.getBoundingClientRect();
+    return !!rect && clientX >= rect.left - 14 && clientX <= rect.right + 14 && clientY >= rect.top - 14 && clientY <= rect.bottom + 14;
   }
   const [showRemoved, setShowRemoved] = useState(false);
   const [goto, setGoto] = useState<Point>({ x: 0, y: 0 });
@@ -194,7 +210,7 @@ export function MapView(props: MapViewProps) {
       document.removeEventListener("pointerdown", onDown, true);
     };
   }, [tip]);
-  useEffect(() => () => cancelTipTimer(), []);
+  useEffect(() => () => cancelTipDismiss(), []);
 
   const cellPx = ZOOM_LEVELS[zoomIndex];
   const plotW = Math.max(40, width - AXIS_LEFT);
@@ -313,9 +329,11 @@ export function MapView(props: MapViewProps) {
   );
   const nameOf = (id: string) => markerById.get(id)?.title ?? id;
   const caption = turnId ? captionFor(effects, turnId, nameOf, pendingAgentId) + (marks.dropped > 0 ? ` · +${marks.dropped} marks not drawn` : "") : null;
+  const plainCaption = caption?.replace(/^Turn \S+ · /, "") ?? null;
 
   const inRegion = (p: Point) => p.x >= region.min_x && p.x <= region.max_x && p.y >= region.min_y && p.y <= region.max_y;
-  const terrainOf = (p: Point): Terrain | null => (inRegion(p) ? (map.cells[pointKey(p)] ?? "land") : null);
+  const terrainOf = (p: Point): Terrain | null => inRegion(p) ? (overlay ? overlay.knownTerrain[pointKey(p)] ?? null : map.cells[pointKey(p)] ?? "land") : null;
+  const terrainLabel = (p: Point) => terrainOf(p) ?? (overlay && inRegion(p) ? "unknown" : "outside region");
   /** Entities that keep a dot when a cell overflows: acting, pending, selected, then everything a mark names. */
   const priority = [highlightId, pendingAgentId, selectedEntityId, ...marks.markedIds];
   // Layouts and far-mode tiles are computed once per render (in the cell loop below); the pointer
@@ -421,30 +439,27 @@ export function MapView(props: MapViewProps) {
     const hit = hitTest(px, py);
     const next: Hover | null = hit ? { key: hit.key, entityId: hit.dot?.marker.id ?? null, badge: hit.badge !== null } : null;
     if (next?.key !== hover?.key || next?.entityId !== hover?.entityId || next?.badge !== hover?.badge) setHover(next);
-    followTip(next);
+    if (tip && nearTooltip(e.clientX, e.clientY)) {
+      cancelTipDismiss();
+      return;
+    }
+    if (next) followTip(next);
+    else closeTip();
   };
-  /** Move the tooltip to the hovered cell: at once from nothing or within the same cell, after a short delay to another cell. */
+  /** Follow the occupied cell immediately; empty cells dismiss the old card. */
   const followTip = (next: Hover | null) => {
     if (next === null) return;
+    cancelTipDismiss();
     if (suppressKey.current !== null) {
       if (suppressKey.current === next.key) return;
       suppressKey.current = null;
     }
     const hasContent = (byPoint.get(next.key)?.length ?? 0) > 0 || (removedByPoint.get(next.key)?.length ?? 0) > 0;
     if (!hasContent) {
-      cancelTipTimer();
+      closeTip();
       return;
     }
-    if (tip === null || tip.key === next.key) {
-      cancelTipTimer();
-      if (tip?.key !== next.key || tip.entityId !== next.entityId) setTip(next);
-      return;
-    }
-    if (tipTimer.current !== null && tipTimer.current !== undefined) window.clearTimeout(tipTimer.current);
-    tipTimer.current = window.setTimeout(() => {
-      tipTimer.current = null;
-      setTip(next);
-    }, TOOLTIP_SWITCH_MS);
+    if (tip?.key !== next.key || tip.entityId !== next.entityId || tip.badge !== next.badge) setTip(next);
   };
   const onPointerUp = (e: ReactPointerEvent<SVGSVGElement>) => {
     const d = drag.current;
@@ -456,7 +471,6 @@ export function MapView(props: MapViewProps) {
     if (!hit) return;
     if (hit.badge) {
       // The count badge: select the cell and pin its tooltip, so every occupant is one click away.
-      cancelTipTimer();
       suppressKey.current = null;
       setTip({ key: hit.key, entityId: null, badge: true });
       if (inRegion(hit.point)) onSelectPoint(hit.point);
@@ -506,13 +520,13 @@ export function MapView(props: MapViewProps) {
   for (const y of ys) {
     for (const x of xs) {
       const key = `${x},${y}`;
-      const terrain = map.cells[key] ?? "land";
+      const terrain = overlay ? overlay.knownTerrain[key] ?? null : map.cells[key] ?? "land";
       const left = cellLeft(x);
       const top = cellTop(y);
       terrainCells.push(
-        <rect key={key} data-cell={key} data-coord={key} x={left} y={top} width={cellPx} height={cellPx} className={`insp-map-cell insp-t-${terrain}`} />,
+        <rect key={key} data-cell={key} data-coord={key} x={left} y={top} width={cellPx} height={cellPx} className={`insp-map-cell insp-t-${terrain ?? "fog"}`} />,
       );
-      if (terrain !== "land") {
+      if (terrain === "mountain" || terrain === "water") {
         terrainCells.push(
           <rect key={`${key}-pat`} x={left} y={top} width={cellPx} height={cellPx} fill={`url(#${uid}-${terrain})`} pointerEvents="none" />,
         );
@@ -666,8 +680,8 @@ export function MapView(props: MapViewProps) {
       {gotoMessage ? <div className="insp-error-text">{gotoMessage}</div> : null}
       {overlay ? (
         <div className="insp-banner insp-banner-agentview insp-map-agentview-note">
-          <strong>Agent view: only what {overlay.agentName} ({overlay.agentId}) has observed.</strong> Each entity is drawn where {overlay.agentId} last saw it
-          (its records name the round); {overlay.agentId} itself is drawn at its believed position
+          <strong>{overlay.agentName} ({overlay.agentId})'s view.</strong> Dark cells have no observed terrain. Known entities appear where {overlay.agentId} last saw them;
+          {" "}{overlay.agentId} itself appears at its believed position
           {overlay.believedPosition ? "" : " (unknown: nothing disclosed yet, so it is not drawn)"}. True positions, values and unobserved entities are hidden.
         </div>
       ) : props.agentView ? (
@@ -695,10 +709,10 @@ export function MapView(props: MapViewProps) {
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={() => (drag.current = null)}
-          onPointerLeave={() => {
-            // The tooltip stays (the pointer may be on its way into it); only the hover outline goes.
+          onPointerLeave={(e) => {
             if (!drag.current) setHover(null);
-            cancelTipTimer();
+            if (nearTooltip(e.clientX, e.clientY)) dismissTipSoon();
+            else closeTip();
           }}
         >
           <defs>
@@ -741,6 +755,7 @@ export function MapView(props: MapViewProps) {
                 />
                 <MarksLayer
                   marks={marks}
+                  action={actingEffect}
                   cellPx={cellPx}
                   farMode={farMode}
                   uid={uid}
@@ -786,7 +801,8 @@ export function MapView(props: MapViewProps) {
                     const box = svgRef.current?.getBoundingClientRect();
                     return { left: (box?.left ?? 0) + cellLeft(tipPoint.x), top: (box?.top ?? 0) + cellTop(tipPoint.y), size: cellPx };
                   }}
-                  onEnter={cancelTipTimer}
+                  onEnter={cancelTipDismiss}
+                  onLeave={closeTip}
                   onClose={closeTip}
                   onPick={(id) => {
                     closeTip();
@@ -800,13 +816,13 @@ export function MapView(props: MapViewProps) {
           : null}
       </div>
 
-      {/* Two fixed-height single lines (long text is cut with an ellipsis): hovering changes their
-          text, never their height, so the map above never moves under the pointer.  The first line
-          shows the viewed turn's caption (the text twin of the action marks) when nothing is hovered. */}
+      {/* Fixed-height lines keep the turn explanation visible while hover details change. */}
       <div className="insp-map-status">
+        <div className="insp-map-status-line insp-map-status-action" data-turn-id={turnId ?? undefined} title={caption ?? undefined}>
+          <strong>This turn:</strong> {plainCaption ?? "No saved action yet"}
+        </div>
         <div
           className="insp-map-status-line insp-map-status-hover"
-          data-turn-id={turnId ?? undefined}
           title="Hover a dot or cell for quick stats; click a dot to select that entity, a cell to list everything there, a count badge to list a packed cell."
         >
           {hoverPoint ? (
@@ -816,19 +832,15 @@ export function MapView(props: MapViewProps) {
               </>
             ) : (
               <>
-                Cell {fmtPoint(hoverPoint)} {terrainOf(hoverPoint)} · {hoverOccupants.length} {overlay ? "known here" : "occupants"}
+                Cell {fmtPoint(hoverPoint)} {terrainLabel(hoverPoint)} · {hoverOccupants.length} {overlay ? "known here" : "occupants"}
                 {hover?.badge ? " · click the count to list every occupant" : ""}
               </>
             )
-          ) : caption !== null ? (
-            <>{caption}</>
-          ) : (
-            <>Hover a dot or cell for quick stats; click a dot to select it, a cell to list everything there.</>
-          )}
+          ) : <>Hover a dot or cell to see what is there.</>}
         </div>
         <div className="insp-map-status-line insp-map-status-row">
           <span className="insp-map-status-item">
-            Selected: {selectedPoint ? `${fmtPoint(selectedPoint)} ${terrainOf(selectedPoint) ?? "outside region"}` : "none"}
+            Selected: {selectedPoint ? `${fmtPoint(selectedPoint)} ${terrainLabel(selectedPoint)}` : "none"}
             {selectedMarker ? ` · ${selectedMarker.title}` : ""}
           </span>
           {packedHint ? (
@@ -1039,27 +1051,35 @@ interface Anchor {
   r: number;
 }
 
-const GLYPH_LETTERS: Record<Glyph, string> = {
-  move: "",
-  attack: "",
-  message: "M",
-  absorb: "E",
-  transfer: "T",
-  recover: "R",
-  upgrade: "U",
-  wait: "W",
-  observe: "O",
-  query: "Q",
-  skill: "S",
-  none: "·",
+const ACTION_BADGE_WORDS: Record<Glyph, string> = {
+  move: "Moved",
+  attack: "Attacked",
+  message: "Sent message",
+  absorb: "Collected resources",
+  transfer: "Gave resources",
+  recover: "Healed",
+  upgrade: "Improved ability",
+  wait: "Waited",
+  observe: "Looked at cell",
+  query: "Checked details",
+  skill: "Used a skill",
+  none: "No action",
 };
 
-const DIRECTION_ANGLE: Record<string, number> = { up: 0, right: 90, down: 180, left: 270 };
+function actionBadgeLabel(mark: Extract<Mark, { type: "badge" }>, action: TurnEffect | null): string {
+  let text = ACTION_BADGE_WORDS[mark.glyph];
+  if (mark.glyph === "message" && action?.broadcast) text = "Broadcast message";
+  if (mark.glyph === "observe" && action?.to) text = `Looked at cell (${action.to.x}, ${action.to.y})`;
+  if (mark.glyph === "query" && action?.label.includes("own stats")) text = "Checked own stats";
+  else if (mark.glyph === "query" && action?.targets[0]) text = `Checked ${action.targets[0]}`;
+  return mark.ok ? text : `Failed: ${text.toLowerCase()}`;
+}
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 function MarksLayer(props: {
   marks: TurnMarks;
+  action: TurnEffect | null;
   cellPx: number;
   farMode: boolean;
   uid: string;
@@ -1094,36 +1114,17 @@ function MarksLayer(props: {
     switch (m.type) {
       case "badge": {
         const cls = `insp-mark-badge${m.ok ? "" : " is-failed"}${m.glyph === "none" ? " is-none" : ""}`;
-        if (farMode) {
-          out.push(
-            <g key={i} className={`${cls} is-mini`} data-actor={m.id} data-action={m.glyph} data-ok={m.ok}>
-              <rect x={cellLeft(m.at.x) + C - 8} y={cellTop(m.at.y)} width={8} height={8} rx={1.5} />
-            </g>,
-          );
-          break;
-        }
         const a = anchorOf(m.id, m.at);
-        const b = clamp(Math.round(1.25 * D), 11, 20);
-        const cx = a.x + 0.5 * D;
-        const cy = a.y - 0.5 * D;
-        const s = 0.75 * b;
-        const fs = 0.72 * b;
+        const label = actionBadgeLabel(m, props.action);
+        const badgeW = Math.min(props.plotW - 8, Math.ceil(label.length * 6.1 + 16));
+        const badgeH = 20;
+        const x = clamp(a.x - badgeW / 2, AXIS_LEFT + 4, AXIS_LEFT + props.plotW - badgeW - 4);
+        const above = a.y - a.r - badgeH - 4;
+        const y = above >= AXIS_TOP + 4 ? above : a.y + a.r + 4;
         out.push(
-          <g key={i} className={cls} data-actor={m.id} data-action={m.glyph} data-ok={m.ok}>
-            <rect x={cx - b / 2} y={cy - b / 2} width={b} height={b} rx={2.5} />
-            {m.glyph === "move" ? (
-              <g transform={`translate(${cx - s / 2} ${cy - s / 2}) scale(${s / 10})`}>
-                <path d="M5,8.5 V1.5 M2,4.5 L5,1.5 L8,4.5" transform={`rotate(${DIRECTION_ANGLE[m.direction ?? "up"]} 5 5)`} strokeWidth={1.6} />
-              </g>
-            ) : m.glyph === "attack" ? (
-              <g transform={`translate(${cx - s / 2} ${cy - s / 2}) scale(${s / 10})`}>
-                <path d="M2,2 L8,8 M8,2 L2,8" strokeWidth={1.8} />
-              </g>
-            ) : (
-              <text x={cx} y={cy + 0.36 * fs} textAnchor="middle" style={{ fontSize: fs }}>
-                {GLYPH_LETTERS[m.glyph]}
-              </text>
-            )}
+          <g key={i} className={cls} data-actor={m.id} data-action={m.glyph} data-ok={m.ok} aria-label={`${m.id}: ${label}`}>
+            <rect x={x} y={y} width={badgeW} height={badgeH} rx={badgeH / 2} />
+            <text x={x + badgeW / 2} y={y + 13.5} textAnchor="middle">{label}</text>
           </g>,
         );
         break;
@@ -1257,6 +1258,7 @@ interface HoverTooltipProps {
   getAnchor(): { left: number; top: number; size: number };
   /** The pointer entered the tooltip (a pending switch to another cell is cancelled). */
   onEnter(): void;
+  onLeave(): void;
   onClose(): void;
   /** Select an occupant listed in the tooltip. */
   onPick(id: string): void;
@@ -1321,6 +1323,7 @@ function HoverTooltip(props: HoverTooltipProps) {
       role="dialog"
       aria-label={`Cell ${fmtPoint(point)}`}
       onPointerEnter={props.onEnter}
+      onPointerLeave={props.onLeave}
       onKeyDown={(e) => {
         // Keys typed here never pan the map; Escape closes the tooltip.
         e.stopPropagation();
@@ -1329,7 +1332,7 @@ function HoverTooltip(props: HoverTooltipProps) {
     >
       <div className="insp-tooltip-head">
         <span>
-          <strong>{fmtPoint(point)}</strong> {terrain ?? "outside region"} ·{" "}
+          <strong>{fmtPoint(point)}</strong> {terrain ?? (props.agentViewOf ? "unknown" : "outside region")} ·{" "}
           {props.agentViewOf ? `${occupants.length} known here` : `${occupants.length} ${occupants.length === 1 ? "occupant" : "occupants"}`}
         </span>
         <button type="button" className="insp-tooltip-close" aria-label="Close cell details" title="Close (Esc)" onClick={props.onClose}>
@@ -1352,7 +1355,7 @@ function HoverTooltip(props: HoverTooltipProps) {
           </li>
         ))}
       </ul>
-      <div className="insp-tooltip-hint">Click a row to select it · Esc or × closes · stays open when the pointer leaves the map</div>
+      <div className="insp-tooltip-hint">Click a row to select it · move away to close</div>
       {removed.length > 0 ? (
         <div className="insp-tooltip-removed">
           Removed here earlier: {removed.slice(0, 3).map((r) => `${r.id} (${r.reason}, round ${r.round})`).join(", ")}
@@ -1387,14 +1390,12 @@ function LegendTile() {
   );
 }
 
-/** The acting agent's badge with the move glyph. */
+/** An example of the acting agent's word badge. */
 function LegendBadge() {
   return (
-    <svg width={11} height={11} viewBox="0 0 11 11" aria-hidden="true" className="insp-legend-dot insp-mark-badge">
-      <rect x={0} y={0} width={11} height={11} rx={2} />
-      <g transform="translate(1.375 1.375) scale(0.825)">
-        <path d="M5,8.5 V1.5 M2,4.5 L5,1.5 L8,4.5" strokeWidth={1.6} />
-      </g>
+    <svg width={48} height={16} viewBox="0 0 48 16" aria-hidden="true" className="insp-legend-dot insp-mark-badge">
+      <rect x={0} y={0} width={48} height={16} rx={8} />
+      <text x={24} y={11.5} textAnchor="middle">Moved</text>
     </svg>
   );
 }
@@ -1583,7 +1584,7 @@ function MapLegend(props: {
           </span>
           <span className="insp-legend-sep" />
           <span className="insp-legend-item">
-            <LegendBadge /> acted (red = failed)
+            <LegendBadge /> the agent's action (red = failed)
           </span>
           <span className="insp-legend-item">
             <LegendArrow /> moved

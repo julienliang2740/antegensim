@@ -36,7 +36,7 @@ export interface ControlHandlers {
   /** The pointer moved over the board (canvas or a label) without dragging (px, py in canvas pixels). */
   onHover(px: number, py: number): void;
   /** The pointer left the board (no drag in progress). */
-  onLeave(): void;
+  onLeave(clientX: number, clientY: number): void;
   /** A left click (press and release under CLICK_SLOP_PX) on the canvas; a click on a label is the label's own. */
   onClick(px: number, py: number): void;
   /** A one-shot command key; return true when it was consumed (then the event is stopped). */
@@ -152,7 +152,7 @@ export function attachControls(viewport: HTMLElement, canvas: HTMLCanvasElement,
     if (!p) {
       if (pointers.size === 0) {
         if (onBoard(event.target)) h.onHover(x, y);
-        else h.onLeave();
+        else h.onLeave(event.clientX, event.clientY);
       }
       return;
     }
@@ -212,8 +212,8 @@ export function attachControls(viewport: HTMLElement, canvas: HTMLCanvasElement,
 
   const onPointerUp = (event: PointerEvent) => endPointer(event, false);
   const onPointerCancel = (event: PointerEvent) => endPointer(event, true);
-  const onPointerLeave = () => {
-    if (pointers.size === 0) h.onLeave();
+  const onPointerLeave = (event: PointerEvent) => {
+    if (pointers.size === 0) h.onLeave(event.clientX, event.clientY);
   };
   const onContextMenu = (event: Event) => {
     if (onBoard(event.target)) event.preventDefault();

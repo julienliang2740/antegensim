@@ -5,7 +5,7 @@
  */
 // DOCS: Canvas 2D draws projected terrain and entities without a graphics API; picking and labels use the same camera projection.
 
-import type { Agent, Entity, MapState, Plant, Point } from "../../api/types";
+import type { Agent, Entity, MapState, Plant, Point, Terrain } from "../../api/types";
 import { pointKey } from "../../api/types";
 import type { CameraState } from "../../state/map3dCamera";
 import { CAMERA_NEAR, FOV_DEG, FRAME_SCREEN_Y, lodDistance, lookDirection, rightOf, upVector } from "../../state/map3dCamera";
@@ -37,6 +37,7 @@ export interface LayerOptions {
   hiddenKinds: ReadonlySet<DotKind>;
   ghost: boolean;
   selfId: string | null;
+  knownTerrain: Readonly<Record<string, Terrain | null>> | null;
 }
 export interface Marks {
   selectedPoint: Point | null;
@@ -109,7 +110,7 @@ export class Scene3d {
   private palette: Palette;
   private layers: LayerRuntime[] = [];
   private active = 0;
-  private options: LayerOptions = { priorityIds: [], hiddenKinds: new Set(), ghost: false, selfId: null };
+  private options: LayerOptions = { priorityIds: [], hiddenKinds: new Set(), ghost: false, selfId: null, knownTerrain: null };
   private marks: Marks = { selectedPoint: null, selectedEntityId: null, highlightAgentId: null, hoverEntityId: null, hoverCell: null };
   private cameraState: CameraState = { x: 0, y: 10, z: 10, yaw: 0, pitch: -0.8 };
   private lod: LodMode = "figures";
@@ -410,7 +411,9 @@ export class Scene3d {
   }
   private tile(rt: LayerRuntime, cell: Point, commands: Draw[]): void {
     const y = layerY(rt.index);
-    const terrain = terrainAt(rt.input.map, cell);
+    const fogged = this.options.knownTerrain !== null && !this.options.knownTerrain[pointKey(cell)];
+    // Unobserved terrain is flat and dark, so its true mountain or water shape cannot show through.
+    const terrain = fogged ? "land" : terrainAt(rt.input.map, cell);
     const top = y + terrainTop(terrain);
     const x = cell.x, z = -cell.y;
     const corners: Vec3[] = [[x - 0.5, top, z - 0.5], [x + 0.5, top, z - 0.5], [x + 0.5, top, z + 0.5], [x - 0.5, top, z + 0.5]];
@@ -419,7 +422,7 @@ export class Scene3d {
     if (poly.every((p) => p.x < -20) || poly.every((p) => p.x > this.width + 20) || poly.every((p) => p.y < -20) || poly.every((p) => p.y > this.height + 20)) return;
     const opacity = rt.index === this.active ? 1 : INACTIVE_LAYER_OPACITY;
     const pal = this.palette;
-    const base = terrain === "mountain" ? pal.mountain : terrain === "water" ? pal.water : pal.land;
+    const base = fogged ? ([0.065, 0.094, 0.153] as Rgb) : terrain === "mountain" ? pal.mountain : terrain === "water" ? pal.water : pal.land;
     const centerDepth = this.projectDepth([x, top, z]).depth;
     commands.push({ depth: centerDepth, paint: () => {
       const ctx = this.ctx;
@@ -437,7 +440,7 @@ export class Scene3d {
       // A quiet grid makes exact tile positions legible without a bright mesh.
       const edge = terrain === "water" ? pal.waterLine : pal.grid;
       this.strokePoly(poly, alpha(edge, opacity * (terrain === "water" ? 0.5 : Math.max(0.26, pal.gridAlpha))), 0.7);
-      if (poly.length === 4) this.terrainDetail(terrain, cell, corners, opacity);
+      if (poly.length === 4 && !fogged) this.terrainDetail(terrain, cell, corners, opacity);
       if (rt.index !== this.active) return;
       if (this.marks.hoverCell && pointKey(this.marks.hoverCell) === pointKey(cell)) { this.path(poly); ctx.fillStyle = alpha(pal.accent, 0.16); ctx.fill(); }
       if (this.marks.selectedPoint && pointKey(this.marks.selectedPoint) === pointKey(cell)) { this.strokePoly(poly, rgbToCss(pal.selOuter), 3); this.strokePoly(poly, rgbToCss(pal.selInner), 1.3); }

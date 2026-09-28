@@ -28,6 +28,8 @@ export interface AgentViewOverlay {
   believedPosition: Point | null;
   /** AgentKnowledgeView.observed_entities: each entity at the position the agent last saw it, with that round. */
   observed: ObservedEntity[];
+  /** Terrain disclosed by successful observations; null means only the location is known. */
+  knownTerrain: Readonly<Record<string, Terrain | null>>;
 }
 
 /**
@@ -118,6 +120,8 @@ export interface InspectorPanelProps {
   /** Plant stage names in the summary line when no turn is loaded (turn.rules wins). */
   rules: RulesConfig | null;
   agentView: boolean;
+  /** The selected agent's believed location while its view is active. */
+  beliefPosition?: Point | null;
   onToggleAgentView(): void;
   /** "Profile": open the entity profile card (components/profile) for `entity`. */
   onOpenProfile(): void;

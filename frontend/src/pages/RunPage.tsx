@@ -53,6 +53,7 @@ import type { Agent, AgentKnowledgeView, ApiProblem, Entity, FieldChange, Interv
 import { findEntity, pointKey } from "../api/types";
 import { InspectorPanel, MapView, OccupantList, entitiesAtPoint, flattenEntities, removedList } from "../components/inspect";
 import type { AgentViewOverlay } from "../components/inspect";
+import { knownTerrainFromKnowledge } from "../state/agentFog";
 import { Map3dLoader, MapViewSwitch, prefetchMap3d } from "../components/map3d";
 import { LauncherButton } from "../components/assistant/Launcher";
 import { ActivityLog } from "../components/run/ActivityLog";
@@ -284,17 +285,20 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     viewTurnId !== null ? getTurnKnowledge(runId, viewTurnId, selectedAgentId ?? "") : withReopen(runId, () => getLiveKnowledge(runId, selectedAgentId ?? "")),
   );
   const knowledgeView = knowledge.dataKey === knowledgeKey ? knowledge.data : null;
+  const knownTerrain = useMemo(() => knowledgeView ? knownTerrainFromKnowledge(knowledgeView) : {}, [knowledgeView]);
   // Agent view: the map and the occupant list draw only what the selected agent has observed
   // (its knowledge view of the viewed turn), never the omniscient entity list.
   const agentViewOverlay: AgentViewOverlay | null =
-    agentView && selectedAgentId && knowledgeView && knowledgeView.knowledge.agent_id === selectedAgentId
+    agentView && selectedAgentId
       ? {
           agentId: selectedAgentId,
           agentName: agentNames.get(selectedAgentId) ?? selectedAgentId,
-          believedPosition: knowledgeView.believed_self.position ?? null,
-          observed: knowledgeView.observed_entities ?? [],
+          believedPosition: knowledgeView?.believed_self.position ?? null,
+          observed: knowledgeView?.observed_entities ?? [],
+          knownTerrain,
         }
       : null;
+  const displaySelectedPoint = agentViewOverlay ? agentViewOverlay.believedPosition : selectedPoint;
 
   const inRegion = (p: Point) => {
     const region = viewed?.map.region;
@@ -334,6 +338,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   const pickEntity = (id: string, open: boolean) => {
     const entity = (viewed ? findEntity(viewed.entities, id) : undefined) ?? (live.data ? findEntity(live.data.entities, id) : undefined);
     setSelectedId(id);
+    setAgentView(entity?.kind === "agent");
     if (entity) setSelectedPoint(entity.position);
     reveal();
     if (open) openProfile(id);
@@ -343,6 +348,8 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   /** An occupant row, a map dot or a single-occupant map cell: the point is already selected; the card opens. */
   const selectOccupant = (id: string) => {
     setSelectedId(id);
+    const entity = (viewed ? findEntity(viewed.entities, id) : undefined) ?? (live.data ? findEntity(live.data.entities, id) : undefined);
+    setAgentView(entity?.kind === "agent");
     reveal();
     openProfile(id);
   };
@@ -352,7 +359,9 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
     setWorkspacePanel("inspect");
     setSelectedPoint(p);
     setTab((current) => (current === "god" || current === "storybook" ? current : "inspect"));
-    if (selectedEntity && (selectedEntity.position.x !== p.x || selectedEntity.position.y !== p.y)) setSelectedId(null);
+    // A cell click clears the agent lens; a dot click selects its occupant immediately afterward.
+    setSelectedId(null);
+    setAgentView(false);
   };
 
   const findEntityById = (id: string): string | null => {
@@ -520,7 +529,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
   const allowed = controlAvailability(status, inFlight !== null || assistantBusy);
   const highlightAgentId = viewTurnId === null && status.active_turn_id ? status.acting_agent_id : viewed.turn.acting_agent_id;
   const pendingAgentId = viewTurnId === null && status.active_turn_id ? status.acting_agent_id : null;
-  const selectedTerrain = selectedPoint ? (viewed.map.cells[pointKey(selectedPoint)] ?? (inRegion(selectedPoint) ? "land" : null)) : null;
+  const selectedTerrain = displaySelectedPoint ? (agentViewOverlay ? agentViewOverlay.knownTerrain[pointKey(displaySelectedPoint)] ?? null : viewed.map.cells[pointKey(displaySelectedPoint)] ?? (inRegion(displaySelectedPoint) ? "land" : null)) : null;
   const committedSeq = live.data && live.data.turn.turn_id === status.current_turn_id ? live.data.turn.event_seq_end : null;
   const stagedList = staged.data?.staged ?? [];
   const runName = summary.data?.name ?? runId;
@@ -663,7 +672,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
             map={viewed.map}
             entities={entities}
             removed={removed}
-            selectedPoint={selectedPoint}
+            selectedPoint={displaySelectedPoint}
             selectedEntityId={selectedId}
             onSelectPoint={selectPoint}
             onSelectEntity={selectOccupant}
@@ -685,7 +694,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
             map={viewed.map}
             entities={entities}
             removed={removed}
-            selectedPoint={selectedPoint}
+            selectedPoint={displaySelectedPoint}
             selectedEntityId={selectedId}
             onSelectPoint={selectPoint}
             onSelectEntity={selectOccupant}
@@ -782,7 +791,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
         <div role="tabpanel" id="panel-inspect" aria-labelledby="tab-inspect" hidden={tab !== "inspect"} className="side-panel area-side">
           <FindBar onFindEntity={findEntityById} onFindPoint={findPoint} />
           <OccupantList
-            point={selectedPoint}
+            point={displaySelectedPoint}
             occupants={occupants}
             selectedEntityId={selectedId}
             onSelectEntity={selectOccupant}
@@ -794,7 +803,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
           <div className="area-inspector" ref={inspectorRef}>
             {selectedEntity ? (
               <div className="inspector-nav">
-                <button type="button" className="btn btn-small" onClick={() => setSelectedId(null)}>
+                <button type="button" className="btn btn-small" onClick={() => { setSelectedId(null); setAgentView(false); }}>
                   Clear selection
                 </button>
                 <span className="hint">
@@ -817,6 +826,7 @@ export function RunPage(props: { runId: string; initialTurnId: string | null }) 
               turn={viewed}
               rules={rules.data ?? viewed.rules}
               agentView={agentView}
+              beliefPosition={agentViewOverlay?.believedPosition ?? null}
               onToggleAgentView={() => setAgentView((v) => !v)}
               onOpenProfile={() => selectedEntity && openProfile(selectedEntity.id)}
             />

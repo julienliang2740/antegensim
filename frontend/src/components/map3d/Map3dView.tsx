@@ -41,6 +41,7 @@ const poseStore = new Map<string, CameraState>();
 
 const HIDDEN_KINDS_STORAGE = "empyrean.map.hiddenKinds.";
 const TOOLTIP_SWITCH_MS = 220;
+const TOOLTIP_TRANSIT_MS = 120;
 /** Live play: a turn interval below this skips the animation (snap). */
 const SKIP_BELOW_MS = 250;
 /** The idle hover line; "? help" leads so a narrow column cuts the tail, never the pointer to the full list. */
@@ -212,6 +213,9 @@ export function Map3dView(props: Map3dProps) {
   const hoverRaf = useRef(0);
   const pointerPos = useRef<[number, number] | null>(null);
   const tipTimer = useRef<number | null>(null);
+  const tipDismissTimer = useRef<number | null>(null);
+  const tipTransitListener = useRef<((event: PointerEvent) => void) | null>(null);
+  const tipTransit = useRef(false);
   const suppressKey = useRef<string | null>(null);
   const tooltipPlace = useRef<(() => void) | null>(null);
   const lastTurnChange = useRef<number | null>(null);
@@ -231,9 +235,37 @@ export function Map3dView(props: Map3dProps) {
     if (tipTimer.current !== null) window.clearTimeout(tipTimer.current);
     tipTimer.current = null;
   };
+  const cancelTipDismiss = () => {
+    if (tipDismissTimer.current !== null) window.clearTimeout(tipDismissTimer.current);
+    tipDismissTimer.current = null;
+    if (tipTransitListener.current) document.removeEventListener("pointermove", tipTransitListener.current);
+    tipTransitListener.current = null;
+  };
+  const nearTooltip = (clientX: number, clientY: number) => {
+    const rect = document.querySelector<HTMLElement>(".map3d-tooltip")?.getBoundingClientRect();
+    return !!rect && clientX >= rect.left - 14 && clientX <= rect.right + 14 && clientY >= rect.top - 14 && clientY <= rect.bottom + 14;
+  };
+  const dismissTipSoon = () => {
+    cancelTipTimer();
+    cancelTipDismiss();
+    tipTransitListener.current = (event) => {
+      if (!nearTooltip(event.clientX, event.clientY)) closeTip();
+    };
+    document.addEventListener("pointermove", tipTransitListener.current);
+    tipDismissTimer.current = window.setTimeout(() => {
+      cancelTipDismiss();
+      tipTransit.current = false;
+      setTip(null);
+    }, TOOLTIP_TRANSIT_MS);
+  };
   const closeTip = useCallback(() => {
     if (tipTimer.current !== null) window.clearTimeout(tipTimer.current);
     tipTimer.current = null;
+    if (tipDismissTimer.current !== null) window.clearTimeout(tipDismissTimer.current);
+    tipDismissTimer.current = null;
+    if (tipTransitListener.current) document.removeEventListener("pointermove", tipTransitListener.current);
+    tipTransitListener.current = null;
+    tipTransit.current = false;
     setTip(null);
   }, []);
 
@@ -427,15 +459,20 @@ export function Map3dView(props: Map3dProps) {
       layerY: () => layerY(latest.current.active),
       boardPoint: (px, py) => scene.boardPoint(px, py),
       onHover: (px, py) => {
+        tipTransit.current = false;
+        cancelTipDismiss();
         pointerPos.current = [px, py];
         if (!hoverRaf.current) hoverRaf.current = requestAnimationFrame(updateHover);
       },
-      onLeave: () => {
+      onLeave: (clientX, clientY) => {
         pointerPos.current = null;
         if (hoverRef.current) {
           hoverRef.current = null;
           setHover(null);
         }
+        tipTransit.current = nearTooltip(clientX, clientY);
+        if (tipTransit.current) dismissTipSoon();
+        else closeTip();
       },
       onClick: (px, py) => {
         const hit = scene.hitTest(px, py);
@@ -501,7 +538,7 @@ export function Map3dView(props: Map3dProps) {
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
-    scene.setLayers(layers, latest.current.active, { priorityIds: [highlightAgentId, selectedEntityId], hiddenKinds, ghost: overlay !== null, selfId: overlay?.agentId ?? null });
+    scene.setLayers(layers, latest.current.active, { priorityIds: [highlightAgentId, selectedEntityId], hiddenKinds, ghost: overlay !== null, selfId: overlay?.agentId ?? null, knownTerrain: overlay?.knownTerrain ?? null });
   }, [layers, hiddenKinds, highlightAgentId, selectedEntityId, overlay, sceneReady]);
 
   useEffect(() => {
@@ -562,16 +599,29 @@ export function Map3dView(props: Map3dProps) {
 
   // ------------------------------------------------------------------ tooltip
   useEffect(() => {
-    if (!hover) return;
+    if (!hover) {
+      if (tipRef.current && !tipTransit.current) closeTip();
+      return;
+    }
+    tipTransit.current = false;
+    cancelTipDismiss();
     const key = pointKey(hover.cell);
     if (suppressKey.current && suppressKey.current !== key) suppressKey.current = null;
     if (suppressKey.current === key) return;
     const occupants = markersAtPoint(activeLayer.markers, hover.cell);
     const gone = removedByPoint.get(key) ?? [];
-    if (occupants.length === 0 && gone.length === 0) return;
+    if (occupants.length === 0 && gone.length === 0) {
+      closeTip();
+      return;
+    }
     const focusId = hover.kind === "entity" ? hover.id : null;
     if (tip && tip.cell.x === hover.cell.x && tip.cell.y === hover.cell.y) {
       if (tip.focusId !== focusId) setTip({ cell: tip.cell, focusId });
+      return;
+    }
+    if (tip) {
+      cancelTipTimer();
+      setTip({ cell: hover.cell, focusId });
       return;
     }
     cancelTipTimer();
@@ -595,7 +645,8 @@ export function Map3dView(props: Map3dProps) {
   }, [tip, closeTip]);
 
   // ------------------------------------------------------------------ derived text
-  const terrainOf = (p: Point) => activeLayer.map.cells[pointKey(p)] ?? (p.x >= region.min_x && p.x <= region.max_x && p.y >= region.min_y && p.y <= region.max_y ? "land" : null);
+  const terrainOf = (p: Point) => overlay ? overlay.knownTerrain[pointKey(p)] ?? null : activeLayer.map.cells[pointKey(p)] ?? (p.x >= region.min_x && p.x <= region.max_x && p.y >= region.min_y && p.y <= region.max_y ? "land" : null);
+  const terrainLabel = (p: Point) => terrainOf(p) ?? (overlay ? "unknown" : "outside region");
   const hoverMarker = hover?.kind === "entity" ? (markerById.get(hover.id) ?? null) : null;
   const hoverOccupants = hover ? markersAtPoint(activeLayer.markers, hover.cell) : [];
   const selectedMarker = selectedEntityId ? (markerById.get(selectedEntityId) ?? null) : null;
@@ -650,7 +701,7 @@ export function Map3dView(props: Map3dProps) {
           {layerText} · {activeLayer.label}
         </span>
         <button type="button" className="insp-btn insp-btn-small" title="Replay the viewed turn's animations (R)" onClick={() => runCommand("replay")}>
-          Animate once
+          Replay turn animation
         </button>
         <label className="insp-small" title={reducedMotion ? "Off: this system asks for reduced motion" : "Animate the viewed turn's actions (moves, attacks, messages, growth)"}>
           <input type="checkbox" checked={animations && !reducedMotion} disabled={reducedMotion} onChange={(e) => setAnimations(e.target.checked)} /> Animations
@@ -661,8 +712,8 @@ export function Map3dView(props: Map3dProps) {
       </div>
       {overlay ? (
         <div className="insp-banner insp-banner-agentview insp-map-agentview-note">
-          <strong>Agent view: only what {overlay.agentName} ({overlay.agentId}) has observed.</strong> Each entity is drawn where {overlay.agentId} last saw it
-          (its records name the round); {overlay.agentId} itself is drawn at its believed position
+          <strong>{overlay.agentName} ({overlay.agentId})'s view.</strong> Dark cells have no observed terrain. Known entities appear where {overlay.agentId} last saw them;
+          {" "}{overlay.agentId} itself appears at its believed position
           {overlay.believedPosition ? "" : " (unknown: nothing disclosed yet, so it is not drawn)"}. True positions, values and unobserved entities are hidden.
         </div>
       ) : props.agentView ? (
@@ -716,14 +767,14 @@ export function Map3dView(props: Map3dProps) {
             </>
           ) : hover ? (
             <>
-              Cell {fmtPoint(hover.cell)} {terrainOf(hover.cell) ?? "outside region"} · {hoverOccupants.length} {overlay ? "known here" : hoverOccupants.length === 1 ? "occupant" : "occupants"}
+              Cell {fmtPoint(hover.cell)} {terrainLabel(hover.cell)} · {hoverOccupants.length} {overlay ? "known here" : hoverOccupants.length === 1 ? "occupant" : "occupants"}
             </>
           ) : (
             KEY_HELP
           )}
         </div>
         <div className="map3d-status-line map3d-status-row">
-          Selected: {selectedPoint ? `${fmtPoint(selectedPoint)} ${terrainOf(selectedPoint) ?? "outside region"}` : "none"}
+          Selected: {selectedPoint ? `${fmtPoint(selectedPoint)} ${terrainLabel(selectedPoint)}` : "none"}
           {selectedMarker ? ` · ${displayName(selectedMarker, activeLayer)}` : ""} · {turnText} · {layerText}
           {hiddenNames.length > 0 ? ` · Not drawn: ${hiddenNames.join(", ")}` : ""}
         </div>
@@ -815,7 +866,8 @@ export function Map3dView(props: Map3dProps) {
             const box = viewport.getBoundingClientRect();
             return { left: box.left + p.x - 20, top: box.top + p.y - 20, size: 40 };
           }}
-          onEnter={cancelTipTimer}
+          onEnter={() => { tipTransit.current = false; cancelTipTimer(); cancelTipDismiss(); }}
+          onLeave={closeTip}
           onClose={closeTip}
           onPick={(id) => {
             closeTip();

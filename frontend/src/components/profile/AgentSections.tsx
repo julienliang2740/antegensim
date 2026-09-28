@@ -60,7 +60,7 @@ export function AgentOverview(props: {
           Agent view: only what {agent.name} ({agent.id}) knows. Its Skills, Knowledge, Decisions and Messages are its own; authoritative stats, model settings and other
           entities are hidden here.
         </div>
-        <KeyValueTable rows={[["position (told each turn)", fmtPoint(agent.position)]]} />
+        <KeyValueTable rows={[["believed position", knowledge?.believed_self.position ? fmtPoint(knowledge.believed_self.position) : "unknown"]]} />
         <Section title="Believed self">{knowledge ? <BelievedSelfTable believed={knowledge.believed_self} /> : <KnowledgeMissing agent={agent} error={props.knowledgeError} />}</Section>
       </div>
     );

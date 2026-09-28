@@ -45,6 +45,7 @@ const MODULES = [
   "state/turnEffects.ts",
   "components/inspect/mapDots.ts",
   "state/mapIndicators.ts",
+  "state/agentFog.ts",
 ];
 
 function build() {
@@ -354,7 +355,8 @@ test("mergeTurnIndex replaces the refreshed rounds", () => {
 });
 
 test("turn options always contain the turn id and say what happened", () => {
-  assert.match(timeline.turnOptionLabel(entry("r00001_t02_a01"), name), /^t02 · a01 Name · observe ok — r00001_t02_a01$/);
+  assert.match(timeline.turnOptionLabel(entry("r00001_t02_a01"), name), /^t02 · a01 Name · Looked at cell — r00001_t02_a01$/);
+  assert.match(timeline.turnOptionLabel(entry("r00001_t04_a01", { action_name: "query", ok: false }), name), /Checked details \(failed\)/);
   assert.match(timeline.turnOptionLabel(entry("r00001_end"), name), /^Round 1 end — r00001_end$/);
   assert.match(timeline.turnOptionLabel(entry("r00001_t03_a04", { action_name: null, decision_source: "skipped_dead" }), name), /skipped \(dead\)/);
 });
@@ -1206,6 +1208,25 @@ test("agent view overlay: one marker per entity, the latest sighting wins", asyn
   assert.deepEqual(markers.map((m) => m.id).sort(), ["a01", "a02", "p0001"]);
   assert.deepEqual(markers.find((m) => m.id === "a02").position, { x: 2, y: 0 });
   assert.equal(markers.find((m) => m.id === "a01").self, true);
+});
+
+test("agent fog reveals only successful own observations and known locations", async () => {
+  const { knownTerrainFromKnowledge } = await load("state/agentFog.mjs");
+  const record = (kind, source, ok, point, terrain) => ({ kind, provenance: { source }, content: { result: { ok, data: { point, terrain } } } });
+  const view = {
+    knowledge: { records: [
+      record("observation", "own_action", true, { x: 1, y: 2 }, "water"),
+      record("observation", "own_action", false, { x: 2, y: 2 }, "mountain"),
+      record("observation", "operator", true, { x: 3, y: 3 }, "land"),
+    ] },
+    observed_entities: [{ position: { x: 4, y: 5 } }],
+    believed_self: { position: { x: 0, y: 0 } },
+  };
+  const known = knownTerrainFromKnowledge(view);
+  assert.deepEqual(Object.keys(known).sort(), ["0,0", "1,2", "4,5"]);
+  assert.equal(known["1,2"], "water");
+  assert.equal(known["4,5"], null);
+  assert.equal(known["0,0"], null);
 });
 
 // ---------------------------------------------------------------- entity profile card

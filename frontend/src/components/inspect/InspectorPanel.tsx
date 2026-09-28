@@ -33,13 +33,14 @@ export function InspectorPanel(props: InspectorPanelProps) {
     entity.kind === "agent" && entity.last_action
       ? `last action: ${entity.last_action.name}${entity.last_result ? (entity.last_result.ok ? " ok" : ` ${entity.last_result.reason}`) : ""}`
       : null;
+  const agentBelief = props.agentView && entity.kind === "agent";
 
   return (
     <div className="insp insp-inspector">
       <div className="insp-inspector-head">
         <div className="insp-panel-title">
           <KindTag kind={entity.kind} dead={dead} /> {capitalize(kindLabel(entity.kind))} {entityTitle(entity)}
-          <span className="insp-muted"> at {fmtPoint(entity.position)}</span>
+          <span className="insp-muted"> at {agentBelief ? props.beliefPosition ? fmtPoint(props.beliefPosition) : "unknown location" : fmtPoint(entity.position)}{agentBelief ? " (believed)" : ""}</span>
           {dead ? <span className="insp-badge insp-badge-bad">dead</span> : null}
         </div>
         <button type="button" className="btn btn-small btn-primary" title="Open the profile card: stats, decisions, skills, knowledge and more" onClick={props.onOpenProfile}>
@@ -66,8 +67,7 @@ export function InspectorPanel(props: InspectorPanelProps) {
         </div>
       ) : null}
       <p className={`insp-summary-line${presence.inTurn === null ? " insp-stale" : ""}`}>
-        {entityOneLine(entity, turn?.rules ?? props.rules)}
-        {last ? ` · ${last}` : ""}
+        {agentBelief ? "Agent view shows its own records. Open Profile for believed stats and knowledge." : <>{entityOneLine(entity, turn?.rules ?? props.rules)}{last ? ` · ${last}` : ""}</>}
       </p>
     </div>
   );
