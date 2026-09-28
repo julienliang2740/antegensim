@@ -1535,6 +1535,412 @@
     "04:50 cut: plateau: story complete; no new event since r64 (a27/a14 odd/even fruit deal); 1 gift (a13->a16 30, r38), 0 hits; 18 survivors farm",
     "2026-09-28 04:53 run folder deleted in the final cleanup (quiet, failed or superseded); verdict kept in sweep/notes"
    ]
+  },
+  "FG100A": {
+   "run_id": "run_20260928_060618_0cd6",
+   "world_id": "world_20260928_060618_5972",
+   "name": "Five Groves \u00b7 100 rounds \u00b7 A",
+   "scenario": "clone of run_20260927_221309_cc43",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 06:06:18",
+   "notes": [
+    "clone of baseline run_20260927_221309_cc43, seed 7101",
+    "08:25 parked: session limit",
+    "10:12 resumed on :8001",
+    "10:40 finished at r00100_end"
+   ]
+  },
+  "TT100A": {
+   "run_id": "run_20260928_060711_1118",
+   "world_id": "world_20260928_060711_58ce",
+   "name": "Two to a Tree \u00b7 100 rounds \u00b7 A",
+   "scenario": "clone of run_20260928_034839_c3c2",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 06:07:11",
+   "notes": [
+    "clone of baseline run_20260928_034839_c3c2, seed 8101",
+    "08:23 parked: session limit",
+    "10:12 resumed on :8002",
+    "10:36 finished at r00100_end"
+   ]
+  },
+  "TT100B": {
+   "run_id": "run_20260928_060716_d5cd",
+   "world_id": "world_20260928_060716_7dea",
+   "name": "Two to a Tree \u00b7 100 rounds \u00b7 B",
+   "scenario": "clone of run_20260928_034839_c3c2",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 06:07:16",
+   "notes": [
+    "clone of baseline run_20260928_034839_c3c2, seed 8102",
+    "08:23 parked: session limit",
+    "10:12 resumed on :8001",
+    "10:29 finished at r00100_end"
+   ]
+  },
+  "TT60A": {
+   "run_id": "run_20260928_060721_66b3",
+   "world_id": "world_20260928_060721_b4b3",
+   "name": "Two to a Tree \u00b7 60 rounds \u00b7 A",
+   "scenario": "clone of run_20260928_034839_c3c2",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-28 06:07:21",
+   "notes": [
+    "clone of baseline run_20260928_034839_c3c2, seed 8161",
+    "07:40 finished at r00060_end"
+   ]
+  },
+  "TT60B": {
+   "run_id": "run_20260928_060725_1bbc",
+   "world_id": "world_20260928_060725_732c",
+   "name": "Two to a Tree \u00b7 60 rounds \u00b7 B",
+   "scenario": "clone of run_20260928_034839_c3c2",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-28 06:07:26",
+   "notes": [
+    "clone of baseline run_20260928_034839_c3c2, seed 8162",
+    "07:43 finished at r00060_end"
+   ]
+  },
+  "FG100B": {
+   "run_id": "run_20260928_060751_d161",
+   "world_id": "world_20260928_060751_5413",
+   "name": "Five Groves \u00b7 100 rounds \u00b7 B",
+   "scenario": "clone of run_20260927_221309_cc43",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 100,
+   "launched": "2026-09-28 06:07:51",
+   "notes": [
+    "clone of baseline run_20260927_221309_cc43, seed 7102",
+    "08:25 parked: session limit",
+    "10:12 resumed on :8002",
+    "10:30 finished at r00100_end"
+   ]
+  },
+  "FG60A": {
+   "run_id": "run_20260928_060835_f750",
+   "world_id": "world_20260928_060835_2b90",
+   "name": "Five Groves \u00b7 60 rounds \u00b7 A",
+   "scenario": "clone of run_20260927_221309_cc43",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-28 06:08:35",
+   "notes": [
+    "clone of baseline run_20260927_221309_cc43, seed 7161",
+    "07:36 finished at r00060_end"
+   ]
+  },
+  "FG60B": {
+   "run_id": "run_20260928_060858_01a1",
+   "world_id": "world_20260928_060858_1843",
+   "name": "Five Groves \u00b7 60 rounds \u00b7 B",
+   "scenario": "clone of run_20260927_221309_cc43",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-28 06:08:58",
+   "notes": [
+    "clone of baseline run_20260927_221309_cc43, seed 7162",
+    "07:35 finished at r00060_end"
+   ]
+  },
+  "FGF1": {
+   "run_id": "run_20260928_071636_b6a2",
+   "world_id": "world_20260927_221309_ec7a",
+   "name": "Five Groves \u00b7 fork at round 17 \u00b7 1",
+   "scenario": "fork of run_20260927_221309_cc43 at r00017_end",
+   "status": "finished",
+   "port": 8003,
+   "agents": 32,
+   "max_rounds": 35,
+   "launched": "2026-09-28 07:16:37",
+   "notes": [
+    "continuation of run_20260927_221309_cc43 from r00017_end",
+    "08:13 finished at r00035_end"
+   ]
+  },
+  "FGF2": {
+   "run_id": "run_20260928_071716_33dd",
+   "world_id": "world_20260927_221309_ec7a",
+   "name": "Five Groves \u00b7 fork at round 17 \u00b7 2",
+   "scenario": "fork of run_20260927_221309_cc43 at r00017_end",
+   "status": "finished",
+   "port": 8003,
+   "agents": 32,
+   "max_rounds": 35,
+   "launched": "2026-09-28 07:17:17",
+   "notes": [
+    "continuation of run_20260927_221309_cc43 from r00017_end",
+    "08:15 finished at r00035_end"
+   ]
+  },
+  "FGF3": {
+   "run_id": "run_20260928_071717_5888",
+   "world_id": "world_20260927_221309_ec7a",
+   "name": "Five Groves \u00b7 fork at round 17 \u00b7 3",
+   "scenario": "fork of run_20260927_221309_cc43 at r00017_end",
+   "status": "finished",
+   "port": 8003,
+   "agents": 32,
+   "max_rounds": 35,
+   "launched": "2026-09-28 07:17:18",
+   "notes": [
+    "continuation of run_20260927_221309_cc43 from r00017_end",
+    "08:16 finished at r00035_end"
+   ]
+  },
+  "FGF4": {
+   "run_id": "run_20260928_071718_1271",
+   "world_id": "world_20260927_221309_ec7a",
+   "name": "Five Groves \u00b7 fork at round 17 \u00b7 4",
+   "scenario": "fork of run_20260927_221309_cc43 at r00017_end",
+   "status": "finished",
+   "port": 8003,
+   "agents": 32,
+   "max_rounds": 35,
+   "launched": "2026-09-28 07:17:19",
+   "notes": [
+    "continuation of run_20260927_221309_cc43 from r00017_end",
+    "10:11 finished at r00035_end"
+   ]
+  },
+  "TTF1": {
+   "run_id": "run_20260928_071719_0f93",
+   "world_id": "world_20260928_034839_de65",
+   "name": "Two to a Tree \u00b7 fork at round 14 \u00b7 1",
+   "scenario": "fork of run_20260928_034839_c3c2 at r00014_end",
+   "status": "finished",
+   "port": 8003,
+   "agents": 32,
+   "max_rounds": 30,
+   "launched": "2026-09-28 07:17:20",
+   "notes": [
+    "continuation of run_20260928_034839_c3c2 from r00014_end",
+    "08:11 finished at r00030_end"
+   ]
+  },
+  "TTF2": {
+   "run_id": "run_20260928_071720_c3ec",
+   "world_id": "world_20260928_034839_de65",
+   "name": "Two to a Tree \u00b7 fork at round 14 \u00b7 2",
+   "scenario": "fork of run_20260928_034839_c3c2 at r00014_end",
+   "status": "finished",
+   "port": 8003,
+   "agents": 32,
+   "max_rounds": 30,
+   "launched": "2026-09-28 07:17:21",
+   "notes": [
+    "continuation of run_20260928_034839_c3c2 from r00014_end",
+    "08:12 finished at r00030_end"
+   ]
+  },
+  "TTF3": {
+   "run_id": "run_20260928_071721_7517",
+   "world_id": "world_20260928_034839_de65",
+   "name": "Two to a Tree \u00b7 fork at round 14 \u00b7 3",
+   "scenario": "fork of run_20260928_034839_c3c2 at r00014_end",
+   "status": "finished",
+   "port": 8003,
+   "agents": 32,
+   "max_rounds": 30,
+   "launched": "2026-09-28 07:17:22",
+   "notes": [
+    "continuation of run_20260928_034839_c3c2 from r00014_end",
+    "08:13 finished at r00030_end"
+   ]
+  },
+  "TTF4": {
+   "run_id": "run_20260928_071722_900f",
+   "world_id": "world_20260928_034839_de65",
+   "name": "Two to a Tree \u00b7 fork at round 14 \u00b7 4",
+   "scenario": "fork of run_20260928_034839_c3c2 at r00014_end",
+   "status": "finished",
+   "port": 8003,
+   "agents": 32,
+   "max_rounds": 30,
+   "launched": "2026-09-28 07:17:23",
+   "notes": [
+    "continuation of run_20260928_034839_c3c2 from r00014_end",
+    "08:13 finished at r00030_end"
+   ]
+  },
+  "FG60C": {
+   "run_id": "run_20260928_073632_b792",
+   "world_id": "world_20260928_073632_2098",
+   "name": "Five Groves \u00b7 60 rounds \u00b7 C",
+   "scenario": "clone of run_20260927_221309_cc43",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-28 07:36:32",
+   "notes": [
+    "clone of baseline run_20260927_221309_cc43, seed 7163",
+    "08:25 parked: session limit",
+    "10:12 resumed on :8001",
+    "11:03 finished at r00060_end"
+   ]
+  },
+  "FG60D": {
+   "run_id": "run_20260928_073641_831d",
+   "world_id": "world_20260928_073641_09dc",
+   "name": "Five Groves \u00b7 60 rounds \u00b7 D",
+   "scenario": "clone of run_20260927_221309_cc43",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-28 07:36:43",
+   "notes": [
+    "clone of baseline run_20260927_221309_cc43, seed 7164",
+    "08:25 parked: session limit",
+    "10:12 resumed on :8002",
+    "11:05 finished at r00060_end"
+   ]
+  },
+  "TT60C": {
+   "run_id": "run_20260928_074334_e857",
+   "world_id": "world_20260928_074334_45f0",
+   "name": "Two to a Tree \u00b7 60 rounds \u00b7 C",
+   "scenario": "clone of run_20260928_034839_c3c2",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-28 07:43:35",
+   "notes": [
+    "clone of baseline run_20260928_034839_c3c2, seed 8163",
+    "08:23 parked: session limit",
+    "10:12 resumed on :8001",
+    "11:12 finished at r00060_end"
+   ]
+  },
+  "TT60D": {
+   "run_id": "run_20260928_074339_cabc",
+   "world_id": "world_20260928_074339_9c3a",
+   "name": "Two to a Tree \u00b7 60 rounds \u00b7 D",
+   "scenario": "clone of run_20260928_034839_c3c2",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-28 07:43:40",
+   "notes": [
+    "clone of baseline run_20260928_034839_c3c2, seed 8164",
+    "08:23 parked: session limit",
+    "10:12 resumed on :8002",
+    "11:08 finished at r00060_end"
+   ]
+  },
+  "FG45A": {
+   "run_id": "run_20260928_101359_84a8",
+   "world_id": "world_20260928_101359_c23d",
+   "name": "Five Groves \u00b7 45 rounds \u00b7 A",
+   "scenario": "clone of run_20260927_221309_cc43",
+   "status": "finished",
+   "port": 8003,
+   "agents": 32,
+   "max_rounds": 45,
+   "launched": "2026-09-28 10:13:59",
+   "notes": [
+    "clone of baseline run_20260927_221309_cc43, seed 7141",
+    "11:23 finished at r00045_end"
+   ]
+  },
+  "FG45B": {
+   "run_id": "run_20260928_101359_6c68",
+   "world_id": "world_20260928_101359_a629",
+   "name": "Five Groves \u00b7 45 rounds \u00b7 B",
+   "scenario": "clone of run_20260927_221309_cc43",
+   "status": "finished",
+   "port": 8003,
+   "agents": 32,
+   "max_rounds": 45,
+   "launched": "2026-09-28 10:13:59",
+   "notes": [
+    "clone of baseline run_20260927_221309_cc43, seed 7142",
+    "11:22 finished at r00045_end"
+   ]
+  },
+  "TT45A": {
+   "run_id": "run_20260928_101400_7953",
+   "world_id": "world_20260928_101400_e734",
+   "name": "Two to a Tree \u00b7 45 rounds \u00b7 A",
+   "scenario": "clone of run_20260928_034839_c3c2",
+   "status": "finished",
+   "port": 8003,
+   "agents": 32,
+   "max_rounds": 45,
+   "launched": "2026-09-28 10:14:00",
+   "notes": [
+    "clone of baseline run_20260928_034839_c3c2, seed 8141",
+    "11:17 finished at r00045_end"
+   ]
+  },
+  "TT45B": {
+   "run_id": "run_20260928_101401_7293",
+   "world_id": "world_20260928_101401_bf84",
+   "name": "Two to a Tree \u00b7 45 rounds \u00b7 B",
+   "scenario": "clone of run_20260928_034839_c3c2",
+   "status": "finished",
+   "port": 8003,
+   "agents": 32,
+   "max_rounds": 45,
+   "launched": "2026-09-28 10:14:02",
+   "notes": [
+    "clone of baseline run_20260928_034839_c3c2, seed 8142",
+    "11:19 finished at r00045_end"
+   ]
+  },
+  "FG45C": {
+   "run_id": "run_20260928_103116_710f",
+   "world_id": "world_20260928_103116_b997",
+   "name": "Five Groves \u00b7 45 rounds \u00b7 C",
+   "scenario": "clone of run_20260927_221309_cc43",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 45,
+   "launched": "2026-09-28 10:31:19",
+   "notes": [
+    "clone of baseline run_20260927_221309_cc43, seed 7143",
+    "11:17 finished at r00045_end"
+   ]
+  },
+  "TT45C": {
+   "run_id": "run_20260928_103120_044f",
+   "world_id": "world_20260928_103120_13f6",
+   "name": "Two to a Tree \u00b7 45 rounds \u00b7 C",
+   "scenario": "clone of run_20260928_034839_c3c2",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 45,
+   "launched": "2026-09-28 10:31:21",
+   "notes": [
+    "clone of baseline run_20260928_034839_c3c2, seed 8143",
+    "11:17 finished at r00045_end"
+   ]
   }
  }
 }
