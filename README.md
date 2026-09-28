@@ -1,5 +1,8 @@
 # Empyrean prototype (antegensim)
 
+<img width="1906" height="942" alt="image" src="https://github.com/user-attachments/assets/e359afea-70a0-4aea-b651-bd2d74684dca" />
+
+
 Empyrean is a local, turn-based artificial-life world in which each agent is a language model: on its turn an agent gets a bounded decision packet built only from what it knows, returns one JSON decision, and the world engine applies the rules, costs and effects. Every turn is saved as a readable JSON checkpoint, so a run can be paused, inspected turn by turn, edited ("god mode") and continued from any point in its history.
 
 A built-in **assistant** explains the world and the controls, reads a run's records to answer questions, proposes changes as execution briefs that run only after you approve them, writes a per-turn **Storybook**, and turns a run into a chaptered story in **Story Mode**. You can speak to it with **Dictate** (local Whisper).
