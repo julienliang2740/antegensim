@@ -46,6 +46,11 @@ export function ContextSettingsEditor(props: ContextSettingsEditorProps) {
     else props.onChange({ ...props.value, include_skill_source: flag });
   };
 
+  const setPersonaTip = (flag: boolean) => {
+    if (overrideMode) setOverride("persona_tip", flag);
+    else props.onChange({ ...props.value, persona_tip: flag });
+  };
+
   const overrideCell = (key: OverrideKey, baseValue: unknown) => {
     if (!overrideMode) return null;
     const checked = isOverridden(key);
@@ -159,6 +164,25 @@ export function ContextSettingsEditor(props: ContextSettingsEditorProps) {
             </td>
             {overrideCell("include_skill_source", props.value.include_skill_source)}
             {baseCell(props.value.include_skill_source ? "yes" : "no")}
+          </tr>
+          <tr>
+            <th scope="row">
+              Persona tip
+              <div className="insp-fieldname">persona_tip</div>
+              <div className="insp-hint">Adds the tip (skills; message, give or attack other agents) after the persona. On for new runs.</div>
+            </th>
+            <td>
+              {editable("persona_tip") ? (
+                <label>
+                  <input type="checkbox" checked={effective.persona_tip} onChange={(e) => setPersonaTip(e.target.checked)} />{" "}
+                  {effective.persona_tip ? "on, the tip follows the persona" : "off, persona only"}
+                </label>
+              ) : (
+                <span>{effective.persona_tip ? "on" : "off"}</span>
+              )}
+            </td>
+            {overrideCell("persona_tip", props.value.persona_tip)}
+            {baseCell(props.value.persona_tip ? "on" : "off")}
           </tr>
         </tbody>
       </table>

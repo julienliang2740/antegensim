@@ -30,6 +30,7 @@ const ALL_NULL_OVERRIDES: ContextOverrides = {
   new_event_digest_limit: null,
   weights: null,
   include_skill_source: null,
+  persona_tip: null,
 };
 
 /** Fields of `next` that differ from `base` (for a readable run-scope merge). */
@@ -43,6 +44,7 @@ function changedFields(base: ContextSettings, next: ContextSettings): ContextOve
   if (next.new_event_digest_limit !== base.new_event_digest_limit) diff.new_event_digest_limit = next.new_event_digest_limit;
   if (JSON.stringify(next.weights) !== JSON.stringify(base.weights)) diff.weights = next.weights;
   if (next.include_skill_source !== base.include_skill_source) diff.include_skill_source = next.include_skill_source;
+  if (next.persona_tip !== base.persona_tip) diff.persona_tip = next.persona_tip;
   return diff;
 }
 

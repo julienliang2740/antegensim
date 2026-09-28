@@ -2508,3 +2508,70 @@ body.is-resizing-y * {
   overflow-x: auto;
 }
 
+
+/* HelpTip: "?" button with a hover/focus explanation (components/common/HelpTip.tsx) */
+.help-tip {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.help-tip-q {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-alt);
+  color: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+.help-tip-text {
+  display: none;
+  position: absolute;
+  left: 26px;
+  top: -6px;
+  z-index: 40;
+  width: min(360px, 80vw);
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.45;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+.help-tip:hover .help-tip-text,
+.help-tip:focus-within .help-tip-text {
+  display: block;
+}
+
+/* New session: the persona tip switch in the Agents section */
+.persona-tip-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 6px 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-alt);
+}
+.persona-tip-toggle > label {
+  font-weight: 600;
+}
+.persona-tip-toggle details {
+  flex-basis: 100%;
+}
+.persona-tip-toggle blockquote {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--accent);
+  color: var(--muted);
+  font-size: 12.5px;
+}

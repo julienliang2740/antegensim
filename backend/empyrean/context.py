@@ -1401,14 +1401,25 @@ _ACTION_SHAPES = """{"name":"move","args":{"direction":"up"|"down"|"left"|"right
 {"name":"run_skill","args":{"skill":"feed","arguments":[]}}"""
 
 
-def _identity_block(agent: Agent) -> str:
+def persona_text(agent: Agent, settings: ContextSettings) -> str:
+    """The persona the agent is shown: its card persona, followed by the persona tip when
+    ``settings.persona_tip`` is on (A-KNOW-9; an empty ``persona_tip_text`` means
+    ``config.PERSONA_TIP_TEXT``).  Empty when neither is present."""
+    parts = [agent.persona.strip()]
+    if settings.persona_tip:
+        parts.append((settings.persona_tip_text or config.PERSONA_TIP_TEXT).strip())
+    return " ".join(p for p in parts if p)
+
+
+def _identity_block(agent: Agent, settings: ContextSettings) -> str:
     lines = [
         "# EMPYREAN: STABLE RULES",
         f'You are {agent.name} (agent id "{agent.id}"), one agent in the Empyrean, a shared grid world with other '
         "agents. These rules describe how the world works; they do not set goals for you.",
     ]
-    if agent.persona.strip():
-        lines.append(f"Persona configured by the operator: {_single_line(agent.persona)}")
+    persona = persona_text(agent, settings)
+    if persona:
+        lines.append(f"Persona configured by the operator: {_single_line(persona)}")
     return "\n".join(lines)
 
 
@@ -1574,14 +1585,16 @@ def _output_block(agent: Agent, settings: ContextSettings) -> str:
 
 
 def stable_rules_text(rules: RulesConfig, agent: Agent, settings: ContextSettings, mind_multiplier: float) -> str:
-    """Layer 1 (system message, cacheable): identity line (id, name, persona if any); the
+    """Layer 1 (system message, cacheable): identity line (id, name, persona if any, followed by
+    the persona tip when ``settings.persona_tip`` is on, A-KNOW-9); the
     action list with normal and skill prices; the failure reasons; cognition rates and this
     agent's mind multiplier, upkeep and interpreter cost; the skill language summary; the
     output JSON description with the effective notebook limit (``settings.notebook_max_tokens``)
     and the observe page/has_more rule; the game rules in ~25 lines.  No goals or
-    personality unless ``agent.persona``.  Nothing that changes from turn to turn."""
+    personality unless ``agent.persona`` (and the tip, which names options, never goals).  Nothing
+    that changes from turn to turn."""
     return "\n\n".join([
-        _identity_block(agent),
+        _identity_block(agent, settings),
         _world_block(rules),
         _costs_block(rules, mind_multiplier),
         _skill_language_block(rules),

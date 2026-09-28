@@ -17,6 +17,10 @@ assistant (part of its always-loaded knowledge). Numbers are shipped defaults; s
 * **Agent card**: the setup form entry for one agent (id, name, model, position, stats, persona,
   notebook, initial skills, context overrides). A run has 6 to 64 cards.
 * **Persona**: operator-written text injected into the agent's stable rules.
+* **Persona tip**: a fixed paragraph appended after the persona when the context setting `persona_tip`
+  is on (the default for new runs): repeated routines can be saved as skills that cost no thinking while
+  they run, and other agents are options (message, give compute, attack, absorb what the dead leave). It
+  names options, never goals. See SYSTEM.md "Agents" and A-KNOW-9.
 * **Plant / species**: a stationary source of energy and essence growing through stages
   (`fruit_tree`: sprout, sapling, mature). **Vitality** is a plant's essence.
 * **Fruit**: an entity holding compute (60 shipped) spawned by a plant; no essence.

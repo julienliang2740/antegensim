@@ -58,6 +58,19 @@ An agent is a card turned into a world entity: id (`a01`..`a12` by default, or a
 `^[A-Za-z0-9]{1,16}$` that is not a reserved word), name, model key (the card's own or the run
 default), start position, stats, optional persona, starting notebook and starting skills.
 
+**Persona tip (A-KNOW-9).** When the context setting `persona_tip` is on (the shipped default for new
+runs; a card can override it), the engine appends one fixed paragraph after the persona in the stable
+rules:
+
+> Tip: a routine you find yourself repeating can be saved as a skill (save_skills) and started with run_skill; while it runs you make no decisions, so you pay no thinking. Other agents are options too: you can message them (send, broadcast), give them compute (transfer) or attack them; a killed agent leaves all its compute as residue that anyone at that point can absorb. Whether and how to use any of this is your call.
+
+It names options the rules already describe and never a goal or a target. Live runs showed why it is
+on by default: in the same crowded world, Haiku agents with only the plain persona sent no messages,
+wrote no skills and attacked nobody, while with the tip they wrote skills, pleaded, traded, fought and
+retaliated. Switch it off only to study unprompted behaviour. The exact words are stored with each run
+(`context.persona_tip_text`, `config.PERSONA_TIP_TEXT` when empty); a stored setting without the field
+reads as off, so older runs keep their prompts.
+
 Shipped default stats: compute 200, essence 20, essence capacity 100, health 100, max health 100,
 attack 1.0, attack cap 50 (the most damage one attack can deal), speed 1, vision range 0, communication range 0, compute absorption 0.20, essence
 absorption 0.10, skill count limit 5, skill block limit 100.
@@ -242,7 +255,7 @@ Shipped limits: 5 skills of at most 100 blocks, 4,000 characters of source, no r
   or the latest `query(self)` and applies only disclosed changes (own costs and effects, damage,
   transfers received, cognition charges). **Upkeep is not disclosed**, so the belief drifts until
   the next `query(self)`.
-* **Decision packet**: a system message (stable rules, persona) and one user message with
+* **Decision packet**: a system message (stable rules, persona, then the persona tip when it is on) and one user message with
   sections skills, notebook, recent history, retrieved memories, situation and decision request.
   Mandatory parts come first; unread event bodies, the notebook, recent history (5 decisions),
   retrieved memories (5, ranked by relevance, recency and importance) and skill source fill the

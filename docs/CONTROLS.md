@@ -71,11 +71,12 @@ Loads `GET /api/defaults?agent_count=8` (and `?agent_count=12` for new-card temp
 | Agents | Row click or **Edit…** | Opens the agent card dialog | | |
 | Agents | **Remove** | Removes that card (disabled at 6 cards) | | |
 | Agents | **Add agent** | Appends a card from the next default template (disabled at 12) | | |
+| Agents | **Add the tip to every persona** (checkbox, on by default), its "?" help, **Show the tip text** | Adds the persona tip after every agent's persona (A-KNOW-9): repeated routines can be saved as skills, and other agents can be messaged, given compute or attacked, with the dead leaving their compute. The "?" explains that it is on so agents do interesting things (without it they mostly forage alone and a run is often boring) and that it should be switched off only on purpose, for example to see what agents do unprompted. A card can override it in its context settings | Sets `context.persona_tip` | on (default) / off |
 | Agent card dialog | **Close** / **Done** / Escape / backdrop | Close the dialog | | |
 | Agent card | id, name, model, **Starting coordinate**, **Initial stats and resources** (13 stats), context overrides, **Persona (optional; shown to the agent as part of its identity)**, **Starting notebook (optional; the agent's own notes)** | Card fields | | |
 | Agent card | **Add initial skill** / **Remove skill** | Edit the card's starting skills (compiled when you validate) | | |
 | Agent card | **Remove this agent** | Removes the card (disabled at 6) | | |
-| Context settings | **Context settings (run defaults)** | Input token cap, generation allowance, history, notebook, memories, digest, weights, skill source; checked inline against the default model | | |
+| Context settings | **Context settings (run defaults)** | Input token cap, generation allowance, history, notebook, memories, digest, weights, skill source, persona tip; checked inline against the default model | | |
 | World | Region, terrain, initial plants, stage, fruit, plants at agent starts, observation page size | World fields | | |
 | World | **Preview world** | Shows the terrain for this seed and where the cards start | `POST /api/world/preview` | |
 | Plant rules | **+ Add species**, **Duplicate**, **Remove species**, **+ Add stage**, **Remove** (stage) | Edit plant species and stages | | |

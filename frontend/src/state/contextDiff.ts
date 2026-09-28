@@ -18,6 +18,7 @@ export function changedContextFields(base: ContextSettings, next: ContextSetting
     "new_event_digest_limit",
     "weights",
     "include_skill_source",
+    "persona_tip",
   ];
   for (const key of keys) {
     if (JSON.stringify(base[key]) !== JSON.stringify(next[key])) (diff as Record<string, unknown>)[key] = next[key];

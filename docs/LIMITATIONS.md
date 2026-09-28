@@ -80,6 +80,7 @@ The host budget (`real_budget_usd`) is checked when a round's calls are started,
 Fixed after the sweep: the input-cap lockout (the cap now bounds only optional content) and the stalls on the CLI's output-token cap (now a truncated reply). Still open:
 
 * **Backend memory grows on live runs with automatic storybook narration.** Fake-model runs stay flat (68 MB after 40 rounds of 20 agents); with the narrator on, a 20-agent run grows super-linearly (328 MB after 30 rounds with a fake narrator) and live backends reached 7 GB within 15-30 minutes (one was killed by the kernel at 11.8 GB). Automatic narration is now off by default; restarting the backend frees the memory and open runs resume.
+* **Un-instructed agents rarely interact.** With only a neutral persona, Haiku agents forage alone: in about 5,900 small-world decisions there were 13 messages and no transfers, skills or attacks on agents, and a 32-agent crowded world gave none in 33 rounds. Naming the options (the persona tip, A-KNOW-9, now on by default) changes that; a permission sentence or a different aim did not. The tip is a nudge, so runs made with it are not evidence of fully unprompted behaviour.
 * **Starving agents cannot think.** At (near) zero compute an agent cannot afford the minimum packet and cannot pay for an attack either, so famine ends in a quiet line of starvation deaths rather than conflict.
 
 - *Next step:* find what the storybook path retains.

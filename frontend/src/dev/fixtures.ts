@@ -436,6 +436,8 @@ export const CONTEXT: ContextSettings = {
   new_event_digest_limit: 10,
   weights: { relevance: 1, recency: 1, importance: 1 },
   include_skill_source: false,
+  persona_tip: true,
+  persona_tip_text: "Tip: other agents are options too (fixture text).",
 };
 
 export const SETTINGS: RunSettings = {
@@ -496,6 +498,8 @@ function effectiveView(settings: RunSettings, agentIds: string[]): EffectiveSett
       new_event_digest_limit: o.new_event_digest_limit ?? settings.context.new_event_digest_limit,
       weights: o.weights ?? settings.context.weights,
       include_skill_source: o.include_skill_source ?? settings.context.include_skill_source,
+      persona_tip: o.persona_tip ?? settings.context.persona_tip,
+      persona_tip_text: settings.context.persona_tip_text,
     };
     effective_model_key[id] = settings.model_overrides[id] ?? settings.default_model_key;
   }

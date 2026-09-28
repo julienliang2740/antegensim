@@ -179,6 +179,7 @@ export function AgentCardEditor(props: AgentCardEditorProps) {
             Persona (optional; shown to the agent as part of its identity)
           </label>
           <textarea id={`${idField}-persona`} rows={2} value={card.persona} onChange={(e) => set({ persona: e.target.value })} />
+          <span className="hint">While the persona tip is on (Agents section; on by default), the tip is added after this text.</span>
           <label className="block-label" htmlFor={`${idField}-notebook`}>
             Starting notebook (optional; the agent's own notes)
           </label>

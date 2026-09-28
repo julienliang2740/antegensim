@@ -769,6 +769,38 @@ def test_stable_rules_identity_prices_and_no_prescribed_goals():
     )
 
 
+def test_persona_tip_follows_the_persona_when_on_and_is_absent_when_off():
+    """A-KNOW-9: the tip is appended to the persona line only when context.persona_tip is on;
+    an empty persona_tip_text means config.PERSONA_TIP_TEXT; with no card persona the tip stands alone."""
+    rules = RulesConfig()
+    agent = make_agent()
+    agent.persona = "A careful gardener."
+    on = context.stable_rules_text(rules, agent, ContextSettings(persona_tip=True), 1.0)
+    assert f"Persona configured by the operator: A careful gardener. {config.PERSONA_TIP_TEXT}" in on
+    off = context.stable_rules_text(rules, agent, ContextSettings(persona_tip=False, persona_tip_text="Ignored."), 1.0)
+    assert "Tip:" not in off and "Ignored." not in off
+    assert "Persona configured by the operator: A careful gardener.\n" in off + "\n"
+    alone = context.stable_rules_text(rules, make_agent(), ContextSettings(persona_tip=True, persona_tip_text="Custom tip."), 1.0)
+    assert "Persona configured by the operator: Custom tip." in alone
+    assert context.persona_text(make_agent(), ContextSettings()) == ""
+
+
+def test_persona_tip_defaults_on_for_new_runs_and_off_for_stored_settings():
+    """A-KNOW-9: the shipped default is on with config.PERSONA_TIP_TEXT; stored settings written
+    before the field existed read it as off; a per-agent override can switch it for one agent."""
+    assert config.DEFAULT_CONTEXT.persona_tip is True
+    assert config.DEFAULT_CONTEXT.persona_tip_text == config.PERSONA_TIP_TEXT
+    assert ContextSettings.model_validate({"input_token_cap": 6000}).persona_tip is False
+    settings = RunSettings(
+        context=config.DEFAULT_CONTEXT.model_copy(deep=True),
+        context_overrides={"a02": ContextOverrides(persona_tip=False)},
+        default_model_key="fake-heuristic",
+    )
+    assert settings.effective_context("a01").persona_tip is True
+    assert settings.effective_context("a02").persona_tip is False
+    assert settings.effective_context("a02").persona_tip_text == config.PERSONA_TIP_TEXT
+
+
 def test_stable_rules_explain_simultaneous_decisions_and_speed_order():
     """A-SCHED-5 reaches the agent: everyone decides at round start, actions resolve in speed
     order and are checked when they resolve, news of the round arrives next round."""

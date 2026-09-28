@@ -494,6 +494,11 @@ class ContextSettings(StrictModel):
     new_event_digest_limit: int = Field(default=10, ge=1, le=50)
     weights: RetrievalWeights = Field(default_factory=RetrievalWeights)
     include_skill_source: bool = False  # include full skill code of every skill in the packet
+    # A-KNOW-9: append persona_tip_text to the agent's persona line.  The schema default is off so
+    # stored settings from before this field keep their prompts; new runs get config.DEFAULT_CONTEXT
+    # (on, with config.PERSONA_TIP_TEXT) through GET /api/defaults.
+    persona_tip: bool = False
+    persona_tip_text: str = Field(default="", max_length=2000)  # empty -> config.PERSONA_TIP_TEXT when on
 
 
 class ContextOverrides(StrictModel):
@@ -512,6 +517,7 @@ class ContextOverrides(StrictModel):
     new_event_digest_limit: Optional[int] = Field(default=None, ge=1, le=50)
     weights: Optional[RetrievalWeights] = None
     include_skill_source: Optional[bool] = None
+    persona_tip: Optional[bool] = None  # the tip text itself stays a run-level setting
 
     def is_empty(self) -> bool:
         return not self.model_dump(exclude_none=True)

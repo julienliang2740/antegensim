@@ -466,6 +466,14 @@ async function runSteps(page) {
       await tryFind(rec, "add card control", clickables(page, /add (agent|card)|\+ ?agent|new card/i));
       await tryFind(rec, "remove card control", clickables(page, /remove|delete/i));
       await tryFind(rec, "context settings in setup (U16)", fields(page, /input token cap|token cap|generation allowance/i));
+      // The persona tip switch (A-KNOW-9): present in the Agents section and on by default.
+      const tipOn = await page.evaluate(() => {
+        const label = [...document.querySelectorAll("label")].find((l) => /add the tip to every persona/i.test(l.textContent || ""));
+        const box = label ? label.querySelector('input[type="checkbox"]') : null;
+        return box ? box.checked : null;
+      });
+      rec.found.persona_tip_default_on = tipOn;
+      if (tipOn !== true) throw new Error(`"Add the tip to every persona" should be present and on by default (got ${tipOn})`);
       await tryFind(rec, "model choice in setup", fields(page, /model/i));
       // The browser check always creates fake-model runs (the operator default is claude-cli-haiku):
       // pick fake-heuristic as the default model before any validation or creation.

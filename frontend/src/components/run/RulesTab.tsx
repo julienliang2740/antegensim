@@ -7,7 +7,7 @@
  */
 
 import type { ReactNode } from "react";
-import type { AssumptionEntry, ContextLimits, ContextSettings, RulesConfig, RunSettings } from "../../api/types";
+import type { AssumptionEntry, ContextLimits, ContextOverrides, ContextSettings, RulesConfig, RunSettings } from "../../api/types";
 import { PlantRulesEditor, applyOverrides } from "../inspect";
 
 export interface RulesTabProps {
@@ -54,7 +54,8 @@ function FlatTable(props: { title: string; values: object; note?: ReactNode }) {
   );
 }
 
-const CONTEXT_COLUMNS: [keyof ContextSettings, string][] = [
+/** Context columns shown per agent: the settings a card can override (the tip text is run-level only). */
+const CONTEXT_COLUMNS: [keyof ContextSettings & keyof ContextOverrides, string][] = [
   ["input_token_cap", "input cap"],
   ["generation_allowance", "generation"],
   ["recent_history_length", "recent history"],
@@ -63,6 +64,7 @@ const CONTEXT_COLUMNS: [keyof ContextSettings, string][] = [
   ["new_event_digest_limit", "digest"],
   ["weights", "weights (rel/rec/imp)"],
   ["include_skill_source", "skill source"],
+  ["persona_tip", "persona tip"],
 ];
 
 function contextCell(settings: ContextSettings, key: keyof ContextSettings): string {

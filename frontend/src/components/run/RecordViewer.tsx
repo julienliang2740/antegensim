@@ -198,7 +198,7 @@ export function PacketView(props: { packet: DecisionPacketRecord; calls: ModelCa
           ["notebook version", String(p.notebook_version)],
           [
             "effective settings",
-            `input cap ${s.input_token_cap}, generation ${s.generation_allowance}, recent history ${s.recent_history_length}, notebook ${s.notebook_max_tokens}, retrieved ${s.retrieved_memory_limit}, digest ${s.new_event_digest_limit}, weights r${s.weights.relevance}/c${s.weights.recency}/i${s.weights.importance}, skill source ${s.include_skill_source ? "yes" : "no"}`,
+            `input cap ${s.input_token_cap}, generation ${s.generation_allowance}, recent history ${s.recent_history_length}, notebook ${s.notebook_max_tokens}, retrieved ${s.retrieved_memory_limit}, digest ${s.new_event_digest_limit}, weights r${s.weights.relevance}/c${s.weights.recency}/i${s.weights.importance}, skill source ${s.include_skill_source ? "yes" : "no"}, persona tip ${s.persona_tip ? "on" : "off"}`,
           ],
           ["selected records", p.selected_record_ids.length ? p.selected_record_ids.join(", ") : "none"],
           ["unread shown (digest)", p.digest_record_ids.length ? p.digest_record_ids.join(", ") : "none"],

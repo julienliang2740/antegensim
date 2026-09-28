@@ -279,6 +279,10 @@ export interface ContextSettings {
   new_event_digest_limit: number;
   weights: RetrievalWeights;
   include_skill_source: boolean;
+  /** A-KNOW-9: append persona_tip_text to every persona (on for new runs; absent in old records = off). */
+  persona_tip: boolean;
+  /** The tip's exact words; empty means the shipped text (config.PERSONA_TIP_TEXT). Run-level only. */
+  persona_tip_text: string;
 }
 
 /**
@@ -295,6 +299,7 @@ export interface ContextOverrides {
   new_event_digest_limit?: number | null;
   weights?: RetrievalWeights | null;
   include_skill_source?: boolean | null;
+  persona_tip?: boolean | null;
 }
 
 // ---------------------------------------------------------------------------

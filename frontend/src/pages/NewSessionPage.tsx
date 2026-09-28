@@ -22,6 +22,7 @@ import { ApiClientError, createRun, getDefaults, getRunSetup, listModels, previe
 import type { AgentCard, ApiProblem, MapState, RunCreateRequest } from "../api/types";
 import { pointKey } from "../api/types";
 import { ContextSettingsEditor, MapView, PlantRulesEditor } from "../components/inspect";
+import { HelpTip } from "../components/common/HelpTip";
 import { NumberField } from "../components/common/NumberField";
 import { PageHeader } from "../components/common/PageHeader";
 import { ErrorLine, FieldProblems, ProblemSummary } from "../components/common/Problems";
@@ -313,6 +314,29 @@ export function NewSessionPage({ cloneRunId }: { cloneRunId?: string }) {
           One row per agent, prefilled from {cloneRunId ? "the saved setup" : "the defaults"}. Click a row or "Edit…" to open its full card: every stat, model, persona, notebook, context settings
           and starting skills.
         </p>
+        <div className="persona-tip-toggle">
+          <label>
+            <input
+              type="checkbox"
+              checked={request.context.persona_tip}
+              onChange={(e) => update({ ...request, context: { ...request.context, persona_tip: e.target.checked } })}
+            />{" "}
+            Add the tip to every persona
+          </label>
+          <HelpTip label="What is the persona tip?">
+            On by default. The tip is added after each agent's persona: it reminds agents that a repeated routine can be
+            saved as a skill (no thinking cost while it runs) and that other agents are options too (message them, give
+            them compute, attack them, absorb what the dead leave). We add it so agents do interesting things: without it
+            they mostly forage alone and the scenario is often very boring. Only turn it off if you know what you are
+            doing, for example to test what agents do completely unprompted. A card can override it under its context
+            settings.
+          </HelpTip>
+          <span className="hint">{request.context.persona_tip ? "on (recommended)" : "off: agents get their persona only"}</span>
+          <details>
+            <summary>Show the tip text</summary>
+            <blockquote>{request.context.persona_tip_text || "(empty: the shipped tip text is used)"}</blockquote>
+          </details>
+        </div>
         <FieldProblems problems={at("agents")} />
         <AgentTable
           cards={request.agents}

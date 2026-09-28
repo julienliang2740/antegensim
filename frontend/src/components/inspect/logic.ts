@@ -165,6 +165,8 @@ export function applyOverrides(base: ContextSettings, overrides: ContextOverride
     new_event_digest_limit: overrides.new_event_digest_limit ?? base.new_event_digest_limit,
     weights: overrides.weights ?? base.weights,
     include_skill_source: overrides.include_skill_source ?? base.include_skill_source,
+    persona_tip: overrides.persona_tip ?? base.persona_tip,
+    persona_tip_text: base.persona_tip_text,
   };
 }
 

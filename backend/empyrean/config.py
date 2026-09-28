@@ -288,6 +288,18 @@ DEFAULT_AGENT_POSITIONS: list[Point] = _ring_positions(MAX_AGENTS)
 # Context / memory defaults (technical spec: "Budget delivery and inspection")
 # ---------------------------------------------------------------------------
 
+# A-KNOW-9: the persona tip, appended to every agent's persona line when context.persona_tip is on
+# (the shipped default for new runs).  It names options the rules already describe; it never
+# says which to use.  Without it, un-instructed Haiku agents in live runs almost never wrote
+# skills, messaged, gave or attacked (docs/LIMITATIONS.md); with it they did all four.
+PERSONA_TIP_TEXT = (
+    "Tip: a routine you find yourself repeating can be saved as a skill (save_skills) and started with "
+    "run_skill; while it runs you make no decisions, so you pay no thinking. Other agents are options too: "
+    "you can message them (send, broadcast), give them compute (transfer) or attack them; a killed agent "
+    "leaves all its compute as residue that anyone at that point can absorb. Whether and how to use any "
+    "of this is your call."
+)
+
 DEFAULT_CONTEXT = ContextSettings(
     input_token_cap=6000,
     generation_allowance=1000,
@@ -297,6 +309,8 @@ DEFAULT_CONTEXT = ContextSettings(
     new_event_digest_limit=10,
     weights=RetrievalWeights(relevance=1.0, recency=1.0, importance=1.0),
     include_skill_source=False,
+    persona_tip=True,
+    persona_tip_text=PERSONA_TIP_TEXT,
 )
 
 # Minimum packet: stable rules + core situation + decision request must fit in this many
@@ -1074,6 +1088,12 @@ ASSUMPTIONS: dict[str, Assumption] = {
         default="mandatory = stable rules (catalogue without source) + core situation (believed self, latest result, digest header with counts by kind and one <= 40-token line per urgent record) + decision request + model overhead; then fill: full unread bodies (urgent kinds first), notebook, recent history, retrieved memories, skill source",
         citation="Spec: 'How selection works' step 1 (compact digest; overflow counts)",
         rationale="A flood of messages can never make every packet unaffordable.",
+    ),
+    "A-KNOW-9": Assumption(
+        key="context.persona_tip, context.persona_tip_text",
+        default={"persona_tip": True, "persona_tip_text": "config.PERSONA_TIP_TEXT"},
+        citation="Live sweep finding 2026-09-27: with the plain persona, Haiku agents in a crowded world sent 0 messages, wrote 0 skills and made 0 attacks; the same world with the tip gave messages, skills, trades and kills",
+        rationale="On for new runs so scenarios are not silent; a stored setting without the field reads as off (runs made before the setting existed had no tip), so reopening an old run never changes its prompts.",
     ),
     # -- god mode -----------------------------------------------------------------
     "A-GOD-1": Assumption(

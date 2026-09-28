@@ -73,7 +73,7 @@ model, and every direct `POST /api/runs` sets `default_model_key` to `fake-heuri
 | --- | --- | --- | --- |
 | 1 | `preflight` | `GET /api/health` and `/api/defaults` answer | |
 | 2 | `entry` | The entry page shows **New session** and **Resume session** | U10 |
-| 3 | `new-session-cards` | New session shows 8 prefilled cards with the default names. Also notes whether add/remove card, context settings and a model choice exist, then picks `fake-heuristic` as the default model | U11, U16 |
+| 3 | `new-session-cards` | New session shows 8 prefilled cards with the default names. Also notes whether add/remove card, context settings and a model choice exist, fails unless **Add the tip to every persona** is present and on by default (A-KNOW-9), then picks `fake-heuristic` as the default model | U11, U16 |
 | 4 | `edit-card` | Renames the first card and sets its starting x to 3 | U11 |
 | 5 | `invalid-value` | Sets health to 999 (or x to 999). Expects a problem shown by its path (`agents[0]...`), then fixes the value | Spec "New session" |
 | 6 | `create-run` | Checks that `fake-heuristic` is the default model, creates the run and checks that it opens **Paused** with a round/turn status line. The backend confirms the edited name and x | U12, U14 |

@@ -102,6 +102,7 @@ Only one backend process may have a given run open at a time. A second process g
 
 1. On the entry page choose **New session**.
 2. The form starts with 8 prefilled agent cards. You can have 6 to 64 (**Add agent**; **Remove** in the table or **Remove this agent** in the card dialog). Each card has an id, a name, a start point, all stats and a model. The form also holds the world settings (seed, plants, fruit), the context and memory settings, the play delay and an optional real-money budget (`real_budget_usd`).
+   The Agents section has **Add the tip to every persona**, on by default. It appends a short tip to every persona (skills cost no thinking while they run; other agents can be messaged, given compute or attacked). Keep it on unless you want to see what agents do unprompted: without it agents mostly forage alone and runs are often quiet. The "?" next to it explains this, and **Show the tip text** shows the exact words.
 3. **Validate setup** lists every problem by its path, for example `agents[2].stats.compute: must be a finite number >= 0`. Nothing is created until the problems are fixed.
 4. **Create and open** creates the run. It always opens **Paused** at `r00000_init`.
 

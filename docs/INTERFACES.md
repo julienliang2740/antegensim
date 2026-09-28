@@ -546,7 +546,8 @@ last-seen position, the agent itself at `believed_self.position`) without parsin
 `messages = [system: stable_rules, user: body]` where body sections appear in this order, each
 under a labelled heading:
 
-1. `stable_rules` (system, cacheable): identity (id, name, persona if set), action list with
+1. `stable_rules` (system, cacheable): identity (id, name, persona if set, followed by the persona
+   tip when `persona_tip` is on, A-KNOW-9), action list with
    normal and skill prices, the failure reasons, cognition rates and this agent's mind
    multiplier, upkeep and interpreter cost, the skill language summary, the output JSON
    description (section 6) with the effective notebook limit and the observe page/`has_more`
@@ -1670,6 +1671,19 @@ Applied for 64 agents (2026-09-27): `schemas.MIN_AGENT_CARDS = 6` / `MAX_AGENT_C
 `config._ring_positions` (the first 12 cards unchanged, cards 13-64 on the next Manhattan rings out
 to radius 6, A-WORLD-4); `GET /api/defaults?agent_count` accepts 6-64; the frontend mirror
 `frontend/src/state/setupForm.ts::MAX_AGENTS` and `scripts/run_sim.py` `--agents` follow.
+
+
+Applied for the persona tip (2026-09-28): `ContextSettings` gained `persona_tip: bool` and
+`persona_tip_text: str` (max 2000 characters) and `ContextOverrides` gained `persona_tip`, mirrored in
+`frontend/src/api/types.ts`. The schema defaults are off and empty, so a stored `settings.json` or
+`run_request.json` written before this change reads as tip off and an old run's prompts never
+change; `config.DEFAULT_CONTEXT` (what `GET /api/defaults` serves, and so the New session form,
+`scripts/run_sim.py` and the assistant's create-run briefs) turns it on with
+`config.PERSONA_TIP_TEXT`. `context.persona_text` appends the text (empty = the shipped text) to the
+persona line of `stable_rules` (section 4, item 1). The switch is a per-run context setting like
+`include_skill_source`: a card overrides it through `context_overrides`, god mode edits it with
+`update_context_settings`, **Clone setup** copies it, and the Rules tab and packet records show it.
+No route changed.
 
 
 Applied for cloning session setup (2026-09-27): `GET /api/runs/{run_id}/setup` returns the saved

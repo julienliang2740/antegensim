@@ -339,6 +339,11 @@ export function InstructionsPage(props: { section?: string | null }) {
           Each decision is one call to the agent's model (the model on its card, else the run default). A card can also give the agent a persona, a starting
           notebook and starting skills.
         </p>
+        <p>
+          By default a short <strong>persona tip</strong> follows every persona: it reminds the agent that a repeated routine can be saved as a skill that
+          costs no thinking while it runs, and that other agents are options too (message them, give them compute, attack them, absorb what the dead leave).
+          It names options, never goals. Without it, agents mostly forage alone. The New session form can switch it off, and a card can override it.
+        </p>
         <h3>Local knowledge</h3>
         <ul>
           <li>
