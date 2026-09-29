@@ -52,7 +52,7 @@ def pos_at(rd, turn, aid):
         return None
 
 
-def analyse(ref):
+def analyse(ref, max_round=None):
     rid = resolve(ref)
     rd = run_dir(rid)
     req = json.load(open(f"{rd}/run_request.json"))
@@ -64,12 +64,16 @@ def analyse(ref):
             evs += json.load(open(f))
         except Exception:
             pass
+    if max_round:
+        evs = [e for e in evs if e["round"] <= max_round]
     last = max([e["round"] for e in evs if e["kind"] == "round_ended"] or [0])
     living = {e["round"]: len(e["details"]["living_agents"]) for e in evs if e["kind"] == "round_ended"}
     hits, tree_hits, msgs, transfers, deaths, saves, rejects, broke = [], 0, [], [], {}, [], 0, {}
     thoughts = {}
     via, acts = Counter(), Counter()
     fruit_eaten, residue_absorbs = [], []
+    observes, obs_points, queries, moves = 0, set(), 0, 0
+    seen_others = set()
     think_cost, act_cost = 0.0, 0.0
     decisions = malformed = skill_runs = 0
     cost = 0.0
@@ -108,6 +112,17 @@ def analyse(ref):
             if not res.get("ok"):
                 continue
             args = d["action"]["args"]
+            if n == "observe":
+                observes += 1
+                pt = args.get("point") or {}
+                obs_points.add((a, pt.get("x"), pt.get("y")))
+                for ent in (res.get("data") or {}).get("entities", []) or []:
+                    if ent.get("kind") == "agent" and ent.get("id") != a:
+                        seen_others.add((a, ent.get("id")))
+            elif n == "query":
+                queries += 1
+            elif n == "move":
+                moves += 1
             if n in ("send", "broadcast"):
                 msgs.append((r, t, a, args.get("recipient", "*"), str(args.get("message", ""))))
             elif n == "transfer":
@@ -244,6 +259,8 @@ def analyse(ref):
         "fruit_eaten": len(fruit_eaten), "residue_absorbs": len(residue_absorbs), "broke": len(broke),
         "first_broke": min((r for r, _ in broke.values()), default=None),
         "decisions": decisions, "malformed": malformed, "cost": round(cost, 2),
+        "observes": observes, "points_observed": len(obs_points), "queries": queries, "moves": moves,
+        "others_seen": len(seen_others), "talk_pairs": len({frozenset((m[2], m[3])) for m in msgs if m[3] not in ("*", None)}),
         "bins": bins, "nature": nature, "notable_rounds": notable_rounds, "msgs": msgs, "transfers_list": transfers, "hit_list": hits,
     }
 

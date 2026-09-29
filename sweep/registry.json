@@ -1941,6 +1941,301 @@
     "clone of baseline run_20260928_034839_c3c2, seed 8143",
     "11:17 finished at r00045_end"
    ]
+  },
+  "SC1": {
+   "run_id": "run_20260928_230043_2915",
+   "world_id": "world_20260928_230043_e988",
+   "name": "Five Groves \u00b7 cheap senses \u00b7 r1",
+   "scenario": "variant of run_20260927_221309_cc43: {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-28 23:00:43",
+   "notes": [
+    "variant of run_20260927_221309_cc43, seed 7141, patch {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}}",
+    "23:42 finished at r00040_end"
+   ]
+  },
+  "SC2": {
+   "run_id": "run_20260928_230043_5929",
+   "world_id": "world_20260928_230043_0a2d",
+   "name": "Five Groves \u00b7 far senses \u00b7 r1",
+   "scenario": "variant of run_20260927_221309_cc43: {\"stats\": {\"vision_range\": 5, \"communication_range\": 10}}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-28 23:00:44",
+   "notes": [
+    "variant of run_20260927_221309_cc43, seed 7141, patch {\"stats\": {\"vision_range\": 5, \"communication_range\": 10}}",
+    "23:44 finished at r00040_end"
+   ]
+  },
+  "SC3": {
+   "run_id": "run_20260928_230044_01da",
+   "world_id": "world_20260928_230044_2f9d",
+   "name": "Five Groves \u00b7 cheap + far senses \u00b7 r1",
+   "scenario": "variant of run_20260927_221309_cc43: {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}, \"stats\": {\"vision_range\": 5, \"communication_range\": 10}}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-28 23:00:44",
+   "notes": [
+    "variant of run_20260927_221309_cc43, seed 7141, patch {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}, \"stats\": {\"vision_range\": 5, \"communication_range\": 10}}",
+    "23:44 finished at r00040_end"
+   ]
+  },
+  "SC4": {
+   "run_id": "run_20260928_230045_4555",
+   "world_id": "world_20260928_230045_42e1",
+   "name": "Two to a Tree \u00b7 cheap senses \u00b7 r1",
+   "scenario": "variant of run_20260928_034839_c3c2: {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-28 23:00:45",
+   "notes": [
+    "variant of run_20260928_034839_c3c2, seed 8141, patch {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}}",
+    "23:44 finished at r00040_end"
+   ]
+  },
+  "SC5": {
+   "run_id": "run_20260928_230046_e290",
+   "world_id": "world_20260928_230046_305f",
+   "name": "Two to a Tree \u00b7 far senses \u00b7 r1",
+   "scenario": "variant of run_20260928_034839_c3c2: {\"stats\": {\"vision_range\": 5, \"communication_range\": 10}}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-28 23:00:46",
+   "notes": [
+    "variant of run_20260928_034839_c3c2, seed 8141, patch {\"stats\": {\"vision_range\": 5, \"communication_range\": 10}}",
+    "23:42 finished at r00040_end"
+   ]
+  },
+  "SC6": {
+   "run_id": "run_20260928_230047_e9db",
+   "world_id": "world_20260928_230047_210b",
+   "name": "Two to a Tree \u00b7 cheap + far senses \u00b7 r1",
+   "scenario": "variant of run_20260928_034839_c3c2: {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}, \"stats\": {\"vision_range\": 5, \"communication_range\": 10}}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-28 23:00:47",
+   "notes": [
+    "variant of run_20260928_034839_c3c2, seed 8141, patch {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}, \"stats\": {\"vision_range\": 5, \"communication_range\": 10}}",
+    "23:43 finished at r00040_end"
+   ]
+  },
+  "SC7": {
+   "run_id": "run_20260928_234500_f438",
+   "world_id": "world_20260928_234500_9f25",
+   "name": "Two to a Tree \u00b7 cheap senses \u00b7 r2a",
+   "scenario": "variant of run_20260928_034839_c3c2: {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-28 23:45:00",
+   "notes": [
+    "variant of run_20260928_034839_c3c2, seed 8142, patch {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}}",
+    "00:27 finished at r00040_end"
+   ]
+  },
+  "SC8": {
+   "run_id": "run_20260928_234500_73e7",
+   "world_id": "world_20260928_234500_bead",
+   "name": "Two to a Tree \u00b7 cheap senses \u00b7 r2b",
+   "scenario": "variant of run_20260928_034839_c3c2: {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-28 23:45:01",
+   "notes": [
+    "variant of run_20260928_034839_c3c2, seed 8143, patch {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}}",
+    "00:28 finished at r00040_end"
+   ]
+  },
+  "SC9": {
+   "run_id": "run_20260928_234501_403d",
+   "world_id": "world_20260928_234501_9101",
+   "name": "Two to a Tree \u00b7 cheap + far senses \u00b7 r2",
+   "scenario": "variant of run_20260928_034839_c3c2: {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}, \"stats\": {\"vision_range\": 5, \"communication_range\": 10}}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-28 23:45:01",
+   "notes": [
+    "variant of run_20260928_034839_c3c2, seed 8142, patch {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}, \"stats\": {\"vision_range\": 5, \"communication_range\": 10}}",
+    "00:28 finished at r00040_end"
+   ]
+  },
+  "SC10": {
+   "run_id": "run_20260928_234502_a98d",
+   "world_id": "world_20260928_234502_339e",
+   "name": "Two to a Tree \u00b7 far senses \u00b7 r2",
+   "scenario": "variant of run_20260928_034839_c3c2: {\"stats\": {\"vision_range\": 5, \"communication_range\": 10}}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-28 23:45:02",
+   "notes": [
+    "variant of run_20260928_034839_c3c2, seed 8142, patch {\"stats\": {\"vision_range\": 5, \"communication_range\": 10}}",
+    "00:28 finished at r00040_end"
+   ]
+  },
+  "SC11": {
+   "run_id": "run_20260928_234502_23ca",
+   "world_id": "world_20260928_234502_b967",
+   "name": "Five Groves \u00b7 cheap senses \u00b7 r2",
+   "scenario": "variant of run_20260927_221309_cc43: {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-28 23:45:03",
+   "notes": [
+    "variant of run_20260927_221309_cc43, seed 7142, patch {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}}",
+    "00:27 finished at r00040_end"
+   ]
+  },
+  "SC12": {
+   "run_id": "run_20260928_234503_4d04",
+   "world_id": "world_20260928_234503_0f6e",
+   "name": "Five Groves \u00b7 cheap + far senses \u00b7 r2",
+   "scenario": "variant of run_20260927_221309_cc43: {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}, \"stats\": {\"vision_range\": 5, \"communication_range\": 10}}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-28 23:45:04",
+   "notes": [
+    "variant of run_20260927_221309_cc43, seed 7142, patch {\"prices\": {\"observe\": 0.25, \"query\": 0.25, \"send\": 0.25, \"broadcast\": 0.5}, \"stats\": {\"vision_range\": 5, \"communication_range\": 10}}",
+    "00:29 finished at r00040_end"
+   ]
+  },
+  "SC13": {
+   "run_id": "run_20260929_003027_535a",
+   "world_id": "world_20260929_003027_5447",
+   "name": "Two to a Tree \u00b7 cheap talk only \u00b7 r3",
+   "scenario": "variant of run_20260928_034839_c3c2: {\"prices\": {\"send\": 0.25, \"broadcast\": 0.5}}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-29 00:30:27",
+   "notes": [
+    "variant of run_20260928_034839_c3c2, seed 8141, patch {\"prices\": {\"send\": 0.25, \"broadcast\": 0.5}}",
+    "02:42 parked: session limit; resume after reset",
+    "02:50 resumed on :8002",
+    "02:55 finished at r00040_end"
+   ]
+  },
+  "SC14": {
+   "run_id": "run_20260929_003027_708b",
+   "world_id": "world_20260929_003027_8f97",
+   "name": "Two to a Tree \u00b7 half-price talk \u00b7 r3",
+   "scenario": "variant of run_20260928_034839_c3c2: {\"prices\": {\"send\": 0.5, \"broadcast\": 1.0}}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-29 00:30:27",
+   "notes": [
+    "variant of run_20260928_034839_c3c2, seed 8141, patch {\"prices\": {\"send\": 0.5, \"broadcast\": 1.0}}",
+    "02:42 parked: session limit; resume after reset",
+    "02:50 resumed on :8002",
+    "02:59 finished at r00040_end"
+   ]
+  },
+  "SC15": {
+   "run_id": "run_20260929_003028_d7e1",
+   "world_id": "world_20260929_003028_748d",
+   "name": "Two to a Tree \u00b7 wide hearing only \u00b7 r3",
+   "scenario": "variant of run_20260928_034839_c3c2: {\"stats\": {\"communication_range\": 10}}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-29 00:30:28",
+   "notes": [
+    "variant of run_20260928_034839_c3c2, seed 8141, patch {\"stats\": {\"communication_range\": 10}}",
+    "02:42 parked: session limit; resume after reset",
+    "02:50 resumed on :8002",
+    "02:56 finished at r00040_end"
+   ]
+  },
+  "SC16": {
+   "run_id": "run_20260929_003028_3690",
+   "world_id": "world_20260929_003028_2434",
+   "name": "Five Groves \u00b7 cheap talk + cheap thinking \u00b7 r3a",
+   "scenario": "variant of run_20260927_221309_cc43: {\"prices\": {\"send\": 0.25, \"broadcast\": 0.5}, \"rules\": {\"cognition\": {\"input_rate\": 0.0002, \"generation_rate\": 0.001}}}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-29 00:30:28",
+   "notes": [
+    "variant of run_20260927_221309_cc43, seed 7141, patch {\"prices\": {\"send\": 0.25, \"broadcast\": 0.5}, \"rules\": {\"cognition\": {\"input_rate\": 0.0002, \"generation_rate\": 0.001}}}",
+    "02:42 parked: session limit; resume after reset",
+    "02:50 resumed on :8001",
+    "02:59 finished at r00040_end"
+   ]
+  },
+  "SC17": {
+   "run_id": "run_20260929_003029_46fb",
+   "world_id": "world_20260929_003029_1304",
+   "name": "Five Groves \u00b7 cheap talk + cheap thinking \u00b7 r3b",
+   "scenario": "variant of run_20260927_221309_cc43: {\"prices\": {\"send\": 0.25, \"broadcast\": 0.5}, \"rules\": {\"cognition\": {\"input_rate\": 0.0002, \"generation_rate\": 0.001}}}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 40,
+   "launched": "2026-09-29 00:30:29",
+   "notes": [
+    "variant of run_20260927_221309_cc43, seed 7142, patch {\"prices\": {\"send\": 0.25, \"broadcast\": 0.5}, \"rules\": {\"cognition\": {\"input_rate\": 0.0002, \"generation_rate\": 0.001}}}",
+    "02:42 parked: session limit; resume after reset",
+    "02:50 resumed on :8001",
+    "03:01 finished at r00040_end"
+   ]
+  },
+  "SCF1": {
+   "run_id": "run_20260929_003031_36c4",
+   "world_id": "world_20260928_230045_42e1",
+   "name": "Two to a Tree \u00b7 cheap senses \u00b7 fork r15 \u00b7 kept cheap",
+   "scenario": "fork of run_20260928_230045_4555 at r00015_end",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 35,
+   "launched": "2026-09-29 00:30:31",
+   "notes": [
+    "continuation of run_20260928_230045_4555 from r00015_end",
+    "01:01 finished at r00035_end"
+   ]
+  },
+  "SCF2": {
+   "run_id": "run_20260929_003032_b6bf",
+   "world_id": "world_20260928_230045_42e1",
+   "name": "Two to a Tree \u00b7 cheap senses \u00b7 fork r15 \u00b7 prices restored",
+   "scenario": "fork of run_20260928_230045_4555 at r00015_end",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 35,
+   "launched": "2026-09-29 00:30:33",
+   "notes": [
+    "continuation of run_20260928_230045_4555 from r00015_end",
+    "01:01 finished at r00035_end"
+   ]
   }
  }
 }
