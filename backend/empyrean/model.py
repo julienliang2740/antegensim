@@ -2906,12 +2906,20 @@ def call_model(request: ModelRequest, registry: Optional[ModelRegistry] = None, 
       handed to the adapter; the CLI adapter polls it every CLI_CANCEL_POLL_SECONDS and kills
       its process group, the fake adapter's ``sleep_ms`` waits on it.  A cancelled call returns
       ``status="error"``, ``error_code="cancelled"`` and is never retried; its cost is
-      unknown (None) unless an earlier attempt reported one."""
+      unknown (None) unless an earlier attempt reported one.
+    * decision salvage (A-COG-11): a ``purpose == "decision"`` reply that fails the format gate
+      only because of its envelope (nested, wrapped, stringified, ``think`` for ``thought``) is
+      repaired deterministically by ``salvage.salvage_decision`` (every provider, every model)
+      and returned ``ok`` with ``salvaged_from`` set; no extra model call."""
     started = time.monotonic()
     try:
         if registry is None:
             registry = default_registry()
         result = _call_model(request, registry, started, cancel)
+        if request.purpose == "decision":
+            from .salvage import salvage_decision  # local: salvage builds on this module's format gate
+
+            result = salvage_decision(request, result)
     except Exception as exc:  # noqa: BLE001 - the boundary never raises
         result = ModelResult(
             request_id=request.request_id,

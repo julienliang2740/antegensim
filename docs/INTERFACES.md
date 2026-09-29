@@ -663,6 +663,14 @@ mechanism is used, else the JSON-only instruction tokens + fixed overhead.
 (per attempt) and `max_retries` come from `config.MODEL_TIMEOUT_SECONDS` /
 `config.MODEL_MAX_RETRIES`; the overall deadline is `timeout × (retries + 1)`.
 
+Decision salvage (A-COG-11): `call_model` passes every `purpose == "decision"` JSON result,
+whatever the provider or model, through `salvage.salvage_decision` (`backend/empyrean/salvage.py`). A reply that fails `parse_decision` as given (status
+`malformed`, or `ok` with a rejected object) is repaired by `salvage.salvage_json` (the assistant's
+A-AST-4 repairs) plus `DECISION_KEY_ALIASES` (`think`/`thoughts` -> `thought`); when the repaired
+object passes, the result is `ok` with that `parsed` and `ModelResult.salvaged_from` = the
+original problem. Truncated, refused and infrastructure failures are never salvaged; no model is
+called.
+
 Usage normalisation (no double counting; table on `schemas.ModelUsage`): OpenAI-compatible
 `input = prompt_tokens − cached_tokens`, `cache_read = cached_tokens`, `output =
 completion_tokens` (reasoning informational only); Anthropic/claude_cli `input_tokens`,
@@ -1098,7 +1106,7 @@ result — no latency numbers (QA compares summaries between runs); the live fee
 | round_started | world | `{round, order}` |
 | turn_started | agent | `{decision_source?}` (`skipped_dead` / `skipped_removed` / `wait` turns emit only this) |
 | model_call_pending | agent | `{call_id, model_key, provider, model_id, reservation_compute}`; `pending=true` |
-| model_call_completed | agent | `{call_id, status, usage, latency_ms, attempts, provider_cost_usd, response_model, uncharged_compute}`; `costs.compute` = charged cognition (`provider_cost_usd` = the reported cost or null, fix pass: the feed shows latency, USD and `usage.reasoning_tokens` as a detail line, never in the summary) |
+| model_call_completed | agent | `{call_id, status, usage, latency_ms, attempts, provider_cost_usd, response_model, uncharged_compute}` plus `salvaged_from` (the original format problem) when the decision was salvaged (A-COG-11); `costs.compute` = charged cognition (`provider_cost_usd` = the reported cost or null, fix pass: the feed shows latency, USD and `usage.reasoning_tokens` as a detail line, never in the summary) |
 | model_call_failed | agent | `{call_id, status, usage, latency_ms, attempts, provider_cost_usd, error, infra: bool, interrupted?: true}`; `costs.compute` = charged (0 when `infra`; the provider may still have billed the call: `provider_cost_usd` says what, and the UI never claims the attempt was free). Also emitted (`infra` false, costs 0, error "turn failed after the call; charge discarded", `status` = the reply's status) for a call that was answered but whose turn then failed: its charge went to the discarded working copy, so the carried record is `failed` with the cost as `uncharged_compute` and its completed/charged events are dropped |
 | cognition_charged | agent | `{call_id, input_tokens, output_tokens, mind_multiplier, charged, uncharged}`; emitted only when an agent-output failure was charged, as an audit record: its `costs` are ZERO (the charge is already on the `model_call_failed` event; `details.charged` repeats it), so summing event costs never counts one charge twice (fix pass) |
 | resource_skip | agent | `{reason, compute, minimum_needed}` |
@@ -1722,3 +1730,11 @@ for old runs. `PATCH /api/runs/{run_id}/presentation` accepts `RunPresentationUp
 the updated summary. Both the active and archive lists put pinned runs first. This does not rewrite
 the manifest or the original creation request, so it is safe for an open run and does not alter
 saved simulation turns.
+
+Applied for decision salvage (A-COG-11; 2026-09-29): new module `backend/empyrean/salvage.py` with
+`salvage_json` (moved from `assistant/calls.py`, which now delegates) and `salvage_decision`,
+applied by `call_model` to decision calls for every provider and model. `schemas.ModelResult` gained `salvaged_from: Optional[str] = None`, mirrored in
+`frontend/src/api/types.ts` as an optional field, so stored model-call records written before read
+unchanged. `model_call_completed` details carry `salvaged_from` only for a salvaged call. A
+salvaged decision is an ok call: charged like any completed call, no `decision_invalid`, no lost
+turn. No route changed.

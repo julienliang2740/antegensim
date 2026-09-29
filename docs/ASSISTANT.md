@@ -120,7 +120,8 @@ one per turn lost to a malformed reply) `total_matches` / `counts_by_round`.
   reply first goes through deterministic salvage (unwrap `{"output": "<json>"}` and doubled
   nesting, unwrap a reply wrapped under one of its own field names such as
   `{"action": {"action": ..., "thought": ...}}` (top level only), decode stringified fields) and
-  then at most one repair step.
+  then at most one repair step. The salvage is `salvage.salvage_json` (`calls.salvage` delegates to
+  it); agent decisions get the same repairs without the repair step (A-COG-11).
 
 The knowledge loader reads `docs/INDEX.md`: every row with `assistant: yes` is loaded and split
 into sections at `##` headings, addressed as `<FILE>.md#<slug>` (slug = the heading lowercased,

@@ -634,6 +634,18 @@ ASSUMPTIONS: dict[str, Assumption] = {
             "and doubling latency.  The 'thought' field remains the agent's paid reasoning.  Set to null to keep the CLI default."
         ),
     ),
+    "A-COG-11": Assumption(
+        key="salvage.salvage_decision (deterministic decision salvage, every model)",
+        default="on: a decision reply that fails the format gate only because of its envelope is repaired without a model call and accepted",
+        citation="Spec: 'Two distinct validation gates' (the format gate); manual_lab/2026-09-29_model_comparison.md (Haiku invalid-decision causes)",
+        rationale=(
+            "Measured on Haiku (claude_cli --json-schema): 97% of invalid decisions were envelope mistakes with a correct "
+            "decision inside (the whole decision nested under 'action', or pasted as a JSON string under an invented key "
+            "such as 'output'), plus 'think' for 'thought'.  A format slip that a fixed rule repairs should not cost the agent "
+            "its turn.  Only replies that fail as given are touched; the repairs are the assistant's A-AST-4 salvage "
+            "(salvage.salvage_json) plus the key alias; the model is never re-called and truncated or refused replies stay invalid."
+        ),
+    ),
     "A-ECON-2": Assumption(
         key="cognition reservation",
         default="reserve = min(balance, cost(input_cap, generation_allowance)); charge actual after the call; nothing is deducted up front",

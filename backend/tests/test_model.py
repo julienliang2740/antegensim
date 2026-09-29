@@ -1477,22 +1477,33 @@ def test_system_prompt_fallback_folds_the_system_text_into_the_first_user_turn()
 def test_claude_cli_rejected_payload_is_stored(fake_cli, registry, delays):
     """A schema-rejected StructuredOutput reply is stored: result.text holds the payload the
     model sent, result.error the validator's message, attempt_errors the model's prose."""
-    rejected = {"action": {"thought": "nested by mistake", "action": {"name": "wait", "args": {"rounds": 1}}}}
-    verdict = "Output does not match required schema: /action: must have required property 'name'"
-    events = [
-        {"type": "system", "subtype": "init"},
-        {"type": "assistant", "message": {"content": [{"type": "text", "text": "I will wait this turn."}]}},
-        {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "StructuredOutput", "input": rejected}]}},
-        {"type": "user", "message": {"content": [{"type": "tool_result", "content": verdict}]}},
-        cli_envelope(is_error=True, subtype="error_max_turns", result=None, structured_output=None),
-    ]
-    fake_cli.stdout_text = "\n".join(json.dumps(e) for e in events)
+    def rejected_stream(payload: dict[str, Any]) -> str:
+        events = [
+            {"type": "system", "subtype": "init"},
+            {"type": "assistant", "message": {"content": [{"type": "text", "text": "I will wait this turn."}]}},
+            {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "StructuredOutput", "input": payload}]}},
+            {"type": "user", "message": {"content": [{"type": "tool_result", "content": verdict}]}},
+            cli_envelope(is_error=True, subtype="error_max_turns", result=None, structured_output=None),
+        ]
+        return "\n".join(json.dumps(e) for e in events)
+
+    verdict = "Output does not match required schema: root: must have required property 'action'"
+    rejected = {"notebook_update": "a note but no action"}  # no decision inside: salvage cannot help
+    fake_cli.stdout_text = rejected_stream(rejected)
     result = call_model(make_request("claude-cli-haiku"), registry)
-    assert result.status == "malformed" and not result.ok
+    assert result.status == "malformed" and not result.ok and result.salvaged_from is None
     assert json.loads(result.text) == rejected
     assert result.error.startswith("structured output did not match the decision schema: Output does not match")
     assert any("I will wait this turn." in note for note in result.attempt_errors)
     assert result.usage.output_tokens == 97 and result.provider_cost_usd == 0.001666
+
+    # The measured Haiku envelope mistake (decision nested under "action") is salvaged (A-COG-11).
+    nested = {"action": {"thought": "nested by mistake", "action": {"name": "wait", "args": {"rounds": 1}}}}
+    fake_cli.stdout_text = rejected_stream(nested)
+    salvaged = call_model(make_request("claude-cli-haiku"), registry)
+    assert salvaged.status == "ok" and salvaged.ok and json.loads(salvaged.text) == nested
+    assert salvaged.parsed == nested["action"] and salvaged.salvaged_from.startswith("status=malformed: structured output")
+    assert salvaged.usage.output_tokens == 97 and salvaged.provider_cost_usd == 0.001666
 
 
 def test_claude_cli_stream_success_uses_the_result_event(fake_cli, registry):

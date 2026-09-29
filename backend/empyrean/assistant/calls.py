@@ -3,8 +3,8 @@ The assistant's single way to call a model (rev 4): ``call_profile`` builds the 
 for a profile (model key, output cap, timeout/retries, response_format), checks the budgets
 (R1), calls ``model.call_model(request, registry, cancel=cancel)``, prices the call, appends the
 ledger line and returns a ``ProfileCallResult``.  Deterministic salvage of malformed JSON and
-the one repair step (A-AST-4): ``salvage`` here is the deterministic part, the engine re-calls
-the model once with the validation error.  OWNER: WP2.
+the one repair step (A-AST-4): ``salvage`` is the deterministic part (``salvage.salvage_json``), the
+engine re-calls the model once with the validation error.  OWNER: WP2.
 """
 # DOCS: every assistant model call goes through call_profile -> model.call_model; costs settle to
 # provider_cost_usd or a list-price estimate; the system prompt must stay byte-stable and under
@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Optional
 
 from .. import config, model
+from ..salvage import salvage_json
 from ..schemas import ModelMessage, ModelRequest, ModelResult
 from .ledger import BudgetExceeded, estimate_cost_usd
 from .models import GLOBAL_SCOPE, BudgetView, LedgerLine
@@ -68,75 +69,12 @@ class ProfileCallResult:
         return self.result.error_code
 
 
-_MISSING = object()
-_WRAPPER_KEYS = ("output", "result", "response", "step", "data", "json", "reply", "answer_step")
-
-
-def _decode_json_string(value: Any) -> Any:
-    """A str that decodes to a JSON object/array -> the decoded value; else ``_MISSING``."""
-    if not isinstance(value, str):
-        return _MISSING
-    stripped = value.strip()
-    if not stripped or stripped[0] not in "{[":
-        return _MISSING
-    try:
-        decoded = json.loads(stripped)
-    except ValueError:
-        return _MISSING
-    return decoded if isinstance(decoded, (dict, list)) else _MISSING
-
-
-def _salvage_once(obj: dict[str, Any], *, top: bool = True) -> dict[str, Any]:
-    """One pass of the deterministic repairs; returns the same object when nothing applied.
-    ``top``: the same-key unwrap applies only to the reply object itself, never inside it."""
-    if len(obj) == 1:
-        (key, value), = obj.items()
-        decoded = _decode_json_string(value)
-        if isinstance(decoded, dict):  # {"output": "<json>"}
-            return decoded
-        if isinstance(value, dict) and "kind" not in obj and ("kind" in value or key in _WRAPPER_KEYS):
-            return dict(value)  # doubled nesting: {"step": {"kind": ...}}
-        if top and isinstance(value, dict) and key in value:
-            return dict(value)  # wrapped under one of its own fields: {"action": {"action": ..., "thought": ...}}
-    out: dict[str, Any] = {}
-    changed = False
-    for key, value in obj.items():
-        decoded = _decode_json_string(value)
-        if decoded is not _MISSING:  # json-decode a stringified field ("brief": "{...}")
-            out[key] = decoded
-            changed = True
-        elif isinstance(value, dict) and value:
-            inner = _salvage_once(value, top=False)
-            out[key] = inner
-            changed = changed or inner is not value
-        else:
-            out[key] = value
-    return out if changed else obj
-
-
 def salvage(parsed: Optional[dict[str, Any]], text: Optional[str]) -> tuple[Optional[dict[str, Any]], bool]:
-    """Deterministic repair of common CLI envelope shapes BEFORE any re-call (A-AST-4):
-    a JSON object recovered from prose, single-key string wrappers such as
-    ``{"output": "<json>"}``, doubled nesting (``{"step": {"kind": ...}}``), the whole reply
-    wrapped under one of its own field names (``{"action": {"action": ..., "thought": ...}}``,
-    top level only) and stringified
-    fields (``"brief": "{...}"``, ``"calls": "[...]"``) at any depth.  Returns ``(object,
-    changed)``; ``object`` is None when nothing decodes to a dict.  Schema-agnostic: the
-    engine validates the result with the step adapters and repairs once more via the model."""
-    changed = False
-    obj: Any = parsed
-    if obj is None and text:
-        obj = model.extract_json_object(text)
-        changed = obj is not None
-    if not isinstance(obj, dict):
-        return None, changed
-    for _ in range(4):
-        repaired = _salvage_once(obj)
-        if repaired is obj:
-            break
-        obj = repaired
-        changed = True
-    return obj, changed
+    """Deterministic repair of common CLI envelope shapes BEFORE any re-call (A-AST-4): the
+    model-agnostic ``salvage.salvage_json`` (the same repairs agent decisions get, A-COG-11).  Returns
+    ``(object, changed)``; the engine validates the result with the step adapters and repairs
+    once more via the model."""
+    return salvage_json(parsed, text)
 
 
 def request_settings(profile: str) -> tuple[float, int]:

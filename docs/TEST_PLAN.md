@@ -77,6 +77,7 @@ ends in `error`.
 | --- | --- |
 | create → play 3 rounds → pause → reopen → continue without repeating a committed action | `test_e2e_run.py::test_run_turn_step_round_play_pause_and_layout` + `::test_close_reopen_and_restart_continue_without_repeating` |
 | malformed model output never applies an effect | `test_e2e_rules.py::test_malformed_model_output_never_applies_an_effect` (8 invalid-JSON turns + 8 unknown-action turns: no action event, only the cognition charge, feedback record, run keeps going) |
+| envelope mistakes are salvaged, for every model (A-COG-11) | `test_e2e_rules.py::test_envelope_mistakes_are_salvaged_and_the_action_applies` (a decision nested under `action` and one pasted as a JSON string under `output`: no `decision_invalid`, the moves apply, `model_call_completed` carries `salvaged_from`); `test_salvage.py::test_nested_and_string_wrapped_decisions_are_salvaged_for_every_provider`, `test_salvage.py::test_valid_replies_and_real_errors_are_left_alone`, `test_salvage.py::test_call_model_salvages_decisions_but_not_other_purposes`, `test_salvage.py::test_salvage_json_is_the_assistant_salvage` |
 | skill and direct actions charge 0.8× / 1× | `test_e2e_rules.py::test_direct_move_costs_5_and_skill_move_costs_4` |
 | packets contain only the agent's records | `test_e2e_context.py::test_packets_cite_only_the_agents_own_records` |
 | voice reaches recipients' knowledge | `test_e2e_godmode.py::test_voice_reaches_only_recipients_and_their_next_packet` |
@@ -168,7 +169,8 @@ and API code. The only thing replaced is the network call. With them we prove:
 * Game rules and accounting are exact: prices, the 0.8 discount, fees, transfers,
   upkeep, starvation, skill turn usage and the op budget. Scripts choose the exact
   decisions and the tests compare exact numbers.
-* The format gate: invalid JSON and unknown actions never reach the world.
+* The format gate: invalid JSON and unknown actions never reach the world, while a correct
+  decision in a wrong envelope is salvaged deterministically (A-COG-11).
 * The knowledge boundary and packet assembly, from the stored packet, the stored call
   request and the knowledge files.
 * Persistence: the commit protocol, reopen/restart, crash recovery of pending calls,

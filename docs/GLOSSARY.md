@@ -93,6 +93,10 @@ assistant (part of its always-loaded knowledge). Numbers are shipped defaults; s
   `memory_priorities`, one `action`.
 * **Format gate**: `model.parse_decision`; a reply that fails it loses the turn
   (`decision_invalid`) and is still charged.
+* **Salvage**: the deterministic repair of a reply's JSON envelope (unwrap nesting, decode a
+  stringified decision, `think` -> `thought`) before the format gate rejects it; no model call
+  (`salvage.salvage_json`, `salvage.salvage_decision`, A-COG-11). A salvaged call records
+  `salvaged_from`, the original problem.
 * **Decision packet**: exactly what the model was given for one decision (`pk_<turn_id>`).
 * **Stable rules**: the rules text at the top of every packet.
 * **Knowledge record**: one remembered item (`<agent>-k000001`), kinds `observation`, `query`,

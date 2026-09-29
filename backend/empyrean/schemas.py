@@ -687,6 +687,9 @@ class ModelResult(StrictModel):
     # result subtype / HTTP status so the assistant UI can map it to an action (None when ok or
     # unclassified).
     error_code: Optional[ModelErrorCode] = None
+    # A-COG-11: the original format problem when model.salvage_decision repaired the reply's
+    # envelope deterministically (the result is then ok); None when no salvage was applied.
+    salvaged_from: Optional[str] = None
 
 
 class ModelCallRecord(LooseModel):

@@ -261,6 +261,26 @@ def test_malformed_model_output_never_applies_an_effect(api):
     assert valid_turns == 8
 
 
+def test_envelope_mistakes_are_salvaged_and_the_action_applies(api):
+    """A-COG-11: a decision nested under "action", or pasted as a JSON string under an invented key,
+    is repaired without a model call; the turn is not lost and the action applies normally."""
+    import json
+
+    request = base_request(api, "e2e salvage")
+    card(request, "a01")["position"] = {"x": 0, "y": 0}
+    up, down = decision("move", "Go up.", direction="up"), decision("move", "Come back.", direction="down")
+    script_card(request, "a01", [{"action": up}, {"output": json.dumps(down)}])
+    run_id = api.create_run(request)["run_id"]
+    api.step_rounds(run_id, 2)
+    for row, expected in zip(first_turns(api, run_id, "a01", 2), [(0, 1), (0, 0)]):
+        view, _ = api.turn_and_previous(run_id, row["turn_id"])
+        assert events_of(view, "decision_invalid") == []
+        assert view["turn"]["action"]["name"] == "move" and view["turn"]["action_result"]["ok"] is True
+        assert point(agent_of(view, "a01")["position"]) == expected
+        completed = events_of(view, "model_call_completed")
+        assert len(completed) == 1 and completed[0]["details"].get("salvaged_from"), completed
+
+
 def test_move_into_mountain_fails_and_position_is_unchanged(api):
     """Design 'Action blocks': moving into a mountain fails without changing position;
     the affordable-but-illegal attempt costs only the fee min(1, 5) = 1."""

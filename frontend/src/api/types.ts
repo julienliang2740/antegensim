@@ -398,6 +398,7 @@ export interface ModelResult {
   attempt_errors: string[];
   error: string | null;
   stop_reason: string | null;
+  salvaged_from?: string | null; // A-COG-11: original format problem a deterministic salvage fixed
 }
 
 export interface ModelCallRecord {

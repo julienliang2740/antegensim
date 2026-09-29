@@ -2103,7 +2103,8 @@ class RunWorker:
                 agent_id,
                 "model_call_completed",
                 f"{agent_id} got a decision from {record.model_key} (in {usage.billed_input_tokens} / out {usage.output_tokens} tokens)",
-                {**common, "response_model": result.response_model, "uncharged_compute": uncharged},
+                {**common, "response_model": result.response_model, "uncharged_compute": uncharged,
+                 **({"salvaged_from": result.salvaged_from} if result.salvaged_from else {})},
                 EventCosts(compute=charged),
             )
         else:

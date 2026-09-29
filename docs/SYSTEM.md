@@ -128,7 +128,10 @@ back as interrupted calls when the run is opened and the rest of the round decid
      waits for that answer if it is not in yet (the run shows `waiting_model` meanwhile);
    * cognition is charged from the reported (or estimated) tokens;
    * the reply passes the **format gate** (`model.parse_decision`): strict JSON Decision with
-     exactly one action. A failing reply loses the turn (`decision_invalid`; cognition is still
+     exactly one action. A reply that fails only because of its envelope (the decision nested
+     under `action`, pasted as a JSON string under a key such as `output`, `think` for `thought`)
+     is first repaired deterministically, with no model call, and accepted (`salvage.salvage_decision`,
+     A-COG-11). A reply that still fails loses the turn (`decision_invalid`; cognition is still
      charged);
    * the decision is applied in order: notebook update, memory priorities, deleted skills, saved
      skills, then exactly one world action or `run_skill`.
