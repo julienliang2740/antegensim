@@ -114,7 +114,8 @@ def estimate_tokens(text: str) -> int:
 # Action prices and execution rules (design doc: "Action blocks and approximate costs")
 # ---------------------------------------------------------------------------
 
-DEFAULT_PRICES = Prices(move=5, observe=1, query=1, send=3, broadcast=7, absorb=3, transfer=1, wait=0)
+# A-ECON-3: looking and talking are cheap but never free (2026-09-29 senses experiment, SENSES_EXPERIMENT.md).
+DEFAULT_PRICES = Prices(move=5, observe=0.5, query=0.5, send=0.5, broadcast=2, absorb=3, transfer=1, wait=0)
 
 # "Upgradeable attributes and prices": 25*2^n compute + 2*2^n essence; attack 100*4^n + 10*4^n;
 # the damage cap per attack (A-ACT-19) is priced like attack: 100*4^n + 10*4^n, +25 per purchase.
@@ -638,6 +639,12 @@ ASSUMPTIONS: dict[str, Assumption] = {
         default="reserve = min(balance, cost(input_cap, generation_allowance)); charge actual after the call; nothing is deducted up front",
         citation="Design: 'Compute metering' suggested enforcement",
         rationale="If reserve < cost(min packet) the call is skipped.",
+    ),
+    "A-ECON-3": Assumption(
+        key="rules.prices",
+        default={"move": 5, "observe": 0.5, "query": 0.5, "send": 0.5, "broadcast": 2, "absorb": 3, "transfer": "1 + amount", "wait": 0},
+        citation="Design: 'Action blocks' price table; lowered 2026-09-29 after live runs (SENSES_EXPERIMENT.md): observe/query 1 -> 0.5, send 3 -> 0.5, broadcast 7 -> 2",
+        rationale="Cheaper talk tilted live runs toward conversation and help (more replies, answered pleas and gifts, fewer hits); broadcast stays pricier than a direct message; looking stays paid.",
     ),
     # -- actions and ranges --------------------------------------------------
     "A-ACT-1": Assumption(

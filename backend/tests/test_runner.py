@@ -758,7 +758,7 @@ def test_run_turn_commits_one_agent_turn_and_clears_pending_file(manager: runner
     assert cp.turn.action == {"name": "observe", "args": {"point": {"x": 0, "y": 0}, "page": 0}, "via_skill": False, "skill_name": None}
     assert cp.turn.action_result is not None and cp.turn.action_result.ok
     agent = cp.world.agents["a01"]
-    # cognition 0.0002*1000 + 0.001*100 = 0.3, observe 1.0
+    # cognition 0.0002*1000 + 0.001*100 = 0.3, observe 1.0 (the fixture pins the old prices)
     assert agent.stats.compute == pytest.approx(200 - 0.3 - 1.0)
     assert agent.total_cognition_spent == pytest.approx(0.3)
     assert agent.model_call_count == 1

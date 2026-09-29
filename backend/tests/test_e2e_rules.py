@@ -356,7 +356,7 @@ def test_design_example_3_skill_sees_skill_prices_and_upgrades(api):
     turn = query_view["turn"]
     assert turn["action"]["name"] == "query" and turn["action"]["via_skill"] is True
     data = turn["action_result"]["data"]
-    assert turn["action_result"]["cost_compute"] == pytest.approx(0.8)
+    assert turn["action_result"]["cost_compute"] == pytest.approx(0.4)
     assert data["quote_mode"] == "skill"
     quote = data["upgrade_quotes"]["vision_range"]
     assert quote["compute"] == pytest.approx(20.0) and quote["essence"] == pytest.approx(2.0)

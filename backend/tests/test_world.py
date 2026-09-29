@@ -676,7 +676,7 @@ def test_observe_pagination():
     for _ in range(45):
         add_fruit(world, compute=1)
     page0 = act(world, "a01", "observe", point=[0, 0])
-    assert page0.result.ok and page0.result.cost_compute == 1
+    assert page0.result.ok and page0.result.cost_compute == 0.5
     data = page0.result.data
     assert data["page"] == 0 and data["page_size"] == 40 and data["total_entities"] == 47
     assert len(data["entities"]) == 40 and data["has_more"] is True
@@ -692,7 +692,7 @@ def test_observe_pagination():
 def test_observe_range_and_outside_region():
     world = make_world([card(1, vision_range=1), card(2, (0, 2))])
     out = act(world, "a01", "observe", point={"x": 0, "y": 2})
-    assert out.result.reason == "out_of_range" and out.result.cost_compute == 1
+    assert out.result.reason == "out_of_range" and out.result.cost_compute == 0.5
     # the region edge: within vision but outside -> ok, terrain null, no entities
     world.agents["a01"].position = Point(x=3, y=3)
     edge = act(world, "a01", "observe", point={"x": 4, "y": 3})
@@ -708,8 +708,8 @@ def test_query_self_exposes_prices_quotes_and_post_payment_balances():
     world = make_world()
     out = act(world, "a01", "query", entity="self")
     data = out.result.data
-    assert out.result.ok and out.result.cost_compute == 1
-    assert data["compute"] == 199 and data["essence"] == 20 and data["position"] == {"x": 0, "y": 0}
+    assert out.result.ok and out.result.cost_compute == 0.5
+    assert data["compute"] == 199.5 and data["essence"] == 20 and data["position"] == {"x": 0, "y": 0}
     assert data["quote_mode"] == "direct" and data["round"] == 1
     assert data["costs"]["normal"]["move"] == 5 and data["costs"]["skill"]["move"] == 4
     assert data["costs"]["discount"] == 0.8 and data["costs"]["upkeep_per_round"] == 1
@@ -721,7 +721,7 @@ def test_query_self_exposes_prices_quotes_and_post_payment_balances():
     own = act(world, "a01", "query", via_skill=True, entity="a01").result.data
     assert own["quote_mode"] == "skill" and own["upgrade_quotes"]["vision_range"]["compute"] == 20
     assert own["upgrade_quotes"]["vision_range"]["essence"] == 2
-    assert own["compute"] == pytest.approx(198.2)
+    assert own["compute"] == pytest.approx(199.1)
     for key in (
         "health", "max_health", "essence_capacity", "attack", "speed", "vision_range", "communication_range",
         "compute_absorption", "essence_absorption", "skill_count_limit", "skill_block_limit",
@@ -732,7 +732,7 @@ def test_query_self_exposes_prices_quotes_and_post_payment_balances():
 def test_query_respects_visibility_and_returns_public_data_only():
     world = make_world([card(1, vision_range=1), card(2, (0, 1)), card(3, (0, 2))])
     hidden = act(world, "a01", "query", entity="a03")
-    assert hidden.result.reason == "target_gone" and hidden.result.cost_compute == 1
+    assert hidden.result.reason == "target_gone" and hidden.result.cost_compute == 0.5
     unknown = act(world, "a01", "query", entity="nope")
     assert unknown.result.reason == "target_gone"
     seen = act(world, "a01", "query", entity="a02")
@@ -768,7 +768,7 @@ def test_query_respects_visibility_and_returns_public_data_only():
 def test_send_delivers_from_unknown_source_when_recipient_cannot_see_sender():
     world = make_world([card(1, vision_range=1, communication_range=1), card(2, (0, 1))])
     out = act(world, "a01", "send", recipient="a02", message="hello there")
-    assert out.result.ok and out.result.cost_compute == 3
+    assert out.result.ok and out.result.cost_compute == 0.5
     assert out.result.data == {"delivered_to": "a02"} and out.result.effects == {"delivered": 1}
     notice = out.notices[0]
     assert notice.agent_id == "a02" and notice.kind == "message"
@@ -788,7 +788,7 @@ def test_send_failure_reasons():
     assert act(world, "a01", "send", recipient="a03", message="x").result.reason == "target_gone"
     assert act(world, "a01", "send", recipient="a01", message="x").result.reason == "invalid_argument"
     empty = act(world, "a01", "send", recipient="a02", message="   ")
-    assert empty.result.reason == "invalid_argument" and empty.result.cost_compute == 1
+    assert empty.result.reason == "invalid_argument" and empty.result.cost_compute == 0.5
     world.agents["a02"].position = Point(x=0, y=1)
     too_long = act(world, "a01", "send", recipient="a02", message="x" * (256 * 4 + 1))
     assert too_long.result.reason == "invalid_argument"
@@ -800,7 +800,7 @@ def test_send_failure_reasons():
 def test_broadcast_fan_out_within_communication_range():
     world = make_world([card(1, vision_range=1, communication_range=2), card(2, (0, 1)), card(3, (2, 0)), card(4, (0, 3))])
     out = act(world, "a01", "broadcast", message="all hands")
-    assert out.result.ok and out.result.cost_compute == 7
+    assert out.result.ok and out.result.cost_compute == 2
     assert sorted(n.agent_id for n in out.notices) == ["a02", "a03"]
     assert out.result.data == {"delivered_to_visible": ["a02"]} and out.result.effects == {"delivered_visible": 1}
     by_id = {n.agent_id: n for n in out.notices}
@@ -810,7 +810,7 @@ def test_broadcast_fan_out_within_communication_range():
     # nobody in range still succeeds and charges the full price (A-ACT-12)
     world.agents["a01"].position = Point(x=-3, y=-3)
     alone = act(world, "a01", "broadcast", message="anyone?")
-    assert alone.result.ok and alone.result.cost_compute == 7 and alone.notices == []
+    assert alone.result.ok and alone.result.cost_compute == 2 and alone.notices == []
     assert alone.result.data == {"delivered_to_visible": []}
     # dead agents never receive
     world.agents["a01"].position = Point(x=0, y=0)

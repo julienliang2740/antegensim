@@ -757,7 +757,7 @@ def test_stable_rules_identity_prices_and_no_prescribed_goals():
     rules = RulesConfig(prices=Prices(move=7))
     text = context.stable_rules_text(rules, agent, ContextSettings(notebook_max_tokens=123), 1.5)
     assert 'You are Aster (agent id "a01")' in text
-    assert "move 7 (skill 5.6)" in text and "observe 1 (skill 0.8)" in text
+    assert "move 7 (skill 5.6)" in text and "observe 0.5 (skill 0.4)" in text
     assert "Upkeep: 1 compute per round" in text and "0.01 compute per op" in text
     assert "your mind multiplier is 1.5" in text and "max ~123 tokens" in text
     assert "has_more" in text and '"a01-k000012"' in text

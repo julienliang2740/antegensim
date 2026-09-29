@@ -204,10 +204,10 @@ class Prices(StrictModel):
     """Normal direct-action compute prices.  recover/attack are nominal budgets."""
 
     move: float = 5
-    observe: float = 1
-    query: float = 1
-    send: float = 3
-    broadcast: float = 7
+    observe: float = 0.5  # A-ECON-3 (was 1 until 2026-09-29)
+    query: float = 0.5  # A-ECON-3 (was 1)
+    send: float = 0.5  # A-ECON-3 (was 3)
+    broadcast: float = 2  # A-ECON-3 (was 7)
     absorb: float = 3
     transfer: float = 1
     wait: float = 0

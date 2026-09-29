@@ -44,7 +44,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 export const RULES: RulesConfig = {
-  prices: { move: 5, observe: 1, query: 1, send: 3, broadcast: 7, absorb: 3, transfer: 1, wait: 0 },
+  prices: { move: 5, observe: 0.5, query: 0.5, send: 0.5, broadcast: 2, absorb: 3, transfer: 1, wait: 0 },
   upgrades: {
     standard_base_compute: 25,
     standard_base_essence: 2,

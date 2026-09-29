@@ -58,7 +58,7 @@ def test_deep_merge_and_merge_create_run(assistant) -> None:
     assert len(request.agents) == 6  # cards beyond agent_count dropped
     assert request.agents[0].name == "Ash" and request.agents[0].stats.attack == 3 and request.agents[0].stats.compute == config.DEFAULT_AGENT_STATS.compute
     assert request.agents[1].name == config.DEFAULT_AGENT_NAMES[1] and request.agents[2].persona == "quiet"
-    assert request.rules.prices.move == 9 and request.rules.prices.observe == 1
+    assert request.rules.prices.move == 9 and request.rules.prices.observe == 0.5
     assert request.rules.plant_species == config.default_rules().plant_species
     with pytest.raises(ValidationError):
         briefs.merge_create_run(assistant, "bad", 6, {"seed": "seven"})

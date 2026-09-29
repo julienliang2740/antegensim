@@ -181,10 +181,10 @@ Exactly one per turn. Prices are shipped defaults; "in a skill" is 80% of the co
 | Action | Effect | Price | In a skill |
 | --- | --- | --- | --- |
 | `move(direction)` | one step up/down/left/right; mountains and the region edge block | 5 | 4 |
-| `observe(point, page)` | terrain and living entities (id, kind, position) at a point within vision range, 40 per page | 1 | 0.8 |
-| `query(entity)` | details of one visible entity; `query("self")` returns exact balances, stats, costs and upgrade quotes | 1 | 0.8 |
-| `send(recipient, message)` | message to one visible agent within communication range (≤ 256 tokens) | 3 | 2.4 |
-| `broadcast(message)` | message to every living agent within communication range (charged even if nobody hears) | 7 | 5.6 |
+| `observe(point, page)` | terrain and living entities (id, kind, position) at a point within vision range, 40 per page | 0.5 | 0.4 |
+| `query(entity)` | details of one visible entity; `query("self")` returns exact balances, stats, costs and upgrade quotes | 0.5 | 0.4 |
+| `send(recipient, message)` | message to one visible agent within communication range (≤ 256 tokens) | 0.5 | 0.4 |
+| `broadcast(message)` | message to every living agent within communication range (charged even if nobody hears) | 2 | 1.6 |
 | `absorb(source, resource)` | take compute or essence from fruit or residue at the same point; keep only the absorption fraction | 3 | 2.4 |
 | `transfer(recipient, resource, amount)` | give compute or essence to an agent at the same point | 1 + amount | 0.8 + amount |
 | `recover(compute_budget)` | turn compute into health 1:1, only the useful part | the useful budget | 80% of it |
