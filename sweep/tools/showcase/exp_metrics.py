@@ -52,7 +52,7 @@ def pos_at(rd, turn, aid):
         return None
 
 
-def analyse(ref, max_round=None):
+def analyse(ref, max_round=None, min_round=None):
     rid = resolve(ref)
     rd = run_dir(rid)
     req = json.load(open(f"{rd}/run_request.json"))
@@ -66,6 +66,8 @@ def analyse(ref, max_round=None):
             pass
     if max_round:
         evs = [e for e in evs if e["round"] <= max_round]
+    if min_round:  # a fork's own rounds (a continuation's folder also holds the source's history)
+        evs = [e for e in evs if e["round"] >= min_round]
     last = max([e["round"] for e in evs if e["kind"] == "round_ended"] or [0])
     living = {e["round"]: len(e["details"]["living_agents"]) for e in evs if e["kind"] == "round_ended"}
     hits, tree_hits, msgs, transfers, deaths, saves, rejects, broke = [], 0, [], [], {}, [], 0, {}

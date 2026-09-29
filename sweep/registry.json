@@ -2236,6 +2236,220 @@
     "continuation of run_20260928_230045_4555 from r00015_end",
     "01:01 finished at r00035_end"
    ]
+  },
+  "MC-FG-HAIKU": {
+   "run_id": "run_20260929_035629_a8e4",
+   "world_id": "world_20260929_035629_1738",
+   "name": "MC Five Groves \u00b7 Haiku",
+   "scenario": "variant of run_20260927_221309_cc43: {\"model\": \"claude-cli-haiku\"}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 25,
+   "launched": "2026-09-29 03:56:29",
+   "notes": [
+    "variant of run_20260927_221309_cc43, seed 1818, patch {\"model\": \"claude-cli-haiku\"}",
+    "04:13 finished at r00025_end"
+   ]
+  },
+  "MC-TT-HAIKU": {
+   "run_id": "run_20260929_035630_2109",
+   "world_id": "world_20260929_035630_d7bc",
+   "name": "MC Two to a Tree \u00b7 Haiku",
+   "scenario": "variant of run_20260928_034839_c3c2: {\"model\": \"claude-cli-haiku\"}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 25,
+   "launched": "2026-09-29 03:56:30",
+   "notes": [
+    "variant of run_20260928_034839_c3c2, seed 2930, patch {\"model\": \"claude-cli-haiku\"}",
+    "04:13 finished at r00025_end"
+   ]
+  },
+  "MC-FG-LUNA": {
+   "run_id": "run_20260929_035630_6c96",
+   "world_id": "world_20260929_035630_025b",
+   "name": "MC Five Groves \u00b7 GPT-6 Luna",
+   "scenario": "variant of run_20260927_221309_cc43: {\"model\": \"azure-gpt6-luna\"}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 25,
+   "launched": "2026-09-29 03:56:30",
+   "notes": [
+    "variant of run_20260927_221309_cc43, seed 1818, patch {\"model\": \"azure-gpt6-luna\"}",
+    "04:05 finished at r00025_end"
+   ]
+  },
+  "MC-TT-LUNA": {
+   "run_id": "run_20260929_035631_20f6",
+   "world_id": "world_20260929_035631_42a0",
+   "name": "MC Two to a Tree \u00b7 GPT-6 Luna",
+   "scenario": "variant of run_20260928_034839_c3c2: {\"model\": \"azure-gpt6-luna\"}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 25,
+   "launched": "2026-09-29 03:56:32",
+   "notes": [
+    "variant of run_20260928_034839_c3c2, seed 2930, patch {\"model\": \"azure-gpt6-luna\"}",
+    "04:05 finished at r00025_end"
+   ]
+  },
+  "MC-FG-DSV4": {
+   "run_id": "run_20260929_035632_4e7b",
+   "world_id": "world_20260929_035632_1cb3",
+   "name": "MC Five Groves \u00b7 DeepSeek V4 Flash",
+   "scenario": "variant of run_20260927_221309_cc43: {\"model\": \"azure-deepseek-v4-flash\"}",
+   "status": "finished",
+   "port": 8003,
+   "agents": 32,
+   "max_rounds": 15,
+   "launched": "2026-09-29 03:56:32",
+   "notes": [
+    "variant of run_20260927_221309_cc43, seed 1818, patch {\"model\": \"azure-deepseek-v4-flash\"}",
+    "04:06 parked: rate limited (operator: stop; rerun only within the 125K TPM / 125 RPM quota)",
+    "04:08 resumed within quota: concurrency 1, one run at a time, to r15",
+    "04:29 finished at r00015_end"
+   ]
+  },
+  "MC-TT-DSV4": {
+   "run_id": "run_20260929_035632_0a89",
+   "world_id": "world_20260929_035632_613d",
+   "name": "MC Two to a Tree \u00b7 DeepSeek V4 Flash",
+   "scenario": "variant of run_20260928_034839_c3c2: {\"model\": \"azure-deepseek-v4-flash\"}",
+   "status": "parked",
+   "port": 8003,
+   "agents": 32,
+   "max_rounds": 15,
+   "launched": "2026-09-29 03:56:33",
+   "notes": [
+    "variant of run_20260928_034839_c3c2, seed 2930, patch {\"model\": \"azure-deepseek-v4-flash\"}",
+    "04:06 parked: rate limited (operator: stop; rerun only within the 125K TPM / 125 RPM quota)",
+    "04:29 resumed within quota: concurrency 1, one run at a time, to r15",
+    "04:41 parked: wrapped up (operator): Haiku and Luna done; DeepSeek results extrapolated from the rounds played"
+   ]
+  },
+  "MC-FG-LUNA-A": {
+   "run_id": "run_20260929_040531_ccdd",
+   "world_id": "world_20260929_035630_025b",
+   "name": "MC Five Groves \u00b7 GPT-6 Luna \u00b7 fork A",
+   "scenario": "fork of run_20260929_035630_6c96 at r00025_end",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 45,
+   "launched": "2026-09-29 04:05:31",
+   "notes": [
+    "continuation of run_20260929_035630_6c96 from r00025_end",
+    "04:29 finished at r00045_end"
+   ]
+  },
+  "MC-FG-LUNA-B": {
+   "run_id": "run_20260929_040532_c153",
+   "world_id": "world_20260929_035630_025b",
+   "name": "MC Five Groves \u00b7 GPT-6 Luna \u00b7 fork B",
+   "scenario": "fork of run_20260929_035630_6c96 at r00025_end",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 45,
+   "launched": "2026-09-29 04:05:32",
+   "notes": [
+    "continuation of run_20260929_035630_6c96 from r00025_end",
+    "04:30 finished at r00045_end"
+   ]
+  },
+  "MC-TT-LUNA-A": {
+   "run_id": "run_20260929_040553_7eab",
+   "world_id": "world_20260929_035631_42a0",
+   "name": "MC Two to a Tree \u00b7 GPT-6 Luna \u00b7 fork A",
+   "scenario": "fork of run_20260929_035631_20f6 at r00025_end",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 45,
+   "launched": "2026-09-29 04:05:56",
+   "notes": [
+    "continuation of run_20260929_035631_20f6 from r00025_end",
+    "04:30 finished at r00045_end"
+   ]
+  },
+  "MC-TT-LUNA-B": {
+   "run_id": "run_20260929_040556_5943",
+   "world_id": "world_20260929_035631_42a0",
+   "name": "MC Two to a Tree \u00b7 GPT-6 Luna \u00b7 fork B",
+   "scenario": "fork of run_20260929_035631_20f6 at r00025_end",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 45,
+   "launched": "2026-09-29 04:05:59",
+   "notes": [
+    "continuation of run_20260929_035631_20f6 from r00025_end",
+    "04:30 finished at r00045_end"
+   ]
+  },
+  "MC-FG-HAIKU-A": {
+   "run_id": "run_20260929_041339_bea1",
+   "world_id": "world_20260929_035629_1738",
+   "name": "MC Five Groves \u00b7 Haiku \u00b7 fork A",
+   "scenario": "fork of run_20260929_035629_a8e4 at r00025_end",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 45,
+   "launched": "2026-09-29 04:13:39",
+   "notes": [
+    "continuation of run_20260929_035629_a8e4 from r00025_end",
+    "04:40 finished at r00045_end"
+   ]
+  },
+  "MC-FG-HAIKU-B": {
+   "run_id": "run_20260929_041339_3141",
+   "world_id": "world_20260929_035629_1738",
+   "name": "MC Five Groves \u00b7 Haiku \u00b7 fork B",
+   "scenario": "fork of run_20260929_035629_a8e4 at r00025_end",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 45,
+   "launched": "2026-09-29 04:13:40",
+   "notes": [
+    "continuation of run_20260929_035629_a8e4 from r00025_end",
+    "04:40 finished at r00045_end"
+   ]
+  },
+  "MC-TT-HAIKU-A": {
+   "run_id": "run_20260929_041400_67ac",
+   "world_id": "world_20260929_035630_d7bc",
+   "name": "MC Two to a Tree \u00b7 Haiku \u00b7 fork A",
+   "scenario": "fork of run_20260929_035630_2109 at r00025_end",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 45,
+   "launched": "2026-09-29 04:14:01",
+   "notes": [
+    "continuation of run_20260929_035630_2109 from r00025_end",
+    "04:40 finished at r00045_end"
+   ]
+  },
+  "MC-TT-HAIKU-B": {
+   "run_id": "run_20260929_041401_b95a",
+   "world_id": "world_20260929_035630_d7bc",
+   "name": "MC Two to a Tree \u00b7 Haiku \u00b7 fork B",
+   "scenario": "fork of run_20260929_035630_2109 at r00025_end",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 45,
+   "launched": "2026-09-29 04:14:02",
+   "notes": [
+    "continuation of run_20260929_035630_2109 from r00025_end",
+    "04:41 finished at r00045_end"
+   ]
   }
  }
 }

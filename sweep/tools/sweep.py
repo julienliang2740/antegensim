@@ -22,12 +22,15 @@ from collections import Counter, defaultdict
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # the repository root
 SWEEP = f"{REPO}/sweep"
 REG = f"{SWEEP}/registry.json"
-BACKENDS = [8000, 8001]  # one backend process per port, same worlds dir (a run is owned by one process at a time)
+BACKENDS = [8001, 8002, 8003]  # one backend process per port, same worlds dir (a run is owned by one process at a time);
+# 8000 is the operator's UI backend and is left alone.  2026-09-29 model comparison: 8001 Haiku, 8002 GPT-6 Luna,
+# 8003 DeepSeek V4 Flash (its Azure deployment allows 125 requests and 125K tokens per minute, hence concurrency 1 and one run at a time: ds_driver.py)
 MAX_PER_BACKEND = 4      # live runs per backend process (memory grows with runs x rounds; one hit 11.8 GB and was OOM-killed)
 RSS_LIMIT_KB = 7 * 1024 * 1024  # the watchdog restarts a backend above this resident size (runs reopen and resume)
 BACKEND_ENV = {"EMPYREAN_FSYNC": "0", "EMPYREAN_MODEL_CONCURRENCY": "12", "EMPYREAN_STORYBOOK_AUTO": "off", "EMPYREAN_MODELS_FILE": f"{REPO}/sweep/models.sweep.json"}
+PORT_ENV = {8002: {"EMPYREAN_MODEL_CONCURRENCY": "5"}, 8003: {"EMPYREAN_MODEL_CONCURRENCY": "1"}}  # per-backend overrides of BACKEND_ENV (Azure token-per-minute quotas: Luna 1M, DeepSeek 125K)
 TOOLS = os.path.dirname(os.path.abspath(__file__))
-LIVE_KEYS = {"claude-cli-haiku", "claude-cli-sonnet"}
+LIVE_KEYS = {"claude-cli-haiku", "claude-cli-sonnet", "azure-gpt6-luna", "azure-deepseek-v4-flash"}
 MAX_CONCURRENT = MAX_PER_BACKEND * len(BACKENDS)
 MAX_ROUNDS = 100  # hard cap (operator: 80 on 2026-09-27, raised to 100 for the showcase runs on 2026-09-28)
 
@@ -383,7 +386,7 @@ def rss_kb(pid):
 
 
 def start_backend(port):
-    env = {**os.environ, **BACKEND_ENV, "EMPYREAN_API_PORT": str(port)}
+    env = {**os.environ, **BACKEND_ENV, **PORT_ENV.get(port, {}), "EMPYREAN_API_PORT": str(port)}
     env.pop("EMPYREAN_ALLOW_LIVE", None)
     log = open(f"{TOOLS}/backend{port}.log", "a")
     subprocess.Popen([f"{REPO}/.venv/bin/python", "-m", "empyrean.main"], cwd=f"{REPO}/backend", env=env,
