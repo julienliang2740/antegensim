@@ -1,5 +1,8 @@
 # Showcase scenarios: final results (2026-09-28)
 
+> **Manual lab record, dated 2026-09-28.** Results of the showcase scenario runs (`SWEEP-S*`); several runs named here were later deleted or archived. This is a timestamped record, not a running doc: it is
+> not updated when the code or the docs change, so details may be out of date. See `manual_lab/README.md`.
+
 * **Finding the runs:** search the UI's run list for **`SWEEP-S`**. Every run below can be re-run
   exactly with **Clone setup** on the Resume page.
 * **Models:** every agent is Claude Haiku 4.5. The one exception is `SWEEP-S13v1`, a deliberate
@@ -131,4 +134,4 @@ against 282) and S28v2 (532 against 398).
   * `sweep/notes/S26_S28.md` (S26, S28, S30)
   * `sweep/notes/S27.md` (S27, S31, and the finished S17-S20)
   * `sweep/notes/S11_S12_S13.md`, `S1_S6.md`, `S2_S3.md`, `S4_S5.md`, `S7.md`
-* **Proposals:** `SCENARIO_PROPOSALS.md`.
+* **Proposals:** `manual_lab/2026-09-27_showcase_scenario_proposals.md`.

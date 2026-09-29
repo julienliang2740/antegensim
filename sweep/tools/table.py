@@ -1,5 +1,5 @@
 """Markdown table of every SWEEP run (not smoke tests) with the key interest metrics."""
-# DOCS: prints the markdown results table of every SWEEP run used in sweep/REPORT.md.
+# DOCS: prints the markdown results table of every SWEEP run used in manual_lab/2026-09-27_scenario_sweep_report.md.
 import sys
 sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 import sweep

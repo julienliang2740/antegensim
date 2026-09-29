@@ -114,7 +114,7 @@ def estimate_tokens(text: str) -> int:
 # Action prices and execution rules (design doc: "Action blocks and approximate costs")
 # ---------------------------------------------------------------------------
 
-# A-ECON-3: looking and talking are cheap but never free (2026-09-29 senses experiment, SENSES_EXPERIMENT.md).
+# A-ECON-3: looking and talking are cheap but never free (2026-09-29 senses experiment, manual_lab/2026-09-29_senses_experiment.md).
 DEFAULT_PRICES = Prices(move=5, observe=0.5, query=0.5, send=0.5, broadcast=2, absorb=3, transfer=1, wait=0)
 
 # "Upgradeable attributes and prices": 25*2^n compute + 2*2^n essence; attack 100*4^n + 10*4^n;
@@ -643,7 +643,7 @@ ASSUMPTIONS: dict[str, Assumption] = {
     "A-ECON-3": Assumption(
         key="rules.prices",
         default={"move": 5, "observe": 0.5, "query": 0.5, "send": 0.5, "broadcast": 2, "absorb": 3, "transfer": "1 + amount", "wait": 0},
-        citation="Design: 'Action blocks' price table; lowered 2026-09-29 after live runs (SENSES_EXPERIMENT.md): observe/query 1 -> 0.5, send 3 -> 0.5, broadcast 7 -> 2",
+        citation="Design: 'Action blocks' price table; lowered 2026-09-29 after live runs (manual_lab/2026-09-29_senses_experiment.md): observe/query 1 -> 0.5, send 3 -> 0.5, broadcast 7 -> 2",
         rationale="Cheaper talk tilted live runs toward conversation and help (more replies, answered pleas and gifts, fewer hits); broadcast stays pricier than a direct message; looking stays paid.",
     ),
     # -- actions and ranges --------------------------------------------------

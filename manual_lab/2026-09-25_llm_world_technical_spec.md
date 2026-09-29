@@ -1,5 +1,8 @@
 # Empyrean Prototype Technical Requirements
 
+> **Manual lab record, dated 2026-09-25.** The operator's source requirements (technical specification v0.5), as given. This is a timestamped record, not a running doc: it is
+> not updated when the code or the docs change, so details may be out of date. See `manual_lab/README.md`.
+
 Running technical document · Version 0.5 · September 25, 2026
 
 ## Contents
@@ -272,7 +275,7 @@ Alan should choose exact module/file names apart from the requested `model.py` b
 
 ## References and revision history
 
-**[G] Game design:** `llm_world_running_design.md`, version 0.7. Referenced section titles and short exact quotations appear beside the requirements they support. Gameplay changes belong there; this document should track technical consequences rather than maintain a second set of game rules.
+**[G] Game design:** `manual_lab/2026-09-25_llm_world_running_design.md`, version 0.7. Referenced section titles and short exact quotations appear beside the requirements they support. Gameplay changes belong there; this document should track technical consequences rather than maintain a second set of game rules.
 
 **[U] Explicit technical requirements:** the September 25, 2026 discussion. The requirements table preserves exact searchable phrases and their intended behavior.
 

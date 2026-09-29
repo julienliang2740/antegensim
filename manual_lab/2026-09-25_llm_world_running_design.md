@@ -1,5 +1,8 @@
 # LLM Artificial Life World
 
+> **Manual lab record, dated 2026-09-25.** The operator's source requirements (world design v0.7), as given. This is a timestamped record, not a running doc: it is
+> not updated when the code or the docs change, so details may be out of date. See `manual_lab/README.md`.
+
 Running design document · Version 0.7 · September 25, 2026
 
 ## Contents

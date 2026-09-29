@@ -1,7 +1,7 @@
 # Resilience and completion-criteria evidence
 
 Final pass of 2026-09-25 (20:44–20:48 UTC) against the spec's "Completion criteria and implementation freedom"
-list (`llm_world_technical_spec.md`), through the real HTTP API with fake models only. No live model call was made.
+list (`manual_lab/2026-09-25_llm_world_technical_spec.md`), through the real HTTP API with fake models only. No live model call was made.
 
 | Item | Value |
 | --- | --- |

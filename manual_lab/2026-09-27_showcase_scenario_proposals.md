@@ -1,5 +1,8 @@
 # Showcase scenario proposals (2026-09-27)
 
+> **Manual lab record, dated 2026-09-27.** Scenario proposals for the showcase experiment the operator specified. This is a timestamped record, not a running doc: it is
+> not updated when the code or the docs change, so details may be out of date. See `manual_lab/README.md`.
+
 Scenarios for the project showcase, designed against the working narrative:
 *"Most LLM simulations simulate stakes semantically. I wanted to simulate stakes causally."*
 Each scenario tests one part of that argument with **real runs**, not described outcomes.
@@ -229,12 +232,12 @@ These run when a slot frees up, and more are added from what the runs show.
   many rounds.
 * **Three strikes.** A failing scenario is stopped, diagnosed and relaunched with a world-only fix
   (v2, then v3). After the third failure it is cut and reported as a failure, with the reason.
-* **Final report.** `SHOWCASE_SCENARIOS.md` in the repository root names the best scenarios and
+* **Final report.** `manual_lab/2026-09-28_showcase_scenarios.md` in the repository root names the best scenarios and
   gives the setup and timeline of each one.
 
 ## Added during the runs
 
-These are new proposals drawn from what the first runs showed. Results are in `SHOWCASE_SCENARIOS.md`.
+These are new proposals drawn from what the first runs showed. Results are in `manual_lab/2026-09-28_showcase_scenarios.md`.
 
 | Tag | Name | Proposed by | The question it tests |
 | --- | --- | --- | --- |

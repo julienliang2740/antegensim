@@ -1,5 +1,8 @@
 # Scenario sweep report (2026-09-27)
 
+> **Manual lab record, dated 2026-09-27.** Report of the first scenario sweep the operator specified (runs `SWEEP-A*` to `SWEEP-E*`); most of those runs have since been deleted. This is a timestamped record, not a running doc: it is
+> not updated when the code or the docs change, so details may be out of date. See `manual_lab/README.md`.
+
 Search the run list in the UI for **`SWEEP-`** to find every run below; the name is
 `SWEEP-<category><proposal>v<version> <title>` (for example `SWEEP-E7v2 Three clans blood feud`).
 Scenario files: `sweep/scenarios/<tag>.json` (each has a `_design` note). Per-run judgements with

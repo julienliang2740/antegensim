@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Metrics for the baseline experiments (BASELINE_EXPERIMENTS.md), read from saved run folders only.
+"""Metrics for the baseline experiments (manual_lab/2026-09-28_baseline_experiments.md), read from saved run folders only.
 
 Usage:
   exp_metrics.py run <run_id|TAG> [--json]         per-run metrics
   exp_metrics.py group <label> <run_id|TAG> ...    per-run table, aggregates, 10-round bins, examples
-Definitions follow the "Metrics" section of BASELINE_EXPERIMENTS.md.
+Definitions follow the "Metrics" section of manual_lab/2026-09-28_baseline_experiments.md.
 """
 import glob, json, os, re, statistics, sys
 from collections import Counter, defaultdict

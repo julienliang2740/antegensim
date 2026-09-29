@@ -46,7 +46,7 @@ skill, pc and variables where it failed.
 
 Design references: "Imperative blocks and expressions", "Examples using only the
 defined blocks", "Turns speed and skill execution" and "Saved skill compute
-discount" (llm_world_running_design.md); docs/INTERFACES.md section 4.2.
+discount" (manual_lab/2026-09-25_llm_world_running_design.md); docs/INTERFACES.md section 4.2.
 """
 
 from __future__ import annotations

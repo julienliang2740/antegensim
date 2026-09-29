@@ -1,5 +1,8 @@
 # Does easier communication and seeing make runs more active? (2026-09-29)
 
+> **Manual lab record, dated 2026-09-29.** Experiment on cheaper and wider talking and looking, as specified by the operator. Its recommendation changed the default prices the same day (A-ECON-3). This is a timestamped record, not a running doc: it is
+> not updated when the code or the docs change, so details may be out of date. See `manual_lab/README.md`.
+
 **Question.** If talking and looking cost less compute, or reach farther, do agents interact more? Every
 option still costs something.
 

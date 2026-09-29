@@ -1,7 +1,7 @@
 # Empyrean prototype: test plan
 
 Owner: QA. This plan maps every completion criterion and every user requirement in
-`llm_world_technical_spec.md`, plus the required checks in `docs/INTERFACES.md`
+`manual_lab/2026-09-25_llm_world_technical_spec.md`, plus the required checks in `docs/INTERFACES.md`
 section 13, to the test, script or browser step that verifies it. It also explains
 what the fake models can and cannot prove.
 

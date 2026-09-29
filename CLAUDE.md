@@ -109,6 +109,24 @@ phrases; and that `docs/INDEX.md` lists every doc.
 | Known limits | `docs/LIMITATIONS.md` |
 | A new doc | `docs/INDEX.md` (with its `assistant: yes|no` flag) |
 
+## Manual lab: timestamped records, not running docs
+
+`manual_lab/` holds documents that belong to a moment in time: the operator's original source
+requirements (the technical spec and the world design) and the experiments the operator specified,
+with their reports. See [manual_lab/README.md](manual_lab/README.md).
+
+* **Not running docs.** The docs rule above does **not** apply to them. Do not update them when code
+  or behaviour changes, and `scripts/check_docs.py` does not read them. They may be out of date;
+  check the date and use `docs/` for how things work now.
+* **New experiments go here.** Each experiment the operator asks for (scenario sweeps, model or
+  setting comparisons, baselines) gets a new file named `YYYY-MM-DD_topic.md`. Put a banner under the
+  title with the date, what the record is, and "timestamped record, not a running doc".
+* **Frozen once written.** Finish the report while the experiment is running, then leave it. Correct
+  a mistake only with a dated note at the end. Never overwrite an older record.
+* **Referring to them.** Running docs and code comments may cite them by path and date, but must not
+  depend on them for current behaviour. Record anything that changes behaviour (for example a new
+  default) in the owning running doc as usual.
+
 ## Change control for shared contracts
 
 These files are the contracts every part of the system builds against:

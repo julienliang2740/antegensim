@@ -7,7 +7,7 @@ Empyrean is a local, turn-based artificial-life world in which each agent is a l
 
 A built-in **assistant** explains the world and the controls, reads a run's records to answer questions, proposes changes as execution briefs that run only after you approve them, writes a per-turn **Storybook**, and turns a run into a chaptered story in **Story Mode**. You can speak to it with **Dictate** (local Whisper).
 
-The backend is Python 3.12 with FastAPI (`backend/empyrean`). The UI is Vite, React 19 and TypeScript (`frontend/`). Requirements are in `llm_world_technical_spec.md` and `llm_world_running_design.md`.
+The backend is Python 3.12 with FastAPI (`backend/empyrean`). The UI is Vite, React 19 and TypeScript (`frontend/`). Requirements are in `manual_lab/2026-09-25_llm_world_technical_spec.md` and `manual_lab/2026-09-25_llm_world_running_design.md`.
 
 Documentation (full list with audiences in [docs/INDEX.md](docs/INDEX.md)):
 

@@ -13,8 +13,8 @@ storage beside each run and in `<worlds>/_assistant/`, text-mode and speech call
 and the change-control rules that replaced the frozen-file process (section 14). How the pieces
 work together is in `docs/SYSTEM.md`; where they live is in `docs/CODE_MAP.md`.
 
-Authoritative requirements: `llm_world_technical_spec.md` (spec) and
-`llm_world_running_design.md` (design). Configurable open rules are listed in
+Authoritative requirements: `manual_lab/2026-09-25_llm_world_technical_spec.md` (spec) and
+`manual_lab/2026-09-25_llm_world_running_design.md` (design). Configurable open rules are listed in
 `docs/ASSUMPTIONS.md` and registered in `config.ASSUMPTIONS` (A-… ids below
 refer to it).
 

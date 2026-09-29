@@ -1,6 +1,6 @@
 /**
  * "How the world works": the rules of the Empyrean written for a human
- * operator, following llm_world_running_design.md (v0.7) and docs/SYSTEM.md.
+ * operator, following manual_lab/2026-09-25_llm_world_running_design.md (v0.7) and docs/SYSTEM.md.
  * The numbers are read from GET /api/defaults (config.default_run_request) once
  * it answers; until then (or when the backend is down) the page shows the
  * shipped defaults written below as fallbacks.  Every number is configurable

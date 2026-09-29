@@ -1,5 +1,8 @@
 # Baseline experiments: Five Groves and Two to a Tree
 
+> **Manual lab record, dated 2026-09-28.** Baseline experiments for Five Groves and Two to a Tree, as specified by the operator. This is a timestamped record, not a running doc: it is
+> not updated when the code or the docs change, so details may be out of date. See `manual_lab/README.md`.
+
 Status: **complete (2026-09-28).** 26 runs: 9 per baseline, plus 8 forks. The findings are at the end: jump to
 "Findings".
 
