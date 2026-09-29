@@ -938,6 +938,7 @@ def test_openai_json_schema_nulls_and_usage_golden(clean_env, monkeypatch, regis
     assert (usage.input_tokens, usage.cache_read_tokens, usage.cache_creation_tokens) == (1976, 1024, 0)
     assert usage.billed_input_tokens == 3000 and usage.output_tokens == 400 and usage.reasoning_tokens == 256
     assert result.response_model == "gpt-4o-mini-2024-07-18"
+    assert result.provider_cost_usd is None  # no usd_per_mtok on the entry: no cost reported
     kwargs = client.calls[0]
     fmt = kwargs["response_format"]
     assert fmt["type"] == "json_schema" and fmt["json_schema"]["strict"] is False
@@ -963,6 +964,27 @@ def test_openai_options_strict_reasoning_and_json_mode(clean_env, monkeypatch):
     kwargs = client.calls[-1]
     assert kwargs["response_format"] == {"type": "json_object"}
     assert kwargs["messages"][0]["content"].endswith(JSON_ONLY_INSTRUCTION)
+
+
+def test_openai_reasoning_effort_and_list_price_cost(clean_env, monkeypatch):
+    clean_env.setenv("AZURE_AI_API_KEY", "azure-test-key-0000000000")
+    clean_env.setenv("AZURE_AI_V1_ENDPOINT", "https://example.openai.azure.com/openai/v1")
+    registry = registry_with(
+        {"key": "luna", "provider": "openai", "model_id": "gpt-6-luna", "credential_env": ["AZURE_AI_V1_ENDPOINT", "AZURE_AI_API_KEY"],
+         "endpoint": "${AZURE_AI_V1_ENDPOINT}", "capabilities": caps(),
+         "options": {"api_key_env": "AZURE_AI_API_KEY", "param_style": "reasoning", "reasoning_effort": "none", "usd_per_mtok": [0.10, 0.01, 0.50]}},
+        {"key": "unpriced", "provider": "openai", "model_id": "m", "credential_env": ["AZURE_AI_API_KEY"], "capabilities": caps(),
+         "options": {"usd_per_mtok": [0.1, "free", 0.5]}},
+    )
+    assert registry.resolved("luna").endpoint == "https://example.openai.azure.com/openai/v1"
+    client = Recorder(openai_completion(json.dumps(VALID_DECISION)))
+    install_client(monkeypatch, "openai", client)
+    result = call_model(make_request("luna"), registry)
+    assert client.calls[-1]["reasoning_effort"] == "none"
+    # golden usage: 1976 uncached + 1024 cached input, 400 output tokens
+    assert result.provider_cost_usd == pytest.approx((1976 * 0.10 + 1024 * 0.01 + 400 * 0.50) / 1_000_000)
+    unpriced = call_model(make_request("unpriced"), registry)
+    assert "reasoning_effort" not in client.calls[-1] and unpriced.provider_cost_usd is None
 
 
 def test_openai_refusal_truncation_and_errors(clean_env, monkeypatch, registry, delays):

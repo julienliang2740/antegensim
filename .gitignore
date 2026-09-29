@@ -40,3 +40,8 @@ playwright-report/
 frontend/dev-screenshots/
 qa/**/shots/
 qa/scratch/
+
+# Operator credentials (never commit)
+azure_credentials.txt
+*credentials*.txt
+azure_*endpoint*.txt

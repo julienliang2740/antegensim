@@ -1,6 +1,7 @@
 """Launch a variant of a baseline: its stored setup (GET /api/runs/{baseline}/setup) plus a patch.
 
-The patch is JSON: {"prices": {...}, "stats": {...every agent...}, "rules": {...deep merge...}}.
+The patch is JSON: {"prices": {...}, "stats": {...every agent...}, "rules": {...deep merge...},
+"model": "<registry key>" (run default and every agent card)}.
 Name, seed, max_rounds and budget are set as in launch_exp.py; the run is registered under TAG
 for the sweep watchdog. At most 4 live runs per backend.
 
@@ -24,6 +25,10 @@ req = S.deep_merge(req, {"rules": patch.get("rules", {})})
 req["rules"]["prices"].update(patch.get("prices", {}))
 for a in req["agents"]:
     a["stats"] = {**(a.get("stats") or {}), **patch.get("stats", {})}
+    if patch.get("model"):
+        a["model_key"] = patch["model"]
+if patch.get("model"):
+    req["default_model_key"] = patch["model"]
 req.update({"name": name, "seed": seed, "max_rounds": rounds, "real_budget_usd": budget, "play_delay_seconds": 0.0, "world_id": None})
 c, v = S.call("POST", "/runs/validate", req, port=port)
 if c != 200 or (isinstance(v, dict) and v.get("ok") is False):

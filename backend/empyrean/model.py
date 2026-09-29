@@ -68,6 +68,10 @@ Hygiene rules every real adapter follows
   and our retry policy governs.
 * ``request.temperature`` overrides ``ref.options["temperature"]``;
   ``ref.options["param_style"] == "reasoning"`` sends no temperature.
+* OpenAI family: ``ref.options["reasoning_effort"]`` is sent as ``reasoning_effort``
+  (for example "none" keeps a reasoning model non-thinking); ``ref.options["usd_per_mtok"]``
+  (``[input, cached_input, output]``) turns reported usage into ``provider_cost_usd``
+  (``list_price_cost``) for routes whose provider reports no cost.
 * Forced tool use / structured output: ``ModelResult.text = json.dumps(tool
   input)``; thinking/reasoning blocks are never joined into ``text``.
 * ``response_model`` is filled from the provider response (``response.model``,
@@ -645,6 +649,20 @@ def usage_from_bedrock(usage: Any) -> Optional[ModelUsage]:
         output_tokens=_count(_field(usage, "outputTokens")),
         source="provider",
     )
+
+
+def list_price_cost(ref: ModelRef, usage: Optional[ModelUsage]) -> Optional[float]:
+    """USD cost of provider-reported ``usage`` at the entry's ``options["usd_per_mtok"]``
+    list prices ``[input, cached_input, output]`` per million tokens (cache writes are
+    priced as input).  None when the entry sets no prices or the provider reported no
+    usage, so a token-billed route without prices keeps reporting no cost."""
+    prices = ref.options.get("usd_per_mtok")
+    if usage is None or not isinstance(prices, (list, tuple)) or len(prices) != 3:
+        return None
+    if not all(isinstance(p, (int, float)) and math.isfinite(p) and p >= 0 for p in prices):
+        return None
+    uncached = usage.input_tokens + usage.cache_creation_tokens
+    return (uncached * prices[0] + usage.cache_read_tokens * prices[1] + usage.output_tokens * prices[2]) / 1_000_000
 
 
 def sum_usage(usages: Iterable[ModelUsage]) -> ModelUsage:
@@ -2104,8 +2122,9 @@ class OpenAIAdapter(BaseAdapter):
     ``ref.options["param_style"]``: "chat" (default: max_tokens + temperature) |
     "reasoning" (max_completion_tokens, no temperature).  Usage: input = prompt_tokens -
     cached_tokens, cache_read = cached_tokens, output = completion_tokens (reasoning_tokens
-    informational only).  finish_reason "length" -> truncated; "content_filter" or a
-    ``message.refusal`` -> refusal."""
+    informational only).  ``ref.options["reasoning_effort"]`` is sent as ``reasoning_effort``;
+    ``ref.options["usd_per_mtok"]`` prices the reported usage (``list_price_cost``).
+    finish_reason "length" -> truncated; "content_filter" or a ``message.refusal`` -> refusal."""
 
     default_key_env = "OPENAI_API_KEY"
 
@@ -2129,6 +2148,9 @@ class OpenAIAdapter(BaseAdapter):
         temperature = _temperature(ref, request)
         if temperature is not None:
             kwargs["temperature"] = temperature
+        effort = ref.options.get("reasoning_effort")
+        if isinstance(effort, str) and effort:
+            kwargs["reasoning_effort"] = effort
         if native:
             assert request.response_schema is not None
             kwargs["response_format"] = {
@@ -2157,12 +2179,12 @@ class OpenAIAdapter(BaseAdapter):
         status, parsed = _classify(request, None, text, refused=refused, truncated=finish == "length")
         if parsed is not None and request.response_schema:
             parsed = strip_transform_nulls(parsed, request.response_schema)
-        usage = usage_from_openai(_field(response, "usage")) or estimate_usage(
-            request, text, extra_input_tokens=_request_overhead(ref, request)
-        )
+        reported = usage_from_openai(_field(response, "usage"))
+        usage = reported or estimate_usage(request, text, extra_input_tokens=_request_overhead(ref, request))
         return _make_result(
             request, ref, status, text=text, parsed=parsed, usage=usage,
             response_model=_field(response, "model"), stop_reason=finish,
+            provider_cost_usd=list_price_cost(ref, reported),
         )
 
     def prepare(self, ref: ModelRef, request: ModelRequest) -> tuple[Optional[ModelRef], Optional[Attempt]]:

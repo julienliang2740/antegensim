@@ -252,6 +252,64 @@
     "strict_schema": false
    },
    "description": "Microsoft AI Foundry / Azure OpenAI deployment (Azure OpenAI deployments only). ${VAR} placeholders are resolved from the environment by the registry loader."
+  },
+  {
+   "key": "azure-gpt6-luna",
+   "provider": "openai",
+   "model_id": "gpt-6-luna",
+   "credential_env": [
+    "AZURE_AI_V1_ENDPOINT",
+    "AZURE_AI_API_KEY"
+   ],
+   "endpoint": "${AZURE_AI_V1_ENDPOINT}",
+   "capabilities": {
+    "supports_json_schema": true,
+    "supports_json_mode": true,
+    "context_window": 272000,
+    "max_output_tokens": 16000,
+    "reports_usage": true
+   },
+   "mind_multiplier": 1.0,
+   "options": {
+    "api_key_env": "AZURE_AI_API_KEY",
+    "param_style": "reasoning",
+    "reasoning_effort": "none",
+    "strict_schema": false,
+    "usd_per_mtok": [
+     0.1,
+     0.01,
+     0.5
+    ]
+   },
+   "description": "GPT-6 Luna on the Azure AI OpenAI-compatible v1 endpoint (deploymentless), non-thinking (reasoning_effort none). Cost is list price x reported tokens (USD 0.10 / 0.01 cached / 0.50 per million)."
+  },
+  {
+   "key": "azure-deepseek-v4-flash",
+   "provider": "openai",
+   "model_id": "DeepSeek-V4-Flash",
+   "credential_env": [
+    "AZURE_AI_V1_ENDPOINT",
+    "AZURE_AI_API_KEY"
+   ],
+   "endpoint": "${AZURE_AI_V1_ENDPOINT}",
+   "capabilities": {
+    "supports_json_schema": true,
+    "supports_json_mode": true,
+    "context_window": 128000,
+    "max_output_tokens": 8000,
+    "reports_usage": true
+   },
+   "mind_multiplier": 1.0,
+   "options": {
+    "api_key_env": "AZURE_AI_API_KEY",
+    "strict_schema": false,
+    "usd_per_mtok": [
+     0.19,
+     0.028,
+     0.51
+    ]
+   },
+   "description": "DeepSeek V4 Flash on the Azure AI OpenAI-compatible v1 endpoint; needs a deployment named DeepSeek-V4-Flash. Azure serves it non-thinking. Cost is list price x reported tokens (USD 0.19 / 0.028 cached / 0.51 per million, global)."
   }
  ]
 }

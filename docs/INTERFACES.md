@@ -651,6 +651,11 @@ native schema and embeds the compact schema in that instruction when its entry d
 `supports_json_schema`. OpenAI family: `json_schema` whenever `capabilities.supports_json_schema`
 (`strict` from `options.strict_schema`; under strict mode `run_skill` arguments are scalars,
 null or `{x, y}` points), `json_object` only for json-mode-only routes.
+OpenAI family registry options: `options.reasoning_effort` is sent as `reasoning_effort` ("none"
+keeps a reasoning model such as GPT-6 Luna non-thinking), and `options.usd_per_mtok`
+(`[input, cached_input, output]` USD per million tokens) turns the reported usage into
+`provider_cost_usd` (`model.list_price_cost`), so run budgets and cost totals also work for
+token-billed routes whose provider reports no cost.
 `request_overhead_tokens` = transformed schema tokens + the route's fixed overhead
 (`config.MODEL_FIXED_OVERHEAD_TOKENS`, per-entry `options.overhead_tokens`) when a native
 mechanism is used, else the JSON-only instruction tokens + fixed overhead.

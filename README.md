@@ -228,6 +228,8 @@ Models are defined in `backend/empyrean/models.example.json`. Agent cards and ru
 | `fireworks-llama` | `fireworks` | `FIREWORKS_API_KEY` |
 | `bedrock-haiku` | `bedrock` | The boto3 default credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`, profiles or roles); `AWS_REGION` overrides the entry's region |
 | `foundry-gpt` | `foundry` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` |
+| `azure-gpt6-luna` | `openai` (Azure AI v1 endpoint) | `AZURE_AI_V1_ENDPOINT` (`https://<resource>.openai.azure.com/openai/v1`), `AZURE_AI_API_KEY`. Non-thinking (`reasoning_effort` none) |
+| `azure-deepseek-v4-flash` | `openai` (Azure AI v1 endpoint) | The same two variables, plus a deployment named `DeepSeek-V4-Flash` on the resource. Served non-thinking |
 
 `GET /api/models` reports, for each key, whether it is available and which variables are missing. The New session form shows the same information. Keys marked assistant only (`options.assistant_only` in the registry) are hidden from that list unless `?include_assistant=1` and are rejected on agent cards and in god mode.
 
@@ -238,7 +240,9 @@ How secrets are handled:
 - The `claude_cli` adapter starts the CLI with a minimal environment (`PATH`, `HOME`, locale and a few others), so none of the keys above reach it.
 - Keep `.env` out of version control (it is in `.gitignore`), and never put a key into a registry file.
 
-Only the `fake` and `claude_cli` adapters have been run on this machine. The other adapters have been tested against recorded or mocked payloads only (see [docs/TEST_EVIDENCE.md](docs/TEST_EVIDENCE.md)).
+The two `azure-*` entries set `options.usd_per_mtok` (list prices per million tokens), so their calls report a list-price `provider_cost_usd` and run budgets apply to them; other OpenAI-family entries report no cost.
+
+Only the `fake`, `claude_cli` and `openai` (the Azure AI v1 entries) adapters have been run on this machine. The other adapters have been tested against recorded or mocked payloads only (see [docs/TEST_EVIDENCE.md](docs/TEST_EVIDENCE.md)).
 
 ## Headless driver
 
