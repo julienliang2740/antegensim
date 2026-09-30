@@ -36,3 +36,4 @@ first, and use `docs/` for how things work today.
 | 2026-09-28 | `2026-09-28_baseline_experiments.md` | Five Groves and Two to a Tree baselines: 26 runs, metrics, timing, forks |
 | 2026-09-29 | `2026-09-29_senses_experiment.md` | Cheaper and wider talking and looking: 19 runs; led to the new default prices (A-ECON-3) |
 | 2026-09-29 | `2026-09-29_model_comparison.md` | GPT-6 Luna vs DeepSeek V4 Flash vs Haiku on both baselines: invalid calls, cost, speed, behaviour (DeepSeek partly extrapolated) |
+| 2026-09-29 | `2026-09-29_new_baselines_and_templates.md` | Two to a Tree and Five Groves on the new default prices; balanced-template search (The Commons recommended to replace Five Groves) |

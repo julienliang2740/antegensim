@@ -2450,6 +2450,220 @@
     "continuation of run_20260929_035630_2109 from r00025_end",
     "04:41 finished at r00045_end"
    ]
+  },
+  "NB-FG-A": {
+   "run_id": "run_20260929_151548_b07c",
+   "world_id": "world_20260929_151548_6294",
+   "name": "Five Groves \u00b7 new defaults \u00b7 A",
+   "scenario": "variant of run_20260927_221309_cc43: {\"prices\": {\"observe\": 0.5, \"query\": 0.5, \"send\": 0.5}}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-29 15:15:48",
+   "notes": [
+    "variant of run_20260927_221309_cc43, seed 1818, patch {\"prices\": {\"observe\": 0.5, \"query\": 0.5, \"send\": 0.5}}",
+    "15:57 finished at r00060_end"
+   ]
+  },
+  "NB-FG-B": {
+   "run_id": "run_20260929_151548_87b9",
+   "world_id": "world_20260929_151548_7048",
+   "name": "Five Groves \u00b7 new defaults \u00b7 B",
+   "scenario": "variant of run_20260927_221309_cc43: {\"prices\": {\"observe\": 0.5, \"query\": 0.5, \"send\": 0.5}}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-29 15:15:48",
+   "notes": [
+    "variant of run_20260927_221309_cc43, seed 1819, patch {\"prices\": {\"observe\": 0.5, \"query\": 0.5, \"send\": 0.5}}",
+    "16:34 finished at r00060_end"
+   ]
+  },
+  "NB-TT-A": {
+   "run_id": "run_20260929_151549_3786",
+   "world_id": "world_20260929_151549_8c2f",
+   "name": "Two to a Tree \u00b7 new defaults \u00b7 A",
+   "scenario": "variant of run_20260928_034839_c3c2: {\"prices\": {\"observe\": 0.5, \"query\": 0.5, \"send\": 0.5}}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-29 15:15:49",
+   "notes": [
+    "variant of run_20260928_034839_c3c2, seed 2930, patch {\"prices\": {\"observe\": 0.5, \"query\": 0.5, \"send\": 0.5}}",
+    "16:09 finished at r00060_end"
+   ]
+  },
+  "NB-TT-B": {
+   "run_id": "run_20260929_151549_06cd",
+   "world_id": "world_20260929_151549_1dd0",
+   "name": "Two to a Tree \u00b7 new defaults \u00b7 B",
+   "scenario": "variant of run_20260928_034839_c3c2: {\"prices\": {\"observe\": 0.5, \"query\": 0.5, \"send\": 0.5}}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-29 15:15:50",
+   "notes": [
+    "variant of run_20260928_034839_c3c2, seed 2931, patch {\"prices\": {\"observe\": 0.5, \"query\": 0.5, \"send\": 0.5}}",
+    "16:33 finished at r00060_end"
+   ]
+  },
+  "TD-HG-1": {
+   "run_id": "run_20260929_190407_67a2",
+   "world_id": "world_20260929_190407_5b5f",
+   "name": "Template trial \u00b7 Hunter and Gatherer \u00b7 1",
+   "scenario": "template design hunter_gatherer {}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-29 19:04:07",
+   "notes": [
+    "design hunter_gatherer, seed 4101, params {}",
+    "19:24 finished at r00030_end",
+    "21:15 extended to r60",
+    "21:31 finished at r00060_end"
+   ]
+  },
+  "TD-COM-1": {
+   "run_id": "run_20260929_190407_3677",
+   "world_id": "world_20260929_190407_839d",
+   "name": "Template trial \u00b7 The Commons \u00b7 1",
+   "scenario": "template design commons {}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-29 19:04:07",
+   "notes": [
+    "design commons, seed 4201, params {}",
+    "19:50 finished at r00030_end",
+    "21:15 extended to r60",
+    "21:53 finished at r00060_end"
+   ]
+  },
+  "TD-FOUR-1": {
+   "run_id": "run_20260929_190407_f5ca",
+   "world_id": "world_20260929_190407_65be",
+   "name": "Template trial \u00b7 Four to a Tree \u00b7 1",
+   "scenario": "template design four_to_a_tree {}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 30,
+   "launched": "2026-09-29 19:04:07",
+   "notes": [
+    "design four_to_a_tree, seed 4301, params {}",
+    "19:25 finished at r00030_end"
+   ]
+  },
+  "TD-LEAN-1": {
+   "run_id": "run_20260929_190408_aad7",
+   "world_id": "world_20260929_190408_4bff",
+   "name": "Template trial \u00b7 Lean Years \u00b7 1",
+   "scenario": "template design lean_years {}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 30,
+   "launched": "2026-09-29 19:04:08",
+   "notes": [
+    "design lean_years, seed 4401, params {}",
+    "19:51 finished at r00030_end"
+   ]
+  },
+  "TD-COM-2": {
+   "run_id": "run_20260929_195320_9bbd",
+   "world_id": "world_20260929_195320_7edb",
+   "name": "Template trial \u00b7 The Commons \u00b7 2",
+   "scenario": "template design commons {\"compute\": 120, \"rim_interval\": 12}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 30,
+   "launched": "2026-09-29 19:53:20",
+   "notes": [
+    "design commons, seed 4202, params {\"compute\": 120, \"rim_interval\": 12}",
+    "20:13 finished at r00030_end"
+   ]
+  },
+  "TD-HG-2": {
+   "run_id": "run_20260929_195320_0fc2",
+   "world_id": "world_20260929_195320_c6ad",
+   "name": "Template trial \u00b7 Hunter and Gatherer \u00b7 2",
+   "scenario": "template design hunter_gatherer {\"compute\": 120, \"hunter_absorption\": 0.2}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 30,
+   "launched": "2026-09-29 19:53:21",
+   "notes": [
+    "design hunter_gatherer, seed 4102, params {\"compute\": 120, \"hunter_absorption\": 0.2}",
+    "20:19 finished at r00030_end"
+   ]
+  },
+  "TD-CH-1": {
+   "run_id": "run_20260929_195321_5641",
+   "world_id": "world_20260929_195321_a1d5",
+   "name": "Template trial \u00b7 Commons with hunters \u00b7 1",
+   "scenario": "template design commons_hunters {\"compute\": 120, \"rim_interval\": 12, \"hunter_absorption\": 0.2}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 30,
+   "launched": "2026-09-29 19:53:21",
+   "notes": [
+    "design commons_hunters, seed 4501, params {\"compute\": 120, \"rim_interval\": 12, \"hunter_absorption\": 0.2}",
+    "20:14 finished at r00030_end"
+   ]
+  },
+  "TD-CH-2": {
+   "run_id": "run_20260929_211532_a387",
+   "world_id": "world_20260929_211532_c949",
+   "name": "Template trial \u00b7 Commons with hunters \u00b7 2",
+   "scenario": "template design commons_hunters {\"hunter_absorption\": 0.2}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-29 21:15:32",
+   "notes": [
+    "design commons_hunters, seed 4502, params {\"hunter_absorption\": 0.2}",
+    "22:13 finished at r00060_end"
+   ]
+  },
+  "TD-COM-3": {
+   "run_id": "run_20260929_221430_eb2f",
+   "world_id": "world_20260929_221430_5d78",
+   "name": "Template trial \u00b7 The Commons \u00b7 3",
+   "scenario": "template design commons {}",
+   "status": "finished",
+   "port": 8001,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-29 22:14:30",
+   "notes": [
+    "design commons, seed 4203, params {}",
+    "22:44 finished at r00060_end"
+   ]
+  },
+  "TD-CH-3": {
+   "run_id": "run_20260929_221430_f1d8",
+   "world_id": "world_20260929_221430_388b",
+   "name": "Template trial \u00b7 Commons with hunters \u00b7 3",
+   "scenario": "template design commons_hunters {\"hunter_absorption\": 0.2}",
+   "status": "finished",
+   "port": 8002,
+   "agents": 32,
+   "max_rounds": 60,
+   "launched": "2026-09-29 22:14:30",
+   "notes": [
+    "design commons_hunters, seed 4503, params {\"hunter_absorption\": 0.2}",
+    "23:04 finished at r00060_end"
+   ]
   }
  }
 }
