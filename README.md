@@ -1,9 +1,8 @@
 # Empyrean prototype (antegensim)
 
-Watch demos:
+2D demo: https://drive.google.com/file/d/18GyzG7qCp1UGQNK8M88PZPgvTdB_q8h7/view?usp=sharing
 
-https://drive.google.com/file/d/18GyzG7qCp1UGQNK8M88PZPgvTdB_q8h7/view?usp=sharing
-https://drive.google.com/file/d/10h_Ii7bqHakEvqjwZlAaLpZbYlLoJxtO/view?usp=sharing
+3D demo: https://drive.google.com/file/d/10h_Ii7bqHakEvqjwZlAaLpZbYlLoJxtO/view?usp=sharing
 
 <img width="1906" height="942" alt="image" src="https://github.com/user-attachments/assets/e359afea-70a0-4aea-b651-bd2d74684dca" />
 
